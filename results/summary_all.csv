@@ -1,0 +1,7 @@
+﻿หุ้น,งาน,โมเดลดีสุด,Accuracy,Baseline ดีสุด,Baseline Acc,ชนะ baseline?
+KBANK.BK,A: คู่/คี่,ANN (MLP),0.5123,Baseline: Random,0.5096,ชนะ
+KBANK.BK,C: ขึ้น/ลง,XGBoost,0.537,Baseline: Majority,0.5397,แพ้
+KBANK.BK,B: ราคา,Random Forest,1.7328,Baseline: Naive (RW),1.7068,แพ้
+ADVANC.BK,A: คู่/คี่,ANN (MLP),0.5534,Baseline: Majority,0.5397,ชนะ
+ADVANC.BK,C: ขึ้น/ลง,Logistic Regression,0.5562,Baseline: Majority,0.5534,ชนะ
+ADVANC.BK,B: ราคา,Random Forest,3.4042,Baseline: Naive (RW),3.274,แพ้
