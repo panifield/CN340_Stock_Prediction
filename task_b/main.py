@@ -142,6 +142,11 @@ def run_task_b(X, targets, verbose=True, dev=False):
     print(f"    เพดานสูงสุดคือ 100% ของวันที่นับ ไม่ใช่ของทั้งชุด")
     print("  - Baseline: Naive (RW) ได้ DirAcc = NaN เพราะทำนาย return = 0")
     print("    เสมอ จึงไม่ได้ให้สัญญาณทิศทาง -> ใช้ Always Up เทียบแทน")
+    print("  - StdRatio / Rho / Bias แตก R2_return ออกเป็นส่วน ๆ ได้พอดี:")
+    print("        R2 = 2*Rho*StdRatio - StdRatio^2 - Bias^2")
+    print("    Rho คือทักษะจริง (เพดานของ R2 หลังปรับเทียบคือ Rho^2)")
+    print("    StdRatio ที่เหมาะสมคือเท่ากับ Rho ถ้าสูงกว่ามาก = ทำนายแกว่งเกินจริง")
+    print("    Bias สูง = train กับชุดที่ประเมินมี distribution ต่างกัน")
     print(always_up_note(y_train))
 
     best_rmse = float(eval_results[best]["RMSE_baht"])

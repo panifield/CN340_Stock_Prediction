@@ -47,6 +47,58 @@ def directional_accuracy(y_true, y_pred):
     return float(np.mean(np.sign(y_true[moved]) == np.sign(y_pred[moved])))
 
 
+def prediction_shape(y_true, y_pred):
+    """
+    แยก "ทักษะ" ออกจาก "การปรับเทียบ" -- คืน (StdRatio, Rho, Bias)
+
+    *** ทำไมต้องมี 3 ตัวนี้ ? ***
+
+    R² กับ MAE บอกแค่ว่าโมเดล "แย่" แต่บอกไม่ได้ว่าแย่เพราะอะไร
+    ทั้งที่ R² แตกออกเป็น 3 ส่วนได้ตรง ๆ:
+
+        R² = 2*Rho*StdRatio - StdRatio^2 - Bias^2
+
+    โดย
+      StdRatio = SD(pred) / SD(true)
+                 ความ "กว้าง" ของการทำนายเทียบกับความจริง
+                 ค่าที่เหมาะสมทางทฤษฎีคือ StdRatio = Rho
+                 ถ้า >> Rho แปลว่าทำนายแกว่งเกินจริง (ปรับเทียบผิด)
+      Rho      = correlation ระหว่าง pred กับ true  = ทักษะที่แท้จริง
+                 เพดานของ R² ที่ทำได้หลังปรับเทียบคือ Rho^2
+      Bias     = (mean(pred) - mean(true)) / SD(true)
+                 ทำนายเอียงไปทางเดียวอย่างเป็นระบบแค่ไหน
+                 เป็นสัญญาณตรงของ distribution shift ระหว่าง train กับ
+                 ชุดที่ประเมิน (เช่น ราคาใน val หลุดช่วงที่ train เคยเห็น)
+
+    *** ข้อควรระวัง: ต้องคำนวณ Rho ตรง ๆ ห้ามย้อนจากสูตร ***
+    ถ้าย้อนหา Rho จาก R² กับ StdRatio โดยลืมพจน์ Bias^2 จะได้ค่าที่ผิด
+    และผิดมากพอจะพลิกเครื่องหมายได้ (เคยเจอกรณีที่คำนวณย้อนได้ Rho ติดลบ
+    ทั้งที่ค่าจริงเป็นบวก) ฟังก์ชันนี้จึงใช้ np.corrcoef ตรง ๆ
+
+    ตัวทำนายที่ให้ค่าคงที่ (Naive / Mean Return / Always Up) ไม่มีการ
+    กระจายเลย -> StdRatio = 0 และ Rho = NaN เพราะ correlation ไม่นิยาม
+
+    หมายเหตุ: เช็คว่า "คงที่" ด้วย np.ptp (ค่าสูงสุด - ค่าต่ำสุด) ไม่ใช่
+    เช็คว่า SD == 0 เพราะ np.std ของอาเรย์ค่าคงที่ที่ไม่ใช่ศูนย์จะได้ค่า
+    เล็กมาก (~1e-19) แต่ไม่เป็นศูนย์เป๊ะจาก floating point ทำให้เผลอไป
+    คำนวณ correlation ของ noise แล้วได้ Rho ปลอม ๆ ออกมาเป็น 0.0000
+    """
+    sd_true = float(np.std(y_true))
+
+    if sd_true == 0:
+        return np.nan, np.nan, np.nan
+
+    bias = float(np.mean(y_pred) - np.mean(y_true)) / sd_true
+
+    if np.ptp(y_pred) == 0:          # ตัวทำนายค่าคงที่
+        return 0.0, np.nan, bias
+
+    std_ratio = float(np.std(y_pred)) / sd_true
+    rho = float(np.corrcoef(y_pred, y_true)[0, 1])
+
+    return std_ratio, rho, bias
+
+
 def regression_metrics(y_true, y_pred, prev_close=None):
     """
     y_true / y_pred เป็น "return"
@@ -55,10 +107,16 @@ def regression_metrics(y_true, y_pred, prev_close=None):
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
 
+    std_ratio, rho, bias = prediction_shape(y_true, y_pred)
+
     m = {
         "MAE_return": mean_absolute_error(y_true, y_pred),
         "RMSE_return": float(np.sqrt(mean_squared_error(y_true, y_pred))),
         "R2_return": r2_score(y_true, y_pred),
+        # 3 ตัวนี้แตก R2_return ออกเป็นส่วน ๆ -- ดู prediction_shape()
+        "StdRatio": std_ratio,
+        "Rho": rho,
+        "Bias": bias,
         # ทายทิศทางถูกกี่ % (สำคัญกว่า R² ในทางปฏิบัติ)
         # นับเฉพาะวันที่ราคาขยับจริง -- ดู docstring ของ directional_accuracy
         "DirAcc": directional_accuracy(y_true, y_pred),
