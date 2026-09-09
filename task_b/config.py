@@ -12,12 +12,29 @@ TICKERS = ["KBANK.BK", "ADVANC.BK"]
 START_DATE = "2016-08-26"
 END_DATE = "2026-08-28"
 
+# แหล่งข้อมูลที่ใช้จริง
+#   "investing" = อ่านจาก raw_data/*_10Y_Cleaned.csv (ข้อมูลจาก investing.com)
+#   "yahoo"     = ดึงจาก Yahoo Finance ผ่าน yfinance แล้ว cache ไว้
+#
+# *** ข้อมูลที่ใช้ในรายงานคือ investing.com ***
+# ไฟล์ใน data_cache/ ถูกสร้างจาก raw_data/ มาแต่แรก (ตรวจสอบแล้วว่าค่า
+# OHLCV ตรงกันทุกแถว และ Volume = Vol.('000) x 1000 พอดี) ชื่อไฟล์ที่มี
+# ticker แบบ Yahoo จึงทำให้เข้าใจผิดได้ง่าย
+#
+# ตั้งเป็น "investing" เพื่อให้ที่มาของข้อมูลชัดเจนในโค้ด ไม่ต้องพึ่ง cache
+# และไม่มีทางหลุดไปดึง Yahoo มาปนโดยไม่รู้ตัว
+DATA_SOURCE = "investing"
+
+# โฟลเดอร์ข้อมูลดิบจาก investing.com
+RAW_DATA_DIR = "raw_data"
+RAW_DATA_SUFFIX = "_10Y_Cleaned.csv"
+
 # ถ้าโหลด yfinance ไม่ได้ (เน็ตมีปัญหา / รันออฟไลน์)
 # ตั้งเป็น True เพื่อใช้ข้อมูลจำลองทดสอบว่าโค้ดรันผ่านไหม
 # *** ห้ามใช้ข้อมูลจำลองในรายงานเด็ดขาด ***
 USE_SYNTHETIC_DATA = False
 
-# โฟลเดอร์เก็บไฟล์ csv ที่โหลดมาแล้ว (จะได้ไม่ต้องโหลดซ้ำ)
+# โฟลเดอร์เก็บไฟล์ csv ที่โหลดมาแล้ว (ใช้เฉพาะตอน DATA_SOURCE = "yahoo")
 CACHE_DIR = "data_cache"
 
 
