@@ -14,6 +14,39 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
+def directional_accuracy(y_true, y_pred):
+    """
+    ทายทิศทางถูกกี่ % — นับเฉพาะวันที่ราคาขยับจริง (y_true != 0)
+
+    *** ทำไมต้องตัดวันราคานิ่งออก ? (นี่คือบั๊กที่แก้ในเวอร์ชันนี้) ***
+
+    ของเดิมคำนวณ `np.mean(np.sign(y_true) == np.sign(y_pred))` ตรง ๆ
+    ซึ่งให้ตัวเลขที่ "ตีความผิด" ได้ 2 ชั้น
+
+    1. Naive baseline ทำนาย return = 0 เสมอ ทำให้ `np.sign(0) = 0`
+       ไปตรงกับวันที่ราคาไม่ขยับเลยพอดี ค่า DirAcc = 0.1397 ของ KBANK
+       จึงไม่ได้แปลว่า "ทายทิศทางถูก 14%" แต่แปลว่า
+       "ชุดข้อมูลนี้มีวันราคานิ่งเป๊ะอยู่ 14%" ซึ่งคนละเรื่องกันเลย
+    2. โมเดลที่ทำนายค่าต่อเนื่องแทบไม่มีทางทำนายออกมาได้ 0 พอดี จึงทาย
+       วันราคานิ่งผิดเสมอ ทำให้เพดานสูงสุดของ DirAcc อยู่ที่ราว 86%
+       (KBANK) และ 82% (ADVANC) ไม่ใช่ 100% การเอาตัวเลขนี้ไปเทียบกับ
+       50% แล้วสรุปว่า "ดีกว่าการเดา" จึงเป็นการเทียบที่ผิดฐาน
+
+    วันราคานิ่งเยอะเพราะ tick size ของ SET (ช่วง 100-200 บาทขยับทีละ
+    0.50 / 200-400 บาทขยับทีละ 1.00) ถ้าหุ้นแกว่งน้อยกว่าครึ่งหนึ่งของ
+    tick ราคาปิดจะถูกปัดกลับมาที่เดิม เป็นกลไกตลาดจริง ไม่ใช่ข้อมูลเสีย
+    (ตรวจแล้วว่าไม่มีแถวไหน Volume = 0 เลย จึงไม่ใช่วันหยุดที่ถูกเติม)
+
+    คืน np.nan ถ้าตัวทำนายไม่ให้สัญญาณทิศทางเลย (ทำนาย 0 ทุกแถว)
+    """
+    moved = y_true != 0
+    if moved.sum() == 0:
+        return np.nan
+    if np.all(np.sign(y_pred[moved]) == 0):
+        return np.nan          # Naive (RW) ทำนาย return = 0 เสมอ
+    return float(np.mean(np.sign(y_true[moved]) == np.sign(y_pred[moved])))
+
+
 def regression_metrics(y_true, y_pred, prev_close=None):
     """
     y_true / y_pred เป็น "return"
@@ -27,7 +60,11 @@ def regression_metrics(y_true, y_pred, prev_close=None):
         "RMSE_return": float(np.sqrt(mean_squared_error(y_true, y_pred))),
         "R2_return": r2_score(y_true, y_pred),
         # ทายทิศทางถูกกี่ % (สำคัญกว่า R² ในทางปฏิบัติ)
-        "DirAcc": float(np.mean(np.sign(y_true) == np.sign(y_pred))),
+        # นับเฉพาะวันที่ราคาขยับจริง -- ดู docstring ของ directional_accuracy
+        "DirAcc": directional_accuracy(y_true, y_pred),
+        # สัดส่วนวันราคานิ่งเป๊ะ ใส่ไว้ให้อ่าน DirAcc ได้ถูกบริบท
+        # (เป็นค่าของชุดข้อมูล ไม่ใช่ของโมเดล จึงเท่ากันทุกแถวในตาราง)
+        "FlatRate": float(np.mean(y_true == 0)),
     }
 
     if prev_close is not None:

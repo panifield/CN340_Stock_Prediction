@@ -39,7 +39,7 @@ from targets import build_targets
 from diagnostics import run_all_diagnostics
 from splits import chronological_split
 from models import get_regressors
-from baselines import get_regression_baselines
+from baselines import get_regression_baselines, always_up_note
 from evaluate import regression_metrics, results_table, print_table, compare_to_baseline
 
 
@@ -136,7 +136,13 @@ def run_task_b(X, targets, verbose=True, dev=False):
     print("  - R2_price ที่สูงมาก (>0.95) ไม่ได้แปลว่าโมเดลเก่ง")
     print("    เพราะมันมาจากการที่ราคาพรุ่งนี้ใกล้เคียงราคาวันนี้อยู่แล้ว")
     print("  - ให้ดู MAE_baht เทียบกับ Baseline: Naive (RW) เป็นหลัก")
-    print("  - DirAcc (ทายทิศทางถูกกี่ %) มีความหมายกว่า R2 มาก")
+    flat = float(eval_results[best]["FlatRate"])
+    print(f"  - DirAcc นับเฉพาะวันที่ราคาขยับจริง (ตัดวันราคานิ่ง "
+          f"{flat*100:.2f}% ออก)")
+    print(f"    เพดานสูงสุดคือ 100% ของวันที่นับ ไม่ใช่ของทั้งชุด")
+    print("  - Baseline: Naive (RW) ได้ DirAcc = NaN เพราะทำนาย return = 0")
+    print("    เสมอ จึงไม่ได้ให้สัญญาณทิศทาง -> ใช้ Always Up เทียบแทน")
+    print(always_up_note(y_train))
 
     best_rmse = float(eval_results[best]["RMSE_baht"])
 
