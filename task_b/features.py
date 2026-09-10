@@ -21,6 +21,7 @@ import pandas as pd
 
 from config import (
     LAG_DAYS, MA_WINDOWS, VOL_WINDOWS, RSI_PERIOD, USE_DAY_OF_WEEK,
+    USE_RAW_PRICE_LEVELS,
 )
 
 
@@ -67,11 +68,18 @@ def bollinger_position(close, window=20, n_std=2):
 # ตัวสร้าง feature หลัก
 # ---------------------------------------------------------------
 
-def build_raw_features(df):
+def build_raw_features(df, use_raw_price_levels=None):
     """
     สร้าง feature ทั้งหมดโดย "ยังไม่ shift"
     (ฟังก์ชันนี้ยังมีข้อมูลวัน t อยู่ อย่าเอาไปเทรนตรงๆ)
+
+    use_raw_price_levels: ใส่ feature ราคาดิบ 5 ตัวไหม
+        None = ใช้ค่าจาก config (ค่าเริ่มต้น)
+        True / False = บังคับ ใช้ตอนรัน ablation H1
     """
+    if use_raw_price_levels is None:
+        use_raw_price_levels = USE_RAW_PRICE_LEVELS
+
     close = df["Close"]
     high = df["High"]
     low = df["Low"]
@@ -80,12 +88,13 @@ def build_raw_features(df):
 
     f = pd.DataFrame(index=df.index)
 
-    # --- ราคาดิบ ---
-    f["close"] = close
-    f["open"] = open_
-    f["high"] = high
-    f["low"] = low
-    f["volume"] = volume
+    # --- ราคาดิบ (กลุ่มเดียวที่ไม่ stationary -- ดู H1 ใน config.py) ---
+    if use_raw_price_levels:
+        f["close"] = close
+        f["open"] = open_
+        f["high"] = high
+        f["low"] = low
+        f["volume"] = volume
 
     # --- ผลตอบแทน (return) : ตัวสำคัญที่สุด เพราะเป็น stationary ---
     for lag in LAG_DAYS:
@@ -134,14 +143,14 @@ def build_raw_features(df):
     return f
 
 
-def build_features(df, verbose=True):
+def build_features(df, verbose=True, use_raw_price_levels=None):
     """
     ฟังก์ชันที่ควรเรียกใช้จริง
     = build_raw_features แล้ว shift(1) ทั้งตาราง
 
     คืน DataFrame ที่ปลอดภัย ใช้เทรนได้เลย
     """
-    raw = build_raw_features(df)
+    raw = build_raw_features(df, use_raw_price_levels=use_raw_price_levels)
     shifted = raw.shift(1)
     shifted.columns = [f"{c}_prev" for c in shifted.columns]
 
@@ -151,17 +160,24 @@ def build_features(df, verbose=True):
     return shifted
 
 
-def verify_no_leak(df, features, sample_idx=100):
+def verify_no_leak(df, features, sample_idx=100, use_raw_price_levels=None):
     """
     ตรวจสอบเชิงโครงสร้างว่า shift ทำงานจริง
     เทียบว่า features แถว t == raw indicator แถว t-1 จริงไหม
+
+    รองรับกรณีปิด USE_RAW_PRICE_LEVELS (ablation H1) ซึ่งจะไม่มีคอลัมน์
+    close_prev ให้ตรวจ -- ตรวจเฉพาะคอลัมน์ที่มีอยู่จริงใน features
     """
-    raw = build_raw_features(df)
+    raw = build_raw_features(df, use_raw_price_levels=use_raw_price_levels)
     row_t = features.iloc[sample_idx]
     row_prev = raw.iloc[sample_idx - 1]
 
+    checked = 0
     for col in raw.columns:
-        a = row_t[f"{col}_prev"]
+        name = f"{col}_prev"
+        if name not in features.columns:
+            continue
+        a = row_t[name]
         b = row_prev[col]
         if pd.isna(a) and pd.isna(b):
             continue
@@ -169,13 +185,19 @@ def verify_no_leak(df, features, sample_idx=100):
             f"LEAK! คอลัมน์ {col}: features แถว {sample_idx} = {a} "
             f"แต่ raw แถว {sample_idx-1} = {b}"
         )
+        checked += 1
+
+    assert checked > 0, "ไม่มีคอลัมน์ให้ตรวจเลย -- features ว่างหรือชื่อไม่ตรง"
 
     # ตรวจซ้ำ: ราคาปิดของวัน t ต้องไม่เท่ากับ feature ตัวไหนเลย
-    close_t = df["Close"].iloc[sample_idx]
-    close_prev = df["Close"].iloc[sample_idx - 1]
-    assert np.isclose(features["close_prev"].iloc[sample_idx], close_prev)
-    if not np.isclose(close_t, close_prev):
-        assert not np.isclose(features["close_prev"].iloc[sample_idx], close_t)
+    # (ข้ามได้ถ้าปิดกลุ่มราคาดิบ เพราะไม่มี close_prev ให้ตรวจ)
+    if "close_prev" in features.columns:
+        close_t = df["Close"].iloc[sample_idx]
+        close_prev = df["Close"].iloc[sample_idx - 1]
+        assert np.isclose(features["close_prev"].iloc[sample_idx], close_prev)
+        if not np.isclose(close_t, close_prev):
+            assert not np.isclose(features["close_prev"].iloc[sample_idx], close_t)
 
-    print("[features] verify_no_leak ผ่าน: feature แถว t = ข้อมูลวัน t-1 จริง")
+    print(f"[features] verify_no_leak ผ่าน ({checked} คอลัมน์): "
+          f"feature แถว t = ข้อมูลวัน t-1 จริง")
     return True
