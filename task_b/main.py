@@ -56,13 +56,57 @@ from evaluate import (regression_metrics, results_table, print_table,
                       compare_to_baseline, rho_significance_note)
 
 
-def _prepare(X, y, extra=None):
-    """จัด X และ y ให้ index ตรงกัน แล้วตัดแถวที่มี NaN ออก"""
+def _prepare(X, y, extra=None, verbose=True):
+    """
+    จัด X และ y ให้ index ตรงกัน แล้วตัดแถวที่ feature ยังคำนวณไม่ครบออก
+
+    *** ทำไมต้องตัดแถวที่มี NaN แม้แต่ตัวเดียว ? (บั๊กที่แก้ในเวอร์ชันนี้) ***
+
+    ของเดิมใช้ `X.isna().mean(axis=1) < 0.5` คือเก็บแถวไว้ตราบใดที่ NaN
+    ไม่เกินครึ่ง แล้วปล่อยให้ `SimpleImputer(median)` ใน pipeline เติมให้
+
+    ปัญหาคือ 20 แถวแรกเป็นช่วง "อุ่นเครื่อง" ที่ rolling window ยังไม่ครบ
+    (volatility_20d ต้องใช้ 20 วัน, sma20 / bb_position / volume_over_ma20
+    ต้องใช้ 19-20 วัน, ret_10d ต้องใช้ 10 วัน) แถวพวกนี้มี NaN ราว 3-44%
+    ซึ่งต่ำกว่าเกณฑ์ 0.5 ทุกแถว จึงถูกเก็บไว้ทั้งหมดแล้วโดนเติมด้วย median
+    ของทั้งคอลัมน์ = **ยัดค่ากลางที่คำนวณจากทั้งชุดลงไปในแถวที่ ณ เวลานั้น
+    ยังไม่มีทางรู้ค่าได้** ทั้งที่ค่าจริงยังไม่เกิดขึ้นด้วยซ้ำ
+
+    ตรวจข้อมูลจริงแล้ว: NaN อยู่แค่ 20 แถวแรกต่อเนื่องกัน (ตำแหน่ง 0-19)
+    ทั้งสองหุ้น **ไม่มี NaN กลางชุดเลย** การตัดทิ้งจึงเสียข้อมูลแค่
+    20 จาก 2,432 แถว = 0.8% แลกกับการไม่มีค่าที่ถูกเดาขึ้นมาปนในชุดเทรน
+
+    `SimpleImputer` ใน models.py ยังคงไว้เป็นตาข่ายนิรภัย (กลายเป็น no-op)
+    เผื่อข้อมูลชุดใหม่มี NaN โผล่มาในอนาคต
+
+    หมายเหตุ: การตัดทำก่อน split เสมอ จึงกระทบแค่ขอบเขตของ train/val/test
+    เล็กน้อยตามสัดส่วน ไม่ได้เป็นการเปิดดูหรือใช้ข้อมูล test แต่อย่างใด
+    """
     idx = X.index.intersection(y.dropna().index)
     X = X.loc[idx]
     y = y.loc[idx]
 
-    ok = X.isna().mean(axis=1) < 0.5
+    ok = X.notna().all(axis=1)
+    n_drop = int((~ok).sum())
+
+    if n_drop and verbose:
+        pos = np.where(~ok.values)[0]
+        # นับว่าแถวที่ถูกตัดต่อเนื่องจากแถวแรกกี่แถว
+        run = 0
+        while run < len(pos) and pos[run] == run:
+            run += 1
+
+        print(f"[prepare] ตัด {n_drop} แถวที่ feature ยังคำนวณไม่ครบ "
+              f"({n_drop / len(ok) * 100:.1f}% ของ {len(ok)} แถว)")
+        if run == n_drop:
+            print(f"          เป็นช่วงอุ่นเครื่องต้นชุดต่อเนื่องกัน "
+                  f"({X.index[0].date()} ถึง {X.index[pos[-1]].date()})")
+        else:
+            print(f"          !! เตือน: มี {n_drop - run} แถวที่ NaN อยู่กลางชุด "
+                  f"(แถวที่ {pos[run:run + 5].tolist()} ...)")
+            print(f"          ตรวจ features.py ว่ามีตัวหารเป็นศูนย์หรือไม่ "
+                  f"ก่อนเชื่อผลลัพธ์")
+
     X, y = X[ok], y[ok]
 
     if extra is not None:
