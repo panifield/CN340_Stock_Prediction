@@ -20,10 +20,22 @@ main.py — งาน B (ราคาปิด / return)
 
 import argparse
 import os
+import sys
 import warnings
 
 import numpy as np
 import pandas as pd
+
+# บน Windows คอนโซลใช้ code page cp1252 เป็นค่าเริ่มต้น พอ print ภาษาไทย
+# จะ crash ด้วย UnicodeEncodeError ตั้งแต่บรรทัดแรก บังคับ stdout/stderr
+# เป็น UTF-8 เพื่อให้รัน `python main.py` ตรง ๆ ได้โดยไม่ต้องตั้ง env เอง
+# (Python 3.7+ มี stream.reconfigure; ห่อ try กันสตรีมที่ไม่รองรับ เช่น
+# ตอนถูก redirect เป็นไฟล์/ไปป์บางชนิด)
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 
 warnings.filterwarnings("ignore")
 pd.set_option("display.width", 200)

@@ -159,7 +159,8 @@ def print_table(df, title=""):
 
 
 def compare_to_baseline(df, metric, baseline_prefix="Baseline",
-                        higher_is_better=True, model_name=None):
+                        higher_is_better=True, model_name=None,
+                        noise_threshold=0.02):
     """
     ตรวจว่าโมเดล ML ชนะ baseline ที่ดีที่สุดหรือไม่
     คืนข้อความสรุปสำหรับเขียนลงรายงาน
@@ -168,6 +169,14 @@ def compare_to_baseline(df, metric, baseline_prefix="Baseline",
     ถ้าไม่ใส่ จะ fallback ไปหาโมเดลที่ดีที่สุด "ในตาราง df นี้" เอง
     (ระวัง: ถ้า df เป็นตาราง test การ fallback แบบนี้เท่ากับเอา test
     มาเลือกโมเดลทางอ้อม ไม่ควรใช้ fallback กับตาราง test)
+
+    noise_threshold: ถ้าโมเดลกับ baseline ต่างกัน "น้อยกว่า" สัดส่วนนี้
+    ของค่า baseline (ค่าเริ่มต้น 2%) ให้ถือว่าต่างกันในระดับ noise —
+    ยังสรุปไม่ได้ว่าใครดีกว่ากัน ไม่รายงานว่า "ชนะ"
+    เหตุผล: ตัวอย่าง val/test มีแค่ ~365 วัน ความต่าง MAE ระดับ 0.2%
+    จมอยู่ในความแปรปรวนของการสุ่มตัวอย่าง การเคลมชนะบนส่วนต่างขนาดนั้น
+    คือการอ่าน noise เป็นสัญญาณ (ดู thesis หลักของงาน: อย่าเคลมว่าชนะ
+    random walk ทั้งที่ส่วนต่างไม่มีนัยสำคัญ)
     """
     is_base = df.index.str.startswith(baseline_prefix)
     baselines = df[is_base]
@@ -196,11 +205,27 @@ def compare_to_baseline(df, metric, baseline_prefix="Baseline",
         won = best_model < best_base
 
     diff = abs(best_model - best_base)
-    verdict = "ชนะ" if won else "แพ้"
+    # ส่วนต่างเชิงสัมพัทธ์เทียบกับค่า baseline (กัน baseline = 0)
+    rel_diff = diff / abs(best_base) if best_base != 0 else np.inf
+    is_noise = rel_diff < noise_threshold
+
+    if is_noise:
+        # ต่างกันน้อยเกินกว่าจะสรุปได้ ไม่ว่าจะเป็นฝั่งชนะหรือแพ้
+        verdict_line = (
+            f"  ผลสรุป ({metric}) : ต่างกันแค่ {rel_diff*100:.2f}% "
+            f"({diff:.4f}) < เกณฑ์ noise {noise_threshold*100:.0f}%\n"
+            f"    -> อยู่ในระดับ noise ยังสรุปไม่ได้ว่าโมเดล ML "
+            f"ดีกว่า baseline จริง (เสมอกันในเชิงสถิติ)"
+        )
+    else:
+        verdict = "ชนะ" if won else "แพ้"
+        verdict_line = (
+            f"  ผลสรุป ({metric}) : โมเดล ML {verdict} baseline "
+            f"(ต่างกัน {diff:.4f} = {rel_diff*100:.2f}%)"
+        )
 
     return (
         f"  Baseline ที่ดีที่สุด : {best_base_name} = {best_base:.4f}\n"
         f"  โมเดลที่ดีที่สุด     : {best_model_name} = {best_model:.4f}\n"
-        f"  ผลสรุป ({metric}) : โมเดล ML {verdict} baseline "
-        f"(ต่างกัน {diff:.4f})"
+        + verdict_line
     )
