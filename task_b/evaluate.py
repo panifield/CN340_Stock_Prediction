@@ -99,6 +99,95 @@ def prediction_shape(y_true, y_pred):
     return std_ratio, rho, bias
 
 
+def rho_confidence_interval(rho, n, z=1.96):
+    """
+    ช่วงความเชื่อมั่น 95% ของ Rho -- คืน (lo, hi)
+
+    *** ทำไมต้องมี ? ***
+    Rho ที่คำนวณได้มาจาก "ตัวอย่างชุดเดียว" (val 365 วัน) ไม่ใช่ค่าจริงของ
+    ประชากร ถ้ารายงานแค่ตัวเลขเปล่า ๆ คนอ่านจะตีความ Rho = 0.10 ว่า
+    "โมเดลมีทักษะ" ทั้งที่ค่าจริงอาจเป็น 0 ก็ได้ การใส่ CI คือการบอกว่า
+    ตัวเลขนี้ "ไม่แน่นอนแค่ไหน"
+
+    ใช้การประมาณแบบปกติ  SE(Rho) ~= 1 / sqrt(n)
+    ที่ n = 365 -> SE = 0.0523 -> ครึ่งความกว้าง CI = 1.96 * 0.0523 = 0.1026
+    แปลว่า **ต้องมี |Rho| > 0.103 ขึ้นไป ถึงจะพูดได้ว่าต่างจากศูนย์**
+    ซึ่งสูงกว่า Rho ของเกือบทุกโมเดลในงานนี้
+
+    ทางเลือกที่ทั่วไปกว่าคือ Fisher z-transform (arctanh) ที่ถูกต้องกับ Rho
+    ทุกค่า แต่ในช่วง |Rho| < 0.2 ซึ่งเป็นกรณีของงานนี้ทั้งหมด ให้ผลต่างกัน
+    ไม่ถึง 0.005 จึงใช้สูตรง่ายที่อธิบายในรายงานได้ตรงไปตรงมากว่า
+
+    *** ข้อควรระวังที่ต้องเขียนในรายงาน ***
+    สูตร 1/sqrt(n) ตั้งอยู่บนสมมติฐานว่าแต่ละวันเป็นอิสระต่อกัน แต่ผลตอบแทน
+    รายวันจริงมี volatility clustering (วันผันผวนเกาะกลุ่มกัน) ทำให้จำนวน
+    ตัวอย่างที่อิสระจริงน้อยกว่า n -> **CI จริงกว้างกว่าที่คำนวณตรงนี้**
+    เกณฑ์นี้จึง "ใจดีกับโมเดลแล้ว" ถ้า CI ยังคร่อม 0 อยู่ ก็ยิ่งสรุปได้แน่น
+    ขึ้นว่าไม่มีทักษะ (การทำให้แม่นกว่านี้ต้องใช้ HAC standard error)
+    """
+    if n is None or n < 4 or not np.isfinite(rho):
+        return np.nan, np.nan
+
+    half = z / np.sqrt(n)
+    # correlation ถูกจำกัดใน [-1, 1] อยู่แล้วโดยนิยาม
+    return max(-1.0, float(rho) - half), min(1.0, float(rho) + half)
+
+
+def rho_significance_note(results_dict):
+    """
+    สรุปว่าโมเดลไหน "มีทักษะจริง" บ้าง โดยดูว่า 95% CI ของ Rho คร่อม 0 ไหม
+
+    ตัวทำนายค่าคงที่ (Naive / Mean Return / Always Up) มี Rho = NaN
+    จึงถูกข้ามไปโดยอัตโนมัติ -- เทียบได้เฉพาะโมเดลที่ให้ค่าแปรผันจริง
+    """
+    tested = []
+    for name, m in results_dict.items():
+        lo = m.get("Rho_lo", np.nan)
+        hi = m.get("Rho_hi", np.nan)
+        if not (np.isfinite(lo) and np.isfinite(hi)):
+            continue           # baseline ค่าคงที่ -> correlation ไม่นิยาม
+        tested.append((name, float(m["Rho"]), float(lo), float(hi)))
+
+    if not tested:
+        return "  (ไม่มีตัวทำนายที่คำนวณ Rho ได้)"
+
+    lines = ["  ทักษะจริง (Rho) ต่างจากศูนย์ไหม เมื่อดูช่วงความเชื่อมั่น 95%:"]
+
+    n_sig = 0
+    for name, rho, lo, hi in sorted(tested, key=lambda r: -r[1]):
+        crosses_zero = lo <= 0 <= hi
+        if crosses_zero:
+            mark = "คร่อม 0 -> สรุปไม่ได้ว่ามีทักษะ"
+        else:
+            mark = "ไม่คร่อม 0 -> มีนัยสำคัญ"
+            n_sig += 1
+        lines.append(f"    {name:16s} Rho = {rho:+.4f}  "
+                     f"CI = [{lo:+.4f}, {hi:+.4f}]  {mark}")
+
+    lines.append(f"  -> {n_sig} จาก {len(tested)} โมเดล ที่ทักษะต่างจากศูนย์"
+                 f"อย่างมีนัยสำคัญ")
+
+    if n_sig > 0:
+        lines.append("     ระวัง 2 เรื่องก่อนสรุปว่า 'เจอสัญญาณจริง':")
+        lines.append("     (1) การทดสอบหลายครั้ง: ทั้งโปรเจกต์มี 3 โมเดล x 2 หุ้น "
+                     "= 6 การทดสอบ")
+        lines.append("         ที่ระดับ 95% คาดว่าจะเจอตัวรอดแบบบังเอิญ "
+                     "6 x 0.05 = 0.3 ตัว")
+        lines.append("         และโอกาสเจออย่างน้อย 1 ตัวโดยบังเอิญ "
+                     "= 1 - 0.95^6 = 26.5%")
+        lines.append("     (2) selection bias: ANN ถูกเลือกค่าพารามิเตอร์จาก val "
+                     "(กวาด 98 ชุด)")
+        lines.append("         ค่า Rho ของ ANN บน val จึงเป็นค่าที่ 'ผ่านการคัดมาแล้ว' "
+                     "ย่อมเข้าข้างตัวเอง")
+        lines.append("         ตัวเลขที่ไม่เอียงต้องดูจาก test ซึ่งยังไม่เปิด")
+
+    lines.append("     และ SE = 1/sqrt(n) สมมติว่าแต่ละวันอิสระกัน ทั้งที่ผลตอบแทนจริง")
+    lines.append("     มี volatility clustering -> CI จริงกว้างกว่านี้ "
+                 "(เกณฑ์นี้ใจดีกับโมเดลแล้ว)")
+
+    return "\n".join(lines)
+
+
 def regression_metrics(y_true, y_pred, prev_close=None):
     """
     y_true / y_pred เป็น "return"
@@ -108,6 +197,7 @@ def regression_metrics(y_true, y_pred, prev_close=None):
     y_pred = np.asarray(y_pred, dtype=float)
 
     std_ratio, rho, bias = prediction_shape(y_true, y_pred)
+    rho_lo, rho_hi = rho_confidence_interval(rho, len(y_true))
 
     m = {
         "MAE_return": mean_absolute_error(y_true, y_pred),
@@ -116,6 +206,10 @@ def regression_metrics(y_true, y_pred, prev_close=None):
         # 3 ตัวนี้แตก R2_return ออกเป็นส่วน ๆ -- ดู prediction_shape()
         "StdRatio": std_ratio,
         "Rho": rho,
+        # ช่วงความเชื่อมั่น 95% ของ Rho -- ถ้าคร่อม 0 แปลว่าทักษะที่วัดได้
+        # ยังแยกไม่ออกจากศูนย์ ดู rho_confidence_interval()
+        "Rho_lo": rho_lo,
+        "Rho_hi": rho_hi,
         "Bias": bias,
         # ทายทิศทางถูกกี่ % (สำคัญกว่า R² ในทางปฏิบัติ)
         # นับเฉพาะวันที่ราคาขยับจริง -- ดู docstring ของ directional_accuracy

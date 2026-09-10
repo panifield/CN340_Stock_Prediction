@@ -52,7 +52,8 @@ from diagnostics import run_all_diagnostics
 from splits import chronological_split
 from models import get_regressors
 from baselines import get_regression_baselines, always_up_note
-from evaluate import regression_metrics, results_table, print_table, compare_to_baseline
+from evaluate import (regression_metrics, results_table, print_table,
+                      compare_to_baseline, rho_significance_note)
 
 
 def _prepare(X, y, extra=None):
@@ -159,6 +160,9 @@ def run_task_b(X, targets, verbose=True, dev=False):
     print("    Rho คือทักษะจริง (เพดานของ R2 หลังปรับเทียบคือ Rho^2)")
     print("    StdRatio ที่เหมาะสมคือเท่ากับ Rho ถ้าสูงกว่ามาก = ทำนายแกว่งเกินจริง")
     print("    Bias สูง = train กับชุดที่ประเมินมี distribution ต่างกัน")
+    print(f"  - Rho_lo / Rho_hi คือช่วงความเชื่อมั่น 95% ของ Rho "
+          f"(n = {len(y_eval)} วัน)")
+    print(rho_significance_note(eval_results))
     print(always_up_note(y_train))
 
     best_rmse = float(eval_results[best]["RMSE_baht"])
