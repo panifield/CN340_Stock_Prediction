@@ -6,6 +6,10 @@ Backward elimination + **การทดสอบด้วย target สุ่�
     cd task_b
     python feature_selection.py                 # group mode (ค่าเริ่มต้น)
     python feature_selection.py --mode both     # เทียบ group กับ single
+    python feature_selection.py --use-raw-price-levels   # 34 features แบบเดิม
+
+ผลลัพธ์: results/feature_selection_{n}feat_{เวลา}_{path,summary}.csv
+         + _report.txt (ทุกบรรทัดที่ขึ้นบนจอ) -- ไม่เขียนทับผลรอบก่อน
 
 *** ใช้แค่ train / val เท่านั้น ไม่แตะ test เด็ดขาด ***
 สคริปต์นี้เรียก chronological_split แล้วหยิบเฉพาะ parts["train"] กับ
@@ -21,6 +25,9 @@ parts["val"] ไม่มีบรรทัดไหนอ้างถึง par
    -> sqrt(2*ln 595) = 3.57  เทียบกับ  sqrt(2*ln 36) = 2.68
    แปลว่าแบบทีละตัวจะเจอ "การปรับปรุง" ที่พองกว่าราว 33% ทั้งที่เป็น
    noise ล้วน ๆ ในงานที่สัญญาณจริงมีแค่ rho^2 ~ 0.01-0.02 นี่คือหายนะ
+   (ตัวเลขข้างบนเป็นของ 34 features ถ้าปิดราคาดิบจะเหลือ 7 กลุ่ม = 28
+    กับ 29 ตัว = 435 การเปรียบเทียบ -> sqrt(2*ln 435) = 3.49 เทียบกับ
+    sqrt(2*ln 28) = 2.58 ข้อสรุปเหมือนเดิม: แบบทีละตัวพองกว่าราว 35%)
 
 2. feature ในโปรเจกต์นี้ correlate กันเองสูงมาก
    close_over_sma5 กับ close_over_ema5 แทบเป็นตัวเดียวกัน ตัดทีละตัว
@@ -59,6 +66,7 @@ import argparse
 import os
 import sys
 import time
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -78,35 +86,50 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error
 
 from config import (TICKERS, OUTPUT_DIR, RANDOM_STATE,
-                    LAG_DAYS, MA_WINDOWS, VOL_WINDOWS, USE_DAY_OF_WEEK)
+                    LAG_DAYS, MA_WINDOWS, VOL_WINDOWS, USE_DAY_OF_WEEK,
+                    USE_RAW_PRICE_LEVELS)
 from data_loader import load_stock
 from features import build_features
 from targets import build_targets
 from splits import chronological_split
 from models import get_regressors
-from main import _prepare
+from main import _prepare, _Tee
 
 
 # ---------------------------------------------------------------
 # นิยาม 8 กลุ่ม feature (สร้างจาก config เพื่อให้ตรงกับ features.py เสมอ)
 # ---------------------------------------------------------------
-def build_feature_groups():
-    """คืน dict {ชื่อกลุ่ม: [ชื่อคอลัมน์ (ยังไม่ใส่ _prev)]}"""
+def build_feature_groups(use_raw_price_levels=None):
+    """
+    คืน dict {ชื่อกลุ่ม: [ชื่อคอลัมน์ (ใส่ _prev แล้ว)]}
+
+    use_raw_price_levels: ใส่กลุ่ม "ราคาดิบ" ไหม
+        None = ใช้ค่าจาก config (ค่าเริ่มต้น) / True-False = บังคับ
+    ต้องตรงกับที่ features.py สร้างจริง -- เดิมใส่กลุ่มนี้ไว้ตายตัว พอ config
+    ปิดราคาดิบ (USE_RAW_PRICE_LEVELS = False) make_units จึง raise ทันที
+    """
+    if use_raw_price_levels is None:
+        use_raw_price_levels = USE_RAW_PRICE_LEVELS
+
     ma_cols = []
     for w in MA_WINDOWS:
         ma_cols += [f"close_over_sma{w}", f"close_over_ema{w}"]
     if len(MA_WINDOWS) >= 2:
         ma_cols.append(f"sma{MA_WINDOWS[0]}_over_sma{MA_WINDOWS[-1]}")
 
-    groups = {
-        "ราคาดิบ": ["close", "open", "high", "low", "volume"],
+    # ใส่ราคาดิบเป็นกลุ่มแรกเสมอ (ถ้ามี) ให้ลำดับตรงกับรอบ 34 features เดิม
+    # -- ลำดับมีผลเฉพาะตอนสองกลุ่มได้คะแนนเท่ากันเป๊ะ
+    groups = {}
+    if use_raw_price_levels:
+        groups["ราคาดิบ"] = ["close", "open", "high", "low", "volume"]
+    groups.update({
         "Return lag": [f"ret_{lag}d" for lag in LAG_DAYS],
         "รูปแท่งเทียน": ["hl_range", "oc_change", "close_pos_in_range"],
         "อัตราส่วน MA": ma_cols,
         "ความผันผวน": [f"volatility_{w}d" for w in VOL_WINDOWS],
         "Momentum": ["rsi", "macd", "macd_signal", "macd_hist", "bb_position"],
         "ปริมาณซื้อขาย": ["volume_change", "volume_over_ma20"],
-    }
+    })
     if USE_DAY_OF_WEEK:
         groups["วันในสัปดาห์"] = [f"dow_{d}" for d in range(5)]
 
@@ -114,16 +137,16 @@ def build_feature_groups():
     return {g: [f"{c}_prev" for c in cols] for g, cols in groups.items()}
 
 
-def make_units(X, mode):
+def make_units(X, mode, use_raw_price_levels=None):
     """
     แปลงคอลัมน์ของ X เป็น "หน่วยที่จะถูกตัด"
-    mode="group"  -> 8 หน่วย (กลุ่ม)
-    mode="single" -> 34 หน่วย (ทีละคอลัมน์)
+    mode="group"  -> ทีละกลุ่ม (8 กลุ่มถ้าเปิดราคาดิบ / 7 กลุ่มถ้าปิด)
+    mode="single" -> ทีละคอลัมน์ (34 / 29 หน่วย)
     """
     if mode == "single":
         return {c: [c] for c in X.columns}
 
-    groups = build_feature_groups()
+    groups = build_feature_groups(use_raw_price_levels)
     covered = [c for cols in groups.values() for c in cols]
 
     missing = [c for c in covered if c not in X.columns]
@@ -221,13 +244,13 @@ def permutation_null(X_tr, y_tr, X_va, y_va, units, model_name, n_perm,
 # ---------------------------------------------------------------
 # รันหนึ่งหุ้น
 # ---------------------------------------------------------------
-def run_ticker(ticker, mode, model_name, n_perm, verbose=True):
+def run_ticker(ticker, mode, model_name, n_perm, use_raw=None, verbose=True):
     print("\n" + "#" * 78)
     print(f"#  {ticker}  |  mode = {mode}  |  โมเดล = {model_name}")
     print("#" * 78)
 
     df = load_stock(ticker, verbose=False)
-    X = build_features(df, verbose=False)
+    X = build_features(df, verbose=False, use_raw_price_levels=use_raw)
     targets = build_targets(df, verbose=False)
     X_, y_ = _prepare(X, targets["y_return"])
 
@@ -237,9 +260,10 @@ def run_ticker(ticker, mode, model_name, n_perm, verbose=True):
     print(f"[data] train {len(X_train)} แถว / val {len(X_val)} แถว "
           f"(test ไม่ถูกเรียกใช้)")
 
-    units = make_units(X_, mode)
+    units = make_units(X_, mode, use_raw)
     k = len(units)
-    print(f"[setup] {k} หน่วย -> {k*(k+1)//2} การเปรียบเทียบ")
+    print(f"[setup] {X_.shape[1]} features / {k} หน่วย -> "
+          f"{k*(k+1)//2} การเปรียบเทียบ")
 
     t0 = time.time()
     print("\n  [1/2] backward elimination บน target จริง")
@@ -274,20 +298,29 @@ def run_ticker(ticker, mode, model_name, n_perm, verbose=True):
     print(f"  (ใช้เวลา {time.time()-t0:.1f} วินาที)")
 
     return {"ticker": ticker, "mode": mode, "model": model_name,
+            "n_features": X_.shape[1],
             "real": real, "nulls": nulls, "p_value": p_value}
 
 
 # ---------------------------------------------------------------
-def save_results(results):
+def save_results(results, stamp):
+    """
+    บันทึก path/summary เป็น csv แล้วคืน path ของไฟล์รายงาน (.txt)
+
+    ชื่อไฟล์ใส่จำนวน feature + เวลาที่รัน (แบบเดียวกับ main.py) เพื่อไม่ให้
+    เขียนทับผลเก่า -- feature_selection_path.csv / _summary.csv ที่ไม่มี tag
+    คือผลรอบเดิมบน 34 features (รันก่อนแก้ _prepare) เก็บไว้ย้อนดูได้
+    """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    tag = f"{results[0]['n_features']}feat_{stamp}"
 
     path_rows, summary_rows = [], []
     for r in results:
-        t = r["ticker"].replace(".", "_")
         for step in r["real"]["path"]:
             path_rows.append({"stock": r["ticker"], "mode": r["mode"], **step})
         summary_rows.append({
             "stock": r["ticker"], "mode": r["mode"], "model": r["model"],
+            "n_features": r["n_features"],
             "n_units": r["real"]["path"][0]["n_units"],
             "n_eval": r["real"]["n_eval"],
             "mae_full": r["real"]["full_score"],
@@ -301,12 +334,15 @@ def save_results(results):
             "best_units": " | ".join(r["real"]["best_units"]),
         })
 
-    p1 = os.path.join(OUTPUT_DIR, "feature_selection_path.csv")
-    p2 = os.path.join(OUTPUT_DIR, "feature_selection_summary.csv")
+    p1 = os.path.join(OUTPUT_DIR, f"feature_selection_{tag}_path.csv")
+    p2 = os.path.join(OUTPUT_DIR, f"feature_selection_{tag}_summary.csv")
+    p3 = os.path.join(OUTPUT_DIR, f"feature_selection_{tag}_report.txt")
     pd.DataFrame(path_rows).to_csv(p1, index=False, encoding="utf-8-sig")
     pd.DataFrame(summary_rows).to_csv(p2, index=False, encoding="utf-8-sig")
     print(f"\n[save] {p1}")
     print(f"[save] {p2}")
+    print(f"[save] {p3}   <- รายงานฉบับเต็มแบบเดียวกับบนจอ")
+    return p3
 
 
 def parse_args():
@@ -315,15 +351,20 @@ def parse_args():
     )
     p.add_argument("--mode", choices=["group", "single", "both"],
                    default="group",
-                   help="group = 8 กลุ่ม (แนะนำ), single = ทีละ feature")
+                   help="group = ทีละกลุ่ม (แนะนำ), single = ทีละ feature")
     p.add_argument("--model", default="Random Forest",
-                   choices=["Random Forest", "XGBoost", "ANN (MLP)"])
+                   choices=["Random Forest", "XGBoost", "ANN (MLP)"],
+                   help="ANN (MLP) เฉลี่ย 10 seeds (ดู models.py) จึงช้ากว่า "
+                        "RF มาก")
     p.add_argument("--n-perm", type=int, default=20,
                    help="จำนวนรอบสับ target (ยิ่งมากยิ่งแม่น แต่ช้า)")
     p.add_argument("--n-perm-single", type=int, default=None,
                    help="จำนวนรอบสับเฉพาะ single mode (ค่าเริ่มต้น = --n-perm) "
-                        "ตั้งน้อยกว่าได้เพราะ single ใช้การประเมิน 595 ครั้ง "
-                        "เทียบกับ group ที่ใช้ 36 ครั้ง = ช้ากว่า ~17 เท่า")
+                        "ตั้งน้อยกว่าได้เพราะ single ช้ากว่า group มาก "
+                        "(29 features: 435 เทียบกับ 28 การประเมิน ~15 เท่า)")
+    p.add_argument("--use-raw-price-levels", action="store_true",
+                   help="ใส่ feature ราคาดิบ 5 ตัว (34 features แบบรอบเดิม) "
+                        "ค่าเริ่มต้น = ไม่ใส่ (29 features) ตรงกับ ann_sweep.py")
     p.add_argument("--quiet", action="store_true")
     return p.parse_args()
 
@@ -331,36 +372,53 @@ def parse_args():
 def main():
     args = parse_args()
     modes = ["group", "single"] if args.mode == "both" else [args.mode]
+    use_raw = args.use_raw_price_levels
 
-    print("=" * 78)
-    print("  งาน B : Feature Selection + Permutation Guard")
-    print("  *** ใช้ train/val เท่านั้น ไม่แตะ test ***")
-    print("=" * 78)
+    # เก็บสำเนาทุกอย่างที่ print เพื่อเขียนเป็นไฟล์รายงานตอนจบ (แบบเดียวกับ main.py)
+    tee = _Tee(sys.stdout)
+    sys.stdout = tee
+    report_path = None
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    results = []
-    for mode in modes:
-        n_perm = args.n_perm
-        if mode == "single" and args.n_perm_single is not None:
-            n_perm = args.n_perm_single
-        for ticker in TICKERS:
-            results.append(run_ticker(ticker, mode, args.model,
-                                      n_perm, verbose=not args.quiet))
-
-    if len(modes) == 2:
-        print("\n" + "=" * 78)
-        print("  เทียบ group กับ single — ทำไมกลุ่มถึงน่าเชื่อถือกว่า")
+    try:
         print("=" * 78)
-        for ticker in TICKERS:
-            rows = [r for r in results if r["ticker"] == ticker]
-            print(f"\n  {ticker}")
-            for r in rows:
-                print(f"    {r['mode']:7s} ({r['real']['n_eval']:3d} เปรียบเทียบ)  "
-                      f"จริง {r['real']['improvement_pct']:5.2f}%  |  "
-                      f"สุ่มเฉลี่ย {r['nulls'].mean():5.2f}%  |  "
-                      f"p = {r['p_value']:.3f}")
+        print("  งาน B : Feature Selection + Permutation Guard")
+        print(f"  feature ราคาดิบ: {'เปิด (34)' if use_raw else 'ปิด (29)'}")
+        print("  *** ใช้ train/val เท่านั้น ไม่แตะ test ***")
+        print("=" * 78)
+        print(f"  เวลาที่รัน: {stamp}")
 
-    save_results(results)
-    print("\nเสร็จสิ้น")
+        results = []
+        for mode in modes:
+            n_perm = args.n_perm
+            if mode == "single" and args.n_perm_single is not None:
+                n_perm = args.n_perm_single
+            for ticker in TICKERS:
+                results.append(run_ticker(ticker, mode, args.model, n_perm,
+                                          use_raw=use_raw,
+                                          verbose=not args.quiet))
+
+        if len(modes) == 2:
+            print("\n" + "=" * 78)
+            print("  เทียบ group กับ single — ทำไมกลุ่มถึงน่าเชื่อถือกว่า")
+            print("=" * 78)
+            for ticker in TICKERS:
+                rows = [r for r in results if r["ticker"] == ticker]
+                print(f"\n  {ticker}")
+                for r in rows:
+                    print(f"    {r['mode']:7s} ({r['real']['n_eval']:3d} เปรียบเทียบ)  "
+                          f"จริง {r['real']['improvement_pct']:5.2f}%  |  "
+                          f"สุ่มเฉลี่ย {r['nulls'].mean():5.2f}%  |  "
+                          f"p = {r['p_value']:.3f}")
+
+        report_path = save_results(results, stamp)
+        print("\nเสร็จสิ้น")
+    finally:
+        sys.stdout = tee.stream
+
+    if report_path is not None:
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(tee.copy.getvalue())
     return results
 
 
