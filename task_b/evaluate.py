@@ -176,7 +176,7 @@ def rho_significance_note(results_dict):
         lines.append("         และโอกาสเจออย่างน้อย 1 ตัวโดยบังเอิญ "
                      "= 1 - 0.95^6 = 26.5%")
         lines.append("     (2) selection bias: ANN ถูกเลือกค่าพารามิเตอร์จาก val "
-                     "(กวาด 98 ชุด)")
+                     "(กวาด 140 ชุด = 52 บน 34 feat + 88 บน 29 feat)")
         lines.append("         ค่า Rho ของ ANN บน val จึงเป็นค่าที่ 'ผ่านการคัดมาแล้ว' "
                      "ย่อมเข้าข้างตัวเอง")
         lines.append("         ตัวเลขที่ไม่เอียงต้องดูจาก test ซึ่งยังไม่เปิด")
