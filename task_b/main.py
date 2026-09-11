@@ -19,9 +19,11 @@ main.py — งาน B (ราคาปิด / return)
 """
 
 import argparse
+import io
 import os
 import sys
 import warnings
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -214,7 +216,8 @@ def run_task_b(X, targets, verbose=True, dev=False):
     return {"table": df, "preds": eval_preds, "y_test": y_eval,
             "prev_close_test": prev_close_eval,
             "best_rmse_baht": best_rmse,
-            "test_index": y_eval.index, "best_model": best, "stage": eval_split}
+            "test_index": y_eval.index, "best_model": best, "stage": eval_split,
+            "n_features": X_.shape[1]}
 
 
 def run_one_ticker(ticker, dev=False):
@@ -248,13 +251,71 @@ def run_one_ticker(ticker, dev=False):
     return {"ticker": ticker, "diag": diag, "b": res}
 
 
-def save_results(all_results):
+class _Tee:
+    """
+    เขียนออกจอตามปกติ และเก็บสำเนาทุกตัวอักษรไว้ด้วย
+    ใช้ทำไฟล์รายงาน (.txt) ที่หน้าตาเหมือนตอนรันบนจอทุกประการ --
+    ทั้ง diagnostics, การแบ่งข้อมูล, ตาราง, ผลเทียบ baseline และหมายเหตุ
+    """
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.copy = io.StringIO()
+
+    def write(self, s):
+        self.stream.write(s)
+        self.copy.write(s)
+        return len(s)
+
+    def flush(self):
+        self.stream.flush()
+
+    def __getattr__(self, name):
+        # attribute อื่น (encoding, isatty ฯลฯ) ส่งต่อให้สตรีมจริง
+        return getattr(self.stream, name)
+
+
+def save_results(all_results, timestamp):
+    """
+    บันทึกผลลัพธ์ 2 แบบ
+
+    1) ตารางตัวเลขของแต่ละหุ้นเป็น csv (เอาไปทำกราฟ/ตารางต่อได้)
+       ชื่อไฟล์: {หุ้น}_taskB_{stage}_{n}feat_{timestamp}.csv
+    2) รายงานฉบับเต็มแบบเดียวกับที่ขึ้นบนจอ (อ่านง่าย ใช้ทำสไลด์)
+       ชื่อไฟล์: taskB_{stage}_{n}feat_{timestamp}_report.txt
+       -- ไฟล์นี้ main() เป็นคนเขียนตอนจบ เพื่อให้เก็บได้ครบถึงบรรทัดสุดท้าย
+
+    stage     = "val" (โหมด --dev) หรือ "test"
+                อ่านจากชุดข้อมูลที่ใช้ประเมิน "จริง" (res["stage"]) ไม่ได้อ่าน
+                จาก flag --dev จึงไม่มีทางที่ผลของ val จะถูกตั้งชื่อเป็น test
+                หรือกลับกัน
+    n feat    = จำนวน feature ที่ใช้ -- กันสับสนระหว่างผลก่อน/หลัง ablation H1
+    timestamp = เวลาที่รัน ไฟล์เก่าไม่ถูกเขียนทับ ย้อนดูได้เสมอว่าตัวเลข
+                บนสไลด์มาจากการรันครั้งไหน
+
+    คืน (รายการไฟล์ csv, path ของไฟล์รายงาน)
+    """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    paths = []
     for r in all_results:
         t = r["ticker"].replace(".", "_").replace("^", "")
-        path = os.path.join(OUTPUT_DIR, f"{t}_taskB_price.csv")
-        r["b"]["table"].to_csv(path, encoding="utf-8-sig")
-    print(f"\n[main] บันทึกตารางผลลัพธ์ไว้ที่โฟลเดอร์ '{OUTPUT_DIR}/'")
+        b = r["b"]
+        name = f"{t}_taskB_{b['stage']}_{b['n_features']}feat_{timestamp}.csv"
+        path = os.path.join(OUTPUT_DIR, name)
+        b["table"].to_csv(path, encoding="utf-8-sig")
+        paths.append(path)
+
+    b0 = all_results[0]["b"]
+    report_path = os.path.join(
+        OUTPUT_DIR,
+        f"taskB_{b0['stage']}_{b0['n_features']}feat_{timestamp}_report.txt",
+    )
+
+    print(f"\n[main] บันทึกผลลัพธ์ {len(paths) + 1} ไฟล์:")
+    for p in paths:
+        print(f"         {p}")
+    print(f"         {report_path}   <- รายงานฉบับเต็มแบบเดียวกับบนจอ")
+    return paths, report_path
 
 
 def parse_args():
@@ -263,8 +324,8 @@ def parse_args():
     )
     parser.add_argument(
         "--dev", action="store_true",
-        help="โหมดพัฒนา: เทรน+ประเมินบน train/val เท่านั้น "
-             "ไม่แตะ test ไม่บันทึกผล",
+        help="โหมดพัฒนา: เทรน+ประเมินบน train/val เท่านั้น ไม่แตะ test "
+             "บันทึกผลเป็น *_taskB_val_*.csv และรายงาน *_report.txt",
     )
     return parser.parse_args()
 
@@ -272,27 +333,43 @@ def parse_args():
 def main():
     args = parse_args()
 
-    print("=" * 78)
-    print("  งาน B : ทำนายราคาปิด (Regression)")
-    if args.dev:
-        print("  *** โหมด dev: ไม่แตะ test, ไม่บันทึกผล ***")
-    print("=" * 78)
+    # เก็บสำเนาทุกอย่างที่ print ระหว่างรัน เพื่อเขียนเป็นไฟล์รายงานตอนจบ
+    tee = _Tee(sys.stdout)
+    sys.stdout = tee
+    report_path = None
 
-    all_results = []
-    for ticker in TICKERS:
-        try:
-            all_results.append(run_one_ticker(ticker, dev=args.dev))
-        except Exception as e:
-            print(f"\n!! {ticker} รันไม่ผ่าน: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+    try:
+        print("=" * 78)
+        print("  งาน B : ทำนายราคาปิด (Regression)")
+        if args.dev:
+            print("  *** โหมด dev: ไม่แตะ test, บันทึกผล val เป็น csv + รายงาน ***")
+        print("=" * 78)
 
-    if all_results and not args.dev:
-        save_results(all_results)
-    elif args.dev:
-        print("\n[main] โหมด dev เสร็จแล้ว — ไม่บันทึก csv")
+        # เวลาเดียวกันทุกหุ้นในการรันครั้งนี้ -> ไฟล์จากรอบเดียวกันจับคู่กันได้
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        print(f"  เวลาที่รัน: {stamp}")
 
-    print("\nเสร็จสิ้น")
+        all_results = []
+        for ticker in TICKERS:
+            try:
+                all_results.append(run_one_ticker(ticker, dev=args.dev))
+            except Exception as e:
+                print(f"\n!! {ticker} รันไม่ผ่าน: {type(e).__name__}: {e}")
+                import traceback
+                # พิมพ์ลง stdout เพื่อให้ error ติดไปในไฟล์รายงานด้วย
+                traceback.print_exc(file=sys.stdout)
+
+        if all_results:
+            _, report_path = save_results(all_results, stamp)
+
+        print("\nเสร็จสิ้น")
+    finally:
+        sys.stdout = tee.stream
+
+    if report_path is not None:
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(tee.copy.getvalue())
+
     return all_results
 
 
