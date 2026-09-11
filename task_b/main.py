@@ -13,7 +13,7 @@ main.py — งาน B (ราคาปิด / return)
   1. โหลดข้อมูล
   2. สร้าง feature (shift แล้ว) + target (return)
   3. ตรวจ leak เชิงโครงสร้าง
-  4. วิเคราะห์ข้อมูลก่อนเทรน
+  4. วิเคราะห์ข้อมูลก่อนเทรน (ใช้ train เท่านั้น ทุกโหมด)
   5. เทรน 3 โมเดล (ทำนายผ่าน return แล้วแปลงกลับเป็นราคา) + เทียบ baseline
   6. บันทึกผลลง csv
 """
@@ -46,7 +46,7 @@ pd.set_option("display.max_columns", 50)
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.preprocessing import StandardScaler
 
-from config import TICKERS, OUTPUT_DIR
+from config import TICKERS, OUTPUT_DIR, ANN_SEEDS
 from data_loader import load_stock
 from features import build_features, verify_no_leak
 from targets import build_targets
@@ -55,7 +55,10 @@ from splits import chronological_split
 from models import get_regressors
 from baselines import get_regression_baselines, always_up_note
 from evaluate import (regression_metrics, results_table, print_table,
-                      compare_to_baseline, rho_significance_note)
+                      compare_to_baseline, rho_significance_note,
+                      diebold_mariano, dm_note)
+
+NAIVE_NAME = "Baseline: Naive (RW)"
 
 
 def _prepare(X, y, extra=None, verbose=True):
@@ -133,6 +136,12 @@ def run_task_b(X, targets, verbose=True, dev=False):
     X_val, y_val = parts["val"]
     prev_close_val = extra_.loc[X_val.index, "prev_close"]
 
+    # วิเคราะห์ข้อมูลก่อนเทรน -- ใช้ "train เท่านั้น" ทุกโหมด
+    # เดิมโหมดปกติรันบนข้อมูลทั้งหมดรวม test ทำให้สถิติของ test (Return SD,
+    # mean return, corr กับ target) หลุดเข้าไฟล์รายงาน ส่วนโหมด dev ตัดด้วย
+    # สัดส่วนของ df ดิบ ซึ่งไม่ตรงกับจุดตัดจริงหลัง _prepare (2068 vs 2071)
+    diag = run_all_diagnostics(targets.loc[X_train.index], X_train)
+
     if not dev:
         X_test, y_test = parts["test"]
         prev_close_test = extra_.loc[X_test.index, "prev_close"]
@@ -161,15 +170,19 @@ def run_task_b(X, targets, verbose=True, dev=False):
 
         if verbose:
             if dev:
-                print(f"เสร็จ (val MAE={val_results[name]['MAE_baht']:.4f} บาท)")
+                print(f"เสร็จ (val MAE_return={val_results[name]['MAE_return']:.6f}, "
+                      f"MAE_baht={val_results[name]['MAE_baht']:.4f} บาท)")
             else:
-                print(f"เสร็จ (val MAE={val_results[name]['MAE_baht']:.4f} บาท, "
-                      f"test MAE={test_results[name]['MAE_baht']:.4f} บาท)")
+                print(f"เสร็จ (val MAE_return={val_results[name]['MAE_return']:.6f}, "
+                      f"test MAE_return={test_results[name]['MAE_return']:.6f})")
 
-    best = min(val_results, key=lambda n: val_results[n]["MAE_baht"])
+    # เลือกด้วย MAE_return ไม่ใช่ MAE_baht: MAE_baht คูณด้วยระดับราคาซึ่งไต่ขึ้น
+    # ตลอดช่วง val ทำให้วันท้ายชุดมีน้ำหนักมากกว่าวันต้นชุดโดยไม่มีเหตุผล
+    # (เหตุผลเดียวกับที่ feature_selection.py ใช้ MAE_return)
+    best = min(val_results, key=lambda n: val_results[n]["MAE_return"])
     if verbose:
         print(f"\n    เลือกโมเดลที่ดีที่สุดจาก val set: {best} "
-              f"(val MAE_baht={val_results[best]['MAE_baht']:.4f} บาท)")
+              f"(val MAE_return={val_results[best]['MAE_return']:.6f})")
 
     if dev:
         eval_split, y_eval, eval_results, eval_preds, prev_close_eval = (
@@ -184,14 +197,30 @@ def run_task_b(X, targets, verbose=True, dev=False):
         eval_results[name] = regression_metrics(y_eval, p, prev_close_eval)
         eval_preds[name] = p
 
+    # Diebold-Mariano เทียบทุกตัวกับ Naive (RW) -- ใส่เป็นคอลัมน์ใน csv ด้วย
+    # (Naive เทียบกับตัวเองได้ NaN)
+    naive = eval_preds[NAIVE_NAME]
+    for name in eval_results:
+        z, p = diebold_mariano(y_eval, eval_preds[name], naive)
+        eval_results[name]["DM_z"] = z
+        eval_results[name]["DM_p"] = p
+
     df = results_table(eval_results, sort_by="MAE_baht", ascending=True)
     label = "Val Set (โหมด dev)" if dev else "Test Set"
     print_table(df, f"งาน B : ผลลัพธ์บน {label}")
 
     print("\n" + compare_to_baseline(df, "MAE_baht", higher_is_better=False,
                                      model_name=best))
+    print("\n" + dm_note(eval_results, NAIVE_NAME))
 
     print("\n  หมายเหตุการอ่านผล:")
+    print(f"  - ANN (MLP) = ค่าเฉลี่ยการทำนายของ {len(ANN_SEEDS)} seeds "
+          f"{ANN_SEEDS} น้ำหนักเท่ากัน")
+    print("    ไม่ได้เลือก seed ที่ดีที่สุด (ดูเหตุผลที่ ANN_SEEDS ใน config.py)")
+    print("  - ทุกโมเดลเทรนบน train เท่านั้น ไม่ refit รวม val "
+          "(ตัดสินใจไว้ก่อนเปิด test -- ดู config.py)")
+    print("  - เลือกโมเดลที่ดีที่สุดด้วย val MAE_return "
+          "(MAE_baht ถ่วงน้ำหนักตามระดับราคา)")
     print("  - R2_price ที่สูงมาก (>0.95) ไม่ได้แปลว่าโมเดลเก่ง")
     print("    เพราะมันมาจากการที่ราคาพรุ่งนี้ใกล้เคียงราคาวันนี้อยู่แล้ว")
     print("  - ให้ดู MAE_baht เทียบกับ Baseline: Naive (RW) เป็นหลัก")
@@ -208,7 +237,7 @@ def run_task_b(X, targets, verbose=True, dev=False):
     print("    Bias สูง = train กับชุดที่ประเมินมี distribution ต่างกัน")
     print(f"  - Rho_lo / Rho_hi คือช่วงความเชื่อมั่น 95% ของ Rho "
           f"(n = {len(y_eval)} วัน)")
-    print(rho_significance_note(eval_results))
+    print(rho_significance_note(eval_results, stage=eval_split))
     print(always_up_note(y_train))
 
     best_rmse = float(eval_results[best]["RMSE_baht"])
@@ -217,7 +246,7 @@ def run_task_b(X, targets, verbose=True, dev=False):
             "prev_close_test": prev_close_eval,
             "best_rmse_baht": best_rmse,
             "test_index": y_eval.index, "best_model": best, "stage": eval_split,
-            "n_features": X_.shape[1]}
+            "n_features": X_.shape[1], "diag": diag}
 
 
 def run_one_ticker(ticker, dev=False):
@@ -233,22 +262,9 @@ def run_one_ticker(ticker, dev=False):
 
     verify_no_leak(df, X, sample_idx=100)
 
-    if dev:
-        from config import TRAIN_RATIO, VAL_RATIO, SPLIT_BY_DATE
-        if SPLIT_BY_DATE is not None:
-            val_end = pd.Timestamp(SPLIT_BY_DATE["val_end"])
-            cutoff = int((df.index <= val_end).sum())
-        else:
-            cutoff = int(len(df) * (TRAIN_RATIO + VAL_RATIO))
-        print(f"\n[main] โหมด dev: diagnostics ใช้แค่ train+val "
-              f"({cutoff}/{len(df)} แถวแรก) ตัด test ออก")
-        diag = run_all_diagnostics(df.iloc[:cutoff], targets.iloc[:cutoff],
-                                   X.iloc[:cutoff])
-    else:
-        diag = run_all_diagnostics(df, targets, X)
-
+    # diagnostics รันใน run_task_b หลัง split เพื่อให้ใช้แถวของ train เท่านั้น
     res = run_task_b(X, targets, dev=dev)
-    return {"ticker": ticker, "diag": diag, "b": res}
+    return {"ticker": ticker, "diag": res["diag"], "b": res}
 
 
 class _Tee:

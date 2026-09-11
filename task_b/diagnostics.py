@@ -80,10 +80,19 @@ def leak_check(X, y_return, verbose=True):
     return suspicious
 
 
-def run_all_diagnostics(df, targets, X, verbose=True):
-    """รันการวิเคราะห์ทั้งหมดรวดเดียว"""
+def run_all_diagnostics(targets, X, verbose=True):
+    """
+    รันการวิเคราะห์ทั้งหมดรวดเดียว
+
+    *** ส่ง "เฉพาะแถวของ train" เข้ามาเท่านั้น ***
+    สถิติที่พิมพ์ตรงนี้ (return เฉลี่ย/SD, corr กับ target) ลงไฟล์รายงาน
+    ถ้าส่งข้อมูลทั้งชุดเข้ามา สถิติของ test จะหลุดเข้ารายงานโดยไม่ตั้งใจ
+    main.py เรียกฟังก์ชันนี้หลัง split ด้วยแถวของ train ทุกโหมด
+    """
     print("\n" + "#" * 78)
-    print("#  การวิเคราะห์ข้อมูลก่อนเทรน (เอาผลส่วนนี้ใส่รายงานด้วย)")
+    print("#  การวิเคราะห์ข้อมูลก่อนเทรน -- ใช้ train เท่านั้น "
+          "(เอาผลส่วนนี้ใส่รายงานด้วย)")
+    print(f"#  ({len(X)} แถว: {X.index[0].date()} -> {X.index[-1].date()})")
     print("#" * 78)
 
     out = {}

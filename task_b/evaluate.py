@@ -8,10 +8,14 @@ evaluate.py — งาน B (ราคาปิด / return)
 จะได้เห็นชัดๆ ว่าโมเดลชนะ baseline หรือไม่
 """
 
+import math
+
 import numpy as np
 import pandas as pd
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+from config import TICKERS, ANN_SWEEP_HISTORY
 
 
 def directional_accuracy(y_true, y_pred):
@@ -133,12 +137,15 @@ def rho_confidence_interval(rho, n, z=1.96):
     return max(-1.0, float(rho) - half), min(1.0, float(rho) + half)
 
 
-def rho_significance_note(results_dict):
+def rho_significance_note(results_dict, stage="val"):
     """
     สรุปว่าโมเดลไหน "มีทักษะจริง" บ้าง โดยดูว่า 95% CI ของ Rho คร่อม 0 ไหม
 
     ตัวทำนายค่าคงที่ (Naive / Mean Return / Always Up) มี Rho = NaN
     จึงถูกข้ามไปโดยอัตโนมัติ -- เทียบได้เฉพาะโมเดลที่ให้ค่าแปรผันจริง
+
+    stage = "val" หรือ "test" -- ข้อความเรื่อง selection bias ต่างกันตามชุด
+    ที่ประเมิน (บน val ค่า ANN ผ่านการคัดมาแล้ว / บน test ไม่ได้ผ่านการคัด)
     """
     tested = []
     for name, m in results_dict.items():
@@ -168,23 +175,103 @@ def rho_significance_note(results_dict):
                  f"อย่างมีนัยสำคัญ")
 
     if n_sig > 0:
+        n_models = len(tested)
+        n_tests = n_models * len(TICKERS)
+        n_sweep = sum(c for _, c in ANN_SWEEP_HISTORY)
+        sweep_txt = " + ".join(f"{c} บน {f} feat" for f, c in ANN_SWEEP_HISTORY)
+
         lines.append("     ระวัง 2 เรื่องก่อนสรุปว่า 'เจอสัญญาณจริง':")
-        lines.append("     (1) การทดสอบหลายครั้ง: ทั้งโปรเจกต์มี 3 โมเดล x 2 หุ้น "
-                     "= 6 การทดสอบ")
+        lines.append(f"     (1) การทดสอบหลายครั้ง: ทั้งโปรเจกต์มี {n_models} โมเดล x "
+                     f"{len(TICKERS)} หุ้น = {n_tests} การทดสอบ")
         lines.append("         ที่ระดับ 95% คาดว่าจะเจอตัวรอดแบบบังเอิญ "
-                     "6 x 0.05 = 0.3 ตัว")
+                     f"{n_tests} x 0.05 = {n_tests * 0.05:.1f} ตัว")
         lines.append("         และโอกาสเจออย่างน้อย 1 ตัวโดยบังเอิญ "
-                     "= 1 - 0.95^6 = 26.5%")
-        lines.append("     (2) selection bias: ANN ถูกเลือกค่าพารามิเตอร์จาก val "
-                     "(กวาด 140 ชุด = 52 บน 34 feat + 88 บน 29 feat)")
-        lines.append("         ค่า Rho ของ ANN บน val จึงเป็นค่าที่ 'ผ่านการคัดมาแล้ว' "
-                     "ย่อมเข้าข้างตัวเอง")
-        lines.append("         ตัวเลขที่ไม่เอียงต้องดูจาก test ซึ่งยังไม่เปิด")
+                     f"= 1 - 0.95^{n_tests} = {(1 - 0.95 ** n_tests) * 100:.1f}%")
+        if stage == "val":
+            lines.append("     (2) selection bias: ANN ถูกเลือกค่าพารามิเตอร์จาก val "
+                         f"(กวาด {n_sweep} ชุด = {sweep_txt})")
+            lines.append("         ค่า Rho ของ ANN บน val จึงเป็นค่าที่ 'ผ่านการคัดมาแล้ว' "
+                         "ย่อมเข้าข้างตัวเอง")
+            lines.append("         ตัวเลขที่ไม่เอียงต้องดูจาก test ซึ่งยังไม่เปิด")
+        else:
+            lines.append("     (2) ค่าบน test ไม่ได้ผ่านการคัด: ANN ถูกเลือกค่าพารามิเตอร์"
+                         f"จาก val (กวาด {n_sweep} ชุด = {sweep_txt})")
+            lines.append("         ไม่มีการใช้ test เลือกอะไรเลย -> Rho บน test "
+                         "ไม่เอียงจากการจูน")
+            lines.append("         ถ้า Rho บน test ต่ำกว่าบน val ชัดเจน = สัญญาณว่าค่าบน val "
+                         "เคยเข้าข้างตัวเอง")
 
     lines.append("     และ SE = 1/sqrt(n) สมมติว่าแต่ละวันอิสระกัน ทั้งที่ผลตอบแทนจริง")
     lines.append("     มี volatility clustering -> CI จริงกว้างกว่านี้ "
                  "(เกณฑ์นี้ใจดีกับโมเดลแล้ว)")
 
+    return "\n".join(lines)
+
+
+def diebold_mariano(y_true, pred_model, pred_base, lag=None):
+    """
+    Diebold-Mariano test: โมเดลคลาดเคลื่อนต่างจาก baseline จริงไหม
+    คืน (z, p)  z < 0 = โมเดลคลาดเคลื่อนน้อยกว่า baseline, p แบบสองทาง
+
+    *** ทำไมต้องมี ? (ใช้แทนเกณฑ์ noise 2% ของ compare_to_baseline) ***
+    เกณฑ์ 2% เป็นตัวเลขที่ตั้งเอง ไม่ได้ขึ้นกับว่าข้อมูลแกว่งแค่ไหน
+    DM test ดูที่ "ผลต่างของ loss รายวัน" d_t = |e_model,t| - |e_base,t|
+    แล้วถามว่าค่าเฉลี่ยของ d_t ต่างจาก 0 เกินกว่าความแปรปรวนของมันไหม
+    = การทดสอบมาตรฐานสำหรับเทียบความแม่นของการพยากรณ์สองชุด
+
+    loss = ค่าคลาดเคลื่อนสัมบูรณ์ของ return (สอดคล้องกับ MAE_return)
+
+    ความแปรปรวนใช้ Newey-West (HAC) เพราะ d_t เกาะกลุ่มกันตาม volatility
+    clustering -- ถ้าใช้สูตรที่สมมติว่าแต่ละวันอิสระกัน p จะเล็กเกินจริง
+    lag ตั้งตามกฎ Newey-West: floor(4 * (n/100)^(2/9)) -> n = 362 ได้ lag = 5
+
+    หมายเหตุ: ไม่ได้ใส่ small-sample correction ของ Harvey-Leybourne-Newbold
+    เพราะที่ n ~ 360 และทำนายล่วงหน้า 1 วัน ตัวคูณมีค่า ~0.999 แทบไม่ต่าง
+    """
+    y = np.asarray(y_true, dtype=float)
+    d = (np.abs(y - np.asarray(pred_model, dtype=float))
+         - np.abs(y - np.asarray(pred_base, dtype=float)))
+    n = len(d)
+    if n < 10 or np.ptp(d) == 0:
+        return np.nan, np.nan          # ตัวทำนายเหมือนกันทุกวัน -> ไม่มีอะไรให้ทดสอบ
+
+    if lag is None:
+        lag = int(np.floor(4 * (n / 100) ** (2 / 9)))
+
+    dc = d - d.mean()
+    var = np.sum(dc * dc) / n
+    for k in range(1, lag + 1):
+        var += 2 * (1 - k / (lag + 1)) * np.sum(dc[k:] * dc[:-k]) / n
+    if var <= 0:
+        return np.nan, np.nan
+
+    z = float(d.mean() / np.sqrt(var / n))
+    p = float(math.erfc(abs(z) / math.sqrt(2)))
+    return z, p
+
+
+def dm_note(results_dict, base_name, alpha=0.05):
+    """สรุปผล DM test ของทุกตัวทำนายเทียบกับ base_name เป็นข้อความ"""
+    lines = [f"  Diebold-Mariano test เทียบกับ {base_name} "
+             f"(loss = |error ของ return|, HAC):"]
+    n_better = n_worse = 0
+    for name, m in results_dict.items():
+        z, p = m.get("DM_z", np.nan), m.get("DM_p", np.nan)
+        if not (np.isfinite(z) and np.isfinite(p)):
+            continue
+        if p >= alpha:
+            mark = "ต่างกันไม่มีนัยสำคัญ"
+        elif z < 0:
+            mark = "ดีกว่าอย่างมีนัยสำคัญ"
+            n_better += 1
+        else:
+            mark = "แย่กว่าอย่างมีนัยสำคัญ"
+            n_worse += 1
+        lines.append(f"    {name:22s} z = {z:+.3f}  p = {p:.3f}  {mark}")
+    lines.append(f"  -> ดีกว่า {base_name} อย่างมีนัยสำคัญ {n_better} ตัว / "
+                 f"แย่กว่า {n_worse} ตัว (ที่ระดับ {alpha})")
+    lines.append("     z < 0 = คลาดเคลื่อนน้อยกว่า baseline "
+                 "(ไม่ได้ปรับสำหรับการทดสอบหลายครั้ง)")
     return "\n".join(lines)
 
 
