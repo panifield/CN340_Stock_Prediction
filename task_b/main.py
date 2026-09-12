@@ -52,11 +52,12 @@ from features import build_features, verify_no_leak
 from targets import build_targets
 from diagnostics import run_all_diagnostics
 from splits import chronological_split
-from models import get_regressors
+from models import get_regressors, equal_weight_ensemble, ENSEMBLE_NAME
 from baselines import get_regression_baselines, always_up_note
 from evaluate import (regression_metrics, results_table, print_table,
                       compare_to_baseline, rho_significance_note,
-                      diebold_mariano, dm_note)
+                      diebold_mariano, dm_note, regime_error_analysis,
+                      print_regime_table)
 
 NAIVE_NAME = "Baseline: Naive (RW)"
 
@@ -184,16 +185,41 @@ def run_task_b(X, targets, verbose=True, dev=False):
         print(f"\n    เลือกโมเดลที่ดีที่สุดจาก val set: {best} "
               f"(val MAE_return={val_results[best]['MAE_return']:.6f})")
 
+    # --- Equal-weight ensemble (ประกาศล่วงหน้า น้ำหนัก 1/3 ตายตัว) ---
+    # เพิ่ม "หลัง" เลือกโมเดลที่ดีที่สุดแล้ว เพื่อให้ ensemble ไม่มีทางถูกเลือก
+    # เป็น best model -- protocol ที่ประกาศไว้คือเลือกจาก 3 โมเดลฐานเท่านั้น
+    # และต้องรายงานทั้ง best model กับ ensemble คู่กันเสมอ ห้ามเลือกอย่างใด
+    # อย่างหนึ่งมารายงานหลังเห็นผลแล้ว
+    val_preds[ENSEMBLE_NAME] = equal_weight_ensemble(val_preds)
+    val_results[ENSEMBLE_NAME] = regression_metrics(
+        y_val, val_preds[ENSEMBLE_NAME], prev_close_val)
+    if not dev:
+        test_preds[ENSEMBLE_NAME] = equal_weight_ensemble(test_preds)
+        test_results[ENSEMBLE_NAME] = regression_metrics(
+            y_test, test_preds[ENSEMBLE_NAME], prev_close_test)
+    if verbose:
+        print(f"    {ENSEMBLE_NAME}: val MAE_return="
+              f"{val_results[ENSEMBLE_NAME]['MAE_return']:.6f}  "
+              f"(รายงานคู่กับ {best} เสมอ ไม่ได้เลือกแทนกัน)")
+
     if dev:
         eval_split, y_eval, eval_results, eval_preds, prev_close_eval = (
             "val", y_val, val_results, val_preds, prev_close_val
         )
+        X_eval = X_val
     else:
         eval_split, y_eval, eval_results, eval_preds, prev_close_eval = (
             "test", y_test, test_results, test_preds, prev_close_test
         )
+        X_eval = X_test
 
-    for name, p in get_regression_baselines(y_train, y_eval).items():
+    # ประวัติ return ที่อนุญาตให้ rolling mean baseline ใช้ -- ตัดปลายไว้ที่
+    # วันสุดท้ายของชุดที่ประเมิน ในโหมด dev จึงไม่มีแถวของ test เข้ามาแม้แต่
+    # ในการคำนวณระหว่างทาง (ตัว baseline เองก็ shift(1) อีกชั้นอยู่แล้ว)
+    y_history = y_.loc[:y_eval.index[-1]]
+    for name, p in get_regression_baselines(y_train, y_eval,
+                                            y_history=y_history,
+                                            verbose=verbose).items():
         eval_results[name] = regression_metrics(y_eval, p, prev_close_eval)
         eval_preds[name] = p
 
@@ -213,6 +239,20 @@ def run_task_b(X, targets, verbose=True, dev=False):
                                      model_name=best))
     print("\n" + dm_note(eval_results, NAIVE_NAME))
 
+    # --- Error analysis แยกตามสภาวะตลาด (ใช้ prediction เดิม ไม่เทรนใหม่) ---
+    vol_col = "volatility_20d_prev"
+    vol_thr = float(X_train[vol_col].median())
+    regime_df = regime_error_analysis(y_eval, eval_preds, X_eval[vol_col],
+                                      vol_thr, baseline_name=NAIVE_NAME)
+    print_regime_table(regime_df,
+                       f"งาน B : Error analysis แยกตามสภาวะตลาด ({label})",
+                       baseline_name=NAIVE_NAME)
+    print(f"\n  เส้นแบ่ง volatility = median ของ {vol_col} บน train "
+          f"= {vol_thr:.6f}")
+    print("  ใช้เส้นแบ่งจาก train เท่านั้น ไม่ใช่ median ของชุดที่ประเมิน")
+    print("  (ถ้าใช้ median ของชุดที่ประเมิน สองกลุ่มจะถูกบังคับให้ใหญ่เท่ากันเสมอ")
+    print("   และเทียบ val กับ test ไม่ได้เพราะเส้นแบ่งคนละเส้น)")
+
     print("\n  หมายเหตุการอ่านผล:")
     print(f"  - ANN (MLP) = ค่าเฉลี่ยการทำนายของ {len(ANN_SEEDS)} seeds "
           f"{ANN_SEEDS} น้ำหนักเท่ากัน")
@@ -221,6 +261,17 @@ def run_task_b(X, targets, verbose=True, dev=False):
           "(ตัดสินใจไว้ก่อนเปิด test -- ดู config.py)")
     print("  - เลือกโมเดลที่ดีที่สุดด้วย val MAE_return "
           "(MAE_baht ถ่วงน้ำหนักตามระดับราคา)")
+    print(f"  - {ENSEMBLE_NAME} = เฉลี่ยการทำนายของ 3 โมเดล น้ำหนัก 1/3 ตายตัว")
+    print("    ไม่ได้หาน้ำหนักจาก val และรายงานคู่กับโมเดลที่เลือกเสมอ")
+    print("    *** ไม่เพิ่ม selection bias รอบใหม่จากการเลือกน้ำหนัก แต่ไม่ได้ลบ")
+    print("    selection bias ที่ติดมากับโมเดลต้นทาง โดยเฉพาะ ANN ที่กวาด 140 ชุด ***")
+    print("  - Baseline: Rolling Mean k d = ค่าเฉลี่ย return ของ k วันก่อนหน้า")
+    print("    (ใช้ข้อมูลถึงวัน t-1 เท่านั้น ตรวจ leak ด้วยการคำนวณมือแล้ว)")
+    print("    ไม่ใช่ตัวทำนายค่าคงที่ จึงมี StdRatio / Rho / DirAcc ให้เทียบ")
+    print("    ถ้าโมเดล ML แพ้แม้แต่ตัวนี้ = หลักฐานเพิ่มว่าสัญญาณอ่อนจริง")
+    print("  - R2_OOS = 1 - SSE(โมเดล)/SSE(Naive) เทียบกับคู่แข่งที่ประกาศไว้")
+    print("    ต่างจาก R2_return ที่เทียบกับค่าเฉลี่ยของชุดที่ประเมินเอง")
+    print("    ซึ่ง ณ เวลาทำนายยังไม่มีทางรู้ค่านั้นได้ (ต้องรู้อนาคตทั้งชุดก่อน)")
     print("  - R2_price ที่สูงมาก (>0.95) ไม่ได้แปลว่าโมเดลเก่ง")
     print("    เพราะมันมาจากการที่ราคาพรุ่งนี้ใกล้เคียงราคาวันนี้อยู่แล้ว")
     print("  - ให้ดู MAE_baht เทียบกับ Baseline: Naive (RW) เป็นหลัก")
@@ -246,7 +297,8 @@ def run_task_b(X, targets, verbose=True, dev=False):
             "prev_close_test": prev_close_eval,
             "best_rmse_baht": best_rmse,
             "test_index": y_eval.index, "best_model": best, "stage": eval_split,
-            "n_features": X_.shape[1], "diag": diag}
+            "n_features": X_.shape[1], "diag": diag, "regime": regime_df,
+            "ensemble": ENSEMBLE_NAME}
 
 
 def run_one_ticker(ticker, dev=False):
@@ -320,6 +372,14 @@ def save_results(all_results, timestamp):
         path = os.path.join(OUTPUT_DIR, name)
         b["table"].to_csv(path, encoding="utf-8-sig")
         paths.append(path)
+
+        # error analysis แยกตาม regime -- แยกไฟล์เพราะเป็นตารางคนละรูปทรง
+        if b.get("regime") is not None:
+            rname = (f"{t}_taskB_regime_{b['stage']}_{b['n_features']}feat_"
+                     f"{timestamp}.csv")
+            rpath = os.path.join(OUTPUT_DIR, rname)
+            b["regime"].to_csv(rpath, index=False, encoding="utf-8-sig")
+            paths.append(rpath)
 
     b0 = all_results[0]["b"]
     report_path = os.path.join(

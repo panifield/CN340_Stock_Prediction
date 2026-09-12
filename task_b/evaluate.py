@@ -171,11 +171,14 @@ def rho_significance_note(results_dict, stage="val"):
         lines.append(f"    {name:16s} Rho = {rho:+.4f}  "
                      f"CI = [{lo:+.4f}, {hi:+.4f}]  {mark}")
 
-    lines.append(f"  -> {n_sig} จาก {len(tested)} โมเดล ที่ทักษะต่างจากศูนย์"
+    lines.append(f"  -> {n_sig} จาก {len(tested)} ตัวทำนาย ที่ทักษะต่างจากศูนย์"
                  f"อย่างมีนัยสำคัญ")
 
     if n_sig > 0:
-        n_models = len(tested)
+        # นับเฉพาะโมเดล ML ในการคิดจำนวนการทดสอบ -- baseline ที่ไม่ได้ทำนาย
+        # ค่าคงที่ (rolling mean) ก็คำนวณ Rho ได้และถูกแสดงในรายการข้างบน
+        # แต่ไม่ได้ถูกนับเป็น "การทดสอบสมมติฐานของโมเดล"
+        n_models = len([t for t in tested if not t[0].startswith("Baseline")])
         n_tests = n_models * len(TICKERS)
 
         # จำนวน config ที่แต่ละโมเดลถูกกวาดบน val -- ไม่เท่ากัน ต้องรายงานตามจริง
@@ -195,6 +198,8 @@ def rho_significance_note(results_dict, stage="val"):
                      f"{n_tests} x 0.05 = {n_tests * 0.05:.1f} ตัว")
         lines.append("         และโอกาสเจออย่างน้อย 1 ตัวโดยบังเอิญ "
                      f"= 1 - 0.95^{n_tests} = {(1 - 0.95 ** n_tests) * 100:.1f}%")
+        lines.append("         (ถ้ามี Ensemble อยู่ในรายการ การทดสอบไม่อิสระกันจริง "
+                     "เพราะมันคือค่าเฉลี่ยของอีก 3 ตัว)")
         if stage == "val":
             lines.append("     (2) selection bias: พารามิเตอร์ถูกเลือกจาก val "
                          "และแต่ละโมเดลได้โอกาสไม่เท่ากัน")
@@ -287,6 +292,38 @@ def dm_note(results_dict, base_name, alpha=0.05):
     return "\n".join(lines)
 
 
+def r2_oos(y_true, y_pred, benchmark_pred=None):
+    """
+    R² out-of-sample แบบ Campbell-Thompson -- เทียบกับ "ตัวเปรียบเทียบ" ที่ประกาศไว้
+
+        R2_OOS = 1 - SSE(model) / SSE(benchmark)
+
+    ค่าเริ่มต้นของ benchmark คือ Naive (ทำนาย return = 0) ซึ่งเป็นคู่แข่งที่
+    ประกาศไว้ตั้งแต่ต้นโปรเจกต์
+
+    *** ต่างจาก R2_return อย่างไร ***
+    R2_return (r2_score ของ sklearn) เทียบกับ "ค่าเฉลี่ยของชุดที่กำลังประเมิน"
+    ซึ่งเป็นค่าที่ ณ เวลาทำนายยังไม่มีทางรู้ได้ (ต้องรู้อนาคตทั้งชุดก่อน)
+    R2_OOS เทียบกับตัวทำนายที่ใช้ได้จริง ณ เวลานั้น จึงตีความได้ตรงกว่าว่า
+    "โมเดลลด squared error ลงจาก Naive ได้กี่ %"
+
+      R2_OOS > 0  = ดีกว่า Naive
+      R2_OOS = 0  = เท่ากับ Naive พอดี (Naive เทียบกับตัวเองได้ 0 เสมอ)
+      R2_OOS < 0  = แย่กว่า Naive
+
+    หมายเหตุ: ค่านี้ไม่บอกนัยสำคัญทางสถิติ ต้องอ่านคู่กับ DM test เสมอ
+    """
+    y = np.asarray(y_true, dtype=float)
+    p = np.asarray(y_pred, dtype=float)
+    b = np.zeros_like(y) if benchmark_pred is None else np.asarray(
+        benchmark_pred, dtype=float)
+
+    sse_bench = float(np.sum((y - b) ** 2))
+    if sse_bench == 0:
+        return np.nan
+    return 1.0 - float(np.sum((y - p) ** 2)) / sse_bench
+
+
 def regression_metrics(y_true, y_pred, prev_close=None):
     """
     y_true / y_pred เป็น "return"
@@ -302,6 +339,8 @@ def regression_metrics(y_true, y_pred, prev_close=None):
         "MAE_return": mean_absolute_error(y_true, y_pred),
         "RMSE_return": float(np.sqrt(mean_squared_error(y_true, y_pred))),
         "R2_return": r2_score(y_true, y_pred),
+        # R2 เทียบกับ Naive (ทำนาย return = 0) -- ดู r2_oos()
+        "R2_OOS": r2_oos(y_true, y_pred),
         # 3 ตัวนี้แตก R2_return ออกเป็นส่วน ๆ -- ดู prediction_shape()
         "StdRatio": std_ratio,
         "Rho": rho,
@@ -422,3 +461,109 @@ def compare_to_baseline(df, metric, baseline_prefix="Baseline",
         f"  โมเดลที่ดีที่สุด     : {best_model_name} = {best_model:.4f}\n"
         + verdict_line
     )
+
+
+# ---------------------------------------------------------------
+# Error analysis แยกตาม market regime
+# ---------------------------------------------------------------
+
+def regime_error_analysis(y_true, preds_dict, vol_prev, vol_threshold,
+                          baseline_name="Baseline: Naive (RW)"):
+    """
+    แยกชุดที่ประเมินออกเป็นกลุ่มตามสภาวะตลาด แล้วคำนวณ MAE_return แยกแต่ละกลุ่ม
+
+    ใช้ prediction ที่มีอยู่แล้ว ไม่มีการเทรนใหม่ จึงไม่ได้ใช้ข้อมูลเพิ่มเติม
+    ในการตัดสินใจอะไรทั้งสิ้น -- เป็นการ "อ่านผลที่มีอยู่ให้ละเอียดขึ้น"
+
+    *** เส้นแบ่ง volatility ต้องมาจาก train เท่านั้น ***
+    ถ้าใช้ median ของชุดที่กำลังประเมิน = เอาข้อมูลที่ประเมินมากำหนดเกณฑ์
+    ซึ่งทำให้ขนาดของสองกลุ่มถูกบังคับให้เท่ากันเสมอโดยไม่มีเหตุผลเชิงเนื้อหา
+    และทำให้เทียบข้ามชุด (val กับ test) ไม่ได้ เพราะเส้นแบ่งคนละเส้น
+
+    กลุ่มที่แบ่ง:
+      - volatility สูง / ต่ำ  (เทียบ median ของ volatility_20d_prev บน train)
+      - วันขึ้น / วันลง / วันนิ่ง  (ดูจาก y_true)
+      - ทั้งหมด (ไว้ตรวจว่าถ่วงน้ำหนักแล้วตรงกับตารางหลัก)
+
+    คืน DataFrame แบบยาว (regime, n_days, model, mae_return, vs_naive_pct)
+    โดย vs_naive_pct > 0 = ดีกว่า Naive ในกลุ่มนั้น (MAE ต่ำกว่ากี่ %)
+    """
+    y = pd.Series(np.asarray(y_true, dtype=float),
+                  index=pd.Index(y_true.index) if hasattr(y_true, "index")
+                  else None)
+    vol = pd.Series(np.asarray(vol_prev, dtype=float), index=y.index)
+
+    regimes = {
+        "ทั้งหมด": pd.Series(True, index=y.index),
+        f"vol สูง (> {vol_threshold:.5f})": vol > vol_threshold,
+        f"vol ต่ำ (<= {vol_threshold:.5f})": vol <= vol_threshold,
+        "วันขึ้น (y > 0)": y > 0,
+        "วันลง (y < 0)": y < 0,
+        "วันนิ่ง (y = 0)": y == 0,
+    }
+
+    rows = []
+    for regime, mask in regimes.items():
+        n = int(mask.sum())
+        if n == 0:
+            continue
+
+        mae = {}
+        for name, p in preds_dict.items():
+            p = np.asarray(p, dtype=float)
+            mae[name] = float(np.mean(np.abs(y.values[mask.values]
+                                             - p[mask.values])))
+
+        base_mae = mae.get(baseline_name, np.nan)
+        for name, value in mae.items():
+            if np.isfinite(base_mae) and base_mae != 0:
+                vs = (base_mae - value) / base_mae * 100.0
+            else:
+                vs = np.nan
+            rows.append({
+                "regime": regime, "n_days": n, "model": name,
+                "mae_return": value, "vs_naive_pct": vs,
+            })
+
+    return pd.DataFrame(rows)
+
+
+def print_regime_table(df, title="", baseline_name="Baseline: Naive (RW)"):
+    """พิมพ์ผล regime analysis เป็นตาราง (แถว = ตัวทำนาย, คอลัมน์ = กลุ่ม)"""
+    print(f"\n{'='*78}")
+    print(f"  {title}")
+    print(f"{'='*78}")
+
+    mae = df.pivot(index="model", columns="regime", values="mae_return")
+    vs = df.pivot(index="model", columns="regime", values="vs_naive_pct")
+    n_days = df.drop_duplicates("regime").set_index("regime")["n_days"]
+
+    # เรียงคอลัมน์ตามลำดับที่สร้างไว้ (pivot เรียงตามตัวอักษร)
+    order = [r for r in df["regime"].unique() if r in mae.columns]
+    mae, vs = mae[order], vs[order]
+
+    print("  MAE_return แยกตามกลุ่ม (จำนวนวันในวงเล็บ)")
+    header = "  " + " " * 24 + "".join(
+        f"{r.split(' (')[0]:>18s}" for r in order)
+    print(header)
+    print("  " + " " * 24 + "".join(f"{'n=' + str(n_days[r]):>18s}"
+                                    for r in order))
+    for m in mae.index:
+        print(f"  {m:24s}" + "".join(f"{mae.loc[m, r]:18.6f}" for r in order))
+
+    print(f"\n  ดีกว่า {baseline_name} กี่ % ในกลุ่มนั้น (+ = ดีกว่า)")
+    print(header)
+    for m in vs.index:
+        if m == baseline_name:
+            continue
+        cells = []
+        for r in order:
+            v = vs.loc[m, r]
+            # กลุ่ม "วันนิ่ง" ที่ Naive ได้ MAE = 0 พอดีโดยนิยาม (ทำนาย 0 และ
+            # ราคาไม่ขยับจริง) การหารด้วยศูนย์ไม่มีความหมาย -> แสดงเป็น n/a
+            cells.append(f"{v:+17.2f}%" if np.isfinite(v) else f"{'n/a':>18s}")
+        print(f"  {m:24s}" + "".join(cells))
+
+    if not np.isfinite(vs.to_numpy()).all():
+        print(f"  (n/a = กลุ่มที่ {baseline_name} ได้ MAE = 0 พอดีโดยนิยาม "
+              f"เทียบเป็น % ไม่ได้)")

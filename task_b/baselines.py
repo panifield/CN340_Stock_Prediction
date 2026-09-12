@@ -11,6 +11,9 @@ Baseline ที่ต้องมี:
   - naive        : ทำนายว่าพรุ่งนี้ = วันนี้ (return = 0)  <-- คู่แข่งตัวจริง
   - mean return  : ทำนายด้วยค่าเฉลี่ย return ของ train
   - always up    : ทำนายว่าขึ้นทุกวัน  <-- baseline ด้าน "ทิศทาง"
+  - rolling mean : ค่าเฉลี่ย return 5/10/20 วันก่อนหน้า  <-- ไม่ใช่ค่าคงที่
+                   ตอบคำถามว่า ML ชนะ "วิธีง่าย ๆ ที่ปรับตามข้อมูลล่าสุด"
+                   ได้จริงไหม ไม่ใช่ชนะแค่ baseline ที่ง่ายเกินไป
 
 *** ทำไมต้องมี always up ทั้งที่มี naive อยู่แล้ว ? ***
 naive ทำนาย return = 0 ซึ่ง "ไม่ได้ให้สัญญาณทิศทาง" เลย ค่า DirAcc ของมัน
@@ -105,10 +108,99 @@ def always_up_note(y_train):
     return "\n".join(lines)
 
 
-def get_regression_baselines(y_train, y_test):
-    """คืน dict {ชื่อ: prediction array}"""
-    return {
+def baseline_rolling_mean(y_history, eval_index, window):
+    """
+    ทำนายด้วยค่าเฉลี่ย return ของ k วันก่อนหน้า
+
+        R_hat(t) = mean( R(t-k) ... R(t-1) )
+
+    *** ใช้ข้อมูลถึงวัน t-1 เท่านั้น ***
+    `rolling(k).mean()` ที่วัน t = ค่าเฉลี่ยของ R(t-k+1)...R(t) ซึ่ง "มี R(t)
+    อยู่ด้วย" = leak เต็ม ๆ เพราะ R(t) คือคำตอบที่กำลังจะทำนาย
+    จึงต้อง `.shift(1)` ต่อท้ายเสมอ ให้เลื่อนหน้าต่างถอยไปหนึ่งวัน
+    (หลักการเดียวกับที่ features.py shift ทั้งตารางตอนท้าย)
+
+    y_history : Series ของ return ทั้งช่วงที่อนุญาตให้ใช้ (index เรียงตามเวลา)
+                ผู้เรียกต้องตัดปลายไว้ไม่ให้เกินวันสุดท้ายของชุดที่ประเมิน
+    eval_index: index ของวันที่ต้องการคำทำนาย
+
+    *** ทำไมต้องมี baseline กลุ่มนี้ ***
+    Naive / Mean Return / Always Up ล้วนทำนายค่าคงที่ ถ้าโมเดล ML ชนะได้
+    ก็ยังตอบไม่ได้ว่าชนะเพราะ "มีทักษะ" หรือเพราะ "คู่แข่งง่ายเกินไป"
+    rolling mean เป็นวิธีที่ปรับตามข้อมูลล่าสุดจริง (ไม่คงที่) แต่ไม่ต้องเทรน
+    อะไรเลย ถ้า ML แพ้แม้แต่ตัวนี้ = หลักฐานเพิ่มว่าสัญญาณอ่อนจริง
+    """
+    roll = y_history.rolling(window).mean().shift(1)
+    out = roll.reindex(eval_index)
+
+    if out.isna().any():
+        n_bad = int(out.isna().sum())
+        raise ValueError(
+            f"rolling mean {window}d มี NaN {n_bad} แถวในชุดที่ประเมิน -- "
+            f"ประวัติที่ส่งเข้ามาสั้นเกินไป (ต้องมีอย่างน้อย {window} วัน "
+            f"ก่อนวันแรกของชุดที่ประเมิน)"
+        )
+    return out.values
+
+
+def verify_rolling_no_leak(y_history, eval_index, window, preds, n_check=5):
+    """
+    ตรวจเชิงโครงสร้างว่า rolling baseline ไม่ได้ใช้ข้อมูลของวันที่กำลังทำนาย
+
+    วิธี: หยิบหลายวันมาคำนวณค่าเฉลี่ยด้วยมือจาก "ตำแหน่งก่อนหน้า" โดยตรง
+    แล้วเทียบกับค่าที่ฟังก์ชันคืนมา พร้อมยืนยันว่าวันสุดท้ายที่ใช้คำนวณคือ
+    t-1 ไม่ใช่ t (assert เทียบวันที่ตรง ๆ ไม่ได้เดาจากตัวเลข)
+    """
+    pos_of = {d: i for i, d in enumerate(y_history.index)}
+    checked = 0
+
+    # เลือกวันแรก วันสุดท้าย และวันกลาง ๆ มาตรวจ
+    picks = list(range(0, len(eval_index), max(1, len(eval_index) // n_check)))
+    picks = sorted(set(picks + [0, len(eval_index) - 1]))
+
+    for i in picks:
+        day = eval_index[i]
+        pos = pos_of[day]
+        if pos < window:
+            continue
+
+        window_days = y_history.index[pos - window:pos]
+        assert window_days[-1] < day, (
+            f"LEAK! rolling {window}d ของวัน {day.date()} ใช้ข้อมูลถึง "
+            f"{window_days[-1].date()} ซึ่งไม่ได้อยู่ก่อนวันที่ทำนาย"
+        )
+        expected = float(y_history.iloc[pos - window:pos].mean())
+        assert np.isclose(preds[i], expected), (
+            f"rolling {window}d ของวัน {day.date()} = {preds[i]} "
+            f"แต่คำนวณมือได้ {expected}"
+        )
+        checked += 1
+
+    assert checked > 0, f"ไม่ได้ตรวจแถวไหนเลยสำหรับ rolling {window}d"
+    return checked
+
+
+def get_regression_baselines(y_train, y_test, y_history=None,
+                             rolling_windows=(5, 10, 20), verbose=False):
+    """
+    คืน dict {ชื่อ: prediction array}
+
+    y_history: Series ของ return ที่อนุญาตให้ใช้ (ต้องตัดปลายไม่ให้เกินวัน
+    สุดท้ายของ y_test) ถ้าไม่ส่งมาจะไม่มี rolling mean baseline
+    """
+    out = {
         "Baseline: Naive (RW)": baseline_naive_return(y_test),
         "Baseline: Mean Return": baseline_mean_return(y_train, y_test),
         "Baseline: Always Up": baseline_always_up(y_train, y_test),
     }
+
+    if y_history is not None:
+        for k in rolling_windows:
+            p = baseline_rolling_mean(y_history, y_test.index, k)
+            n = verify_rolling_no_leak(y_history, y_test.index, k, p)
+            if verbose:
+                print(f"[baselines] rolling mean {k}d ผ่านการตรวจ leak "
+                      f"({n} วันที่สุ่มตรวจ)")
+            out[f"Baseline: Rolling Mean {k}d"] = p
+
+    return out

@@ -69,6 +69,36 @@ def _unscaled(estimator):
     ])
 
 
+# ---------------------------------------------------------------
+# Equal-weight ensemble
+# ---------------------------------------------------------------
+ENSEMBLE_NAME = "Ensemble (1/3 each)"
+ENSEMBLE_MEMBERS = ("ANN (MLP)", "Random Forest", "XGBoost")
+
+
+def equal_weight_ensemble(preds):
+    """
+    เฉลี่ยการทำนายของ 3 โมเดลด้วยน้ำหนักเท่ากัน 1/3 ตายตัว
+
+    *** ห้ามหาน้ำหนักที่ดีที่สุดจาก validation เด็ดขาด ***
+    การหาน้ำหนักจาก val = การจูนพารามิเตอร์เพิ่มอีกชุดหนึ่งบนชุดข้อมูลที่ถูก
+    ใช้ไปมากแล้ว น้ำหนัก 1/3 เท่ากันเป็นค่าที่ประกาศได้ล่วงหน้าโดยไม่ต้องดูผล
+
+    เหตุผลเชิงหลักการที่รวมโมเดล (ประกาศก่อนเห็นผล): โมเดลทั้งสามมี error
+    ที่ไม่เหมือนกัน (RF ดีกว่าบน KBANK ส่วน ANN ดีกว่าบน ADVANC) การเฉลี่ย
+    จึงลด variance ของการทำนาย ซึ่งเป็นเหตุผลที่ไม่ได้มาจากการดูตัวเลข val
+
+    หมายเหตุสำคัญสำหรับรายงาน: ensemble ไม่เพิ่ม selection bias "รอบใหม่"
+    จากการเลือกน้ำหนัก แต่ **ไม่ได้ลบ** selection bias ที่ติดมากับโมเดล
+    ต้นทาง โดยเฉพาะ ANN ที่ผ่านการกวาด 140 ชุดบน val
+    """
+    missing = [m for m in ENSEMBLE_MEMBERS if m not in preds]
+    if missing:
+        raise KeyError(f"ensemble ต้องการการทำนายของ {missing} แต่ไม่พบ")
+    return np.mean([np.asarray(preds[m], dtype=float)
+                    for m in ENSEMBLE_MEMBERS], axis=0)
+
+
 def get_regressors():
     """
     ANN + Random Forest + XGBoost สำหรับทำนาย return
