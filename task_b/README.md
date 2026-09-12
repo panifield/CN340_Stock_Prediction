@@ -5,7 +5,12 @@
 `task_c/` โดยสมบูรณ์ ไม่ import ไฟล์จากที่อื่นเลย แก้อะไรในนี้ไม่กระทบ
 โฟลเดอร์อื่น
 
-โมเดล: **ANN (MLP) + Random Forest + XGBoost**
+โมเดล: **ANN (MLP) + Random Forest + XGBoost** และ `Ensemble (1/3 each)`
+ซึ่งเป็นค่าเฉลี่ยของทั้งสามด้วยน้ำหนักตายตัว (ไม่ได้หาน้ำหนักจาก val)
+ANN เฉลี่ยผลจาก 10 seed เพื่อไม่ให้ผลขึ้นกับการสุ่มค่าเริ่มต้น
+
+ใช้ **29 features** (ตัดกลุ่มราคาดิบออกตาม ablation H1)
+ค่าทั้งหมดที่ถูกล็อกไว้ก่อนเปิด test อยู่ใน **[`PRE_TEST_LOCK.md`](PRE_TEST_LOCK.md)**
 
 ---
 
@@ -17,13 +22,34 @@ python main.py
 ```
 
 ข้อมูลอ่านจากไฟล์ในเครื่อง ไม่ต้องต่อเน็ต
-ผลลัพธ์จะถูกบันทึกเป็น csv ในโฟลเดอร์ `results/`
 
 **โหมด dev** — ใช้ตอนกำลังปรับ feature/พารามิเตอร์ซ้ำๆ
-เทรน+ประเมินบน train/val เท่านั้น ยังไม่แตะ test เลย ไม่บันทึกผล:
+เทรน+ประเมินบน train/val เท่านั้น ยังไม่แตะ test เลย:
 
 ```bash
 python main.py --dev
+```
+
+ทั้งสองโหมดบันทึกผลลง `results/` เหมือนกัน ต่างกันที่ชื่อไฟล์
+(`*_val_*` กับ `*_test_*`) ซึ่งอ่านจากชุดข้อมูลที่ใช้ประเมินจริง ไม่ได้อ่านจาก
+flag จึงไม่มีทางที่ผล val จะถูกตั้งชื่อเป็น test หรือกลับกัน
+
+ไฟล์ที่ได้ต่อการรันหนึ่งครั้ง:
+
+| ไฟล์ | เนื้อหา |
+|---|---|
+| `{หุ้น}_taskB_{stage}_{n}feat_{เวลา}.csv` | ตาราง metric ของทุกโมเดลและ baseline |
+| `{หุ้น}_taskB_regime_{stage}_..._{เวลา}.csv` | MAE แยกตามสภาวะตลาด (vol สูง/ต่ำ, วันขึ้น/ลง/นิ่ง) |
+| `{หุ้น}_taskB_preds_{stage}_..._{เวลา}.csv` | คำทำนายรายวันของทุกตัวทำนาย (เอาไปทำกราฟได้) |
+| `taskB_{stage}_..._{เวลา}_report.txt` | รายงานเต็มแบบเดียวกับที่ขึ้นบนจอ |
+
+**สคริปต์เสริม** (ทุกตัวใช้แค่ train/val ไม่แตะ test):
+
+```bash
+python ablation_h1.py                      # ทดสอบ H1: feature ราคาดิบทำให้เอียงไหม
+python ann_sweep.py                        # กวาด hyperparameter ANN
+python xgb_sweep.py                        # กวาด hyperparameter XGBoost + ตรวจความไว RF
+python feature_selection.py --model XGBoost  # backward elimination + permutation guard
 ```
 
 ---
@@ -76,11 +102,16 @@ Yahoo จริง ๆ (ตรวจสอบแล้วว่า OHLC ตร�
 | `features.py` | สร้าง feature + shift(1) กัน leak | อยากเพิ่ม/ลด indicator |
 | `targets.py` | สร้าง target `y_return` | เปลี่ยนนิยาม target |
 | `splits.py` | แบ่ง train/val/test ตามเวลา (ห้าม shuffle) | อยากใช้ walk-forward |
-| `baselines.py` | Baseline: Naive (RW) / Mean Return | เพิ่ม baseline ใหม่ |
-| `models.py` | นิยามโมเดล ANN / Random Forest / XGBoost (regression) | เปลี่ยนโมเดล / สลับไปใช้ Keras |
-| `evaluate.py` | คำนวณ metric (MAE, RMSE, R², DirAcc, MAE_baht ฯลฯ) + ตาราง | เพิ่ม metric |
-| `diagnostics.py` | วิเคราะห์ข้อมูลก่อนเทรน (ขนาด return, leak check) | — |
+| `baselines.py` | Naive (RW) / Mean Return / Always Up / Rolling Mean 5-10-20 วัน | เพิ่ม baseline ใหม่ |
+| `models.py` | นิยามโมเดล ANN / RF / XGBoost + seed averaging + ensemble | เปลี่ยนโมเดล / สลับไปใช้ Keras |
+| `evaluate.py` | metric ทั้งหมด + DM test + error analysis แยก regime + ตาราง | เพิ่ม metric |
+| `diagnostics.py` | วิเคราะห์ข้อมูลก่อนเทรน (ใช้ train เท่านั้น) | — |
 | `main.py` | ตัวหลัก เรียกทุกอย่าง (รวม `TransformedTargetRegressor` scale target) | เปลี่ยนขั้นตอนการทดลอง |
+| `PRE_TEST_LOCK.md` | ค่าที่ล็อกไว้ก่อนเปิด test + คำทำนายก่อนเห็นผล | **ห้ามแก้หลังล็อก** |
+| `ablation_h1.py` | ทดสอบ H1 (feature ราคาดิบทำให้โมเดลเอียง) | — |
+| `ann_sweep.py` / `xgb_sweep.py` | กวาด hyperparameter บน val | — |
+| `feature_selection.py` | backward elimination + permutation guard | — |
+| `plots.py` | วาดกราฟจากไฟล์ผลใน `results/` (ไม่เทรนโมเดลใหม่) | อยากได้กราฟแบบอื่น |
 
 ---
 
@@ -99,7 +130,17 @@ Yahoo จริง ๆ (ตรวจสอบแล้วว่า OHLC ตร�
 
 ## สิ่งที่ต้องดูก่อนเขียนรายงาน
 
-- **ดู `MAE_baht` เทียบกับ `Baseline: Naive (RW)` เป็นหลัก** อย่าไปดู
-  `R2_price` เฉยๆ เพราะมันจะสูงหลอกๆ อยู่แล้วจากธรรมชาติของราคาหุ้น
-- **`DirAcc`** (ทายทิศทางถูกกี่ %) มีความหมายในทางปฏิบัติมากกว่า R²
-- ถ้าโมเดล ML แพ้ `Baseline: Naive (RW)` แปลว่าโมเดลไม่มีค่าเพิ่ม
+- **`DM_p` คือตัวตัดสิน** ไม่ใช่การเทียบตัวเลข MAE ด้วยตาเปล่า
+  Diebold-Mariano test บอกว่าส่วนต่างจาก `Baseline: Naive (RW)` ใหญ่เกิน
+  ความแปรปรวนของมันเองหรือยัง ถ้า `DM_p > 0.05` = เสมอกันในเชิงสถิติ
+- **`R2_OOS`** เทียบกับ Naive โดยตรง (`1 − SSE/SSE_naive`) ส่วน `R2_return`
+  เทียบกับค่าเฉลี่ยของชุดที่ประเมินเอง ซึ่ง ณ เวลาทำนายยังไม่มีทางรู้
+- **อย่าดู `R2_price` เฉยๆ** มันสูงหลอกๆ อยู่แล้วจากธรรมชาติของราคาหุ้น
+- **`StdRatio` เทียบกับ `Rho`** ถ้า StdRatio สูงกว่า Rho มาก แปลว่าโมเดล
+  ทำนายแกว่งเกินจริง (ปรับเทียบผิด) ไม่ใช่ทายผิดทิศ
+- **`DirAcc`** นับเฉพาะวันที่ราคาขยับจริง เทียบกับ `Baseline: Always Up`
+  ไม่ใช่เทียบกับ 50%
+- เลือกโมเดลที่ดีที่สุดด้วย **`MAE_return`** ไม่ใช่ `MAE_baht` เพราะ
+  `MAE_baht` ถ่วงน้ำหนักวันท้ายชุดมากกว่าตามระดับราคาที่สูงขึ้น
+- ถ้าโมเดล ML แพ้ `Baseline: Naive (RW)` หรือแพ้ `Baseline: Rolling Mean`
+  แปลว่าโมเดลไม่มีค่าเพิ่ม

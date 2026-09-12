@@ -291,6 +291,20 @@ def run_task_b(X, targets, verbose=True, dev=False):
     print(rho_significance_note(eval_results, stage=eval_split))
     print(always_up_note(y_train))
 
+    # --- เก็บคำทำนายรายวันไว้ด้วย ---
+    # ตารางผลเก็บแค่ค่าสรุป ถ้าอยากทำกราฟ "ราคาทำนาย vs ราคาจริง" หรือวิเคราะห์
+    # เพิ่มทีหลัง (เช่น error สะสม, DM ด้วย loss แบบอื่น) จะต้องรัน test ซ้ำ
+    # ซึ่งขัดกับนโยบาย "test ใช้ครั้งเดียว" -- บันทึกรายวันไว้ตั้งแต่รอบแรกจึง
+    # ทำให้ไม่ต้องแตะ test อีกเลย
+    # ราคาแปลงกลับได้ตรง ๆ จาก prev_close: price = prev_close * (1 + return)
+    preds_table = pd.DataFrame({"prev_close": prev_close_eval,
+                                "y_true_return": y_eval})
+    preds_table["close_true"] = (preds_table["prev_close"]
+                                 * (1 + preds_table["y_true_return"]))
+    for name, p in eval_preds.items():
+        preds_table[name] = np.asarray(p, dtype=float)
+    preds_table.index.name = "Date"
+
     best_rmse = float(eval_results[best]["RMSE_baht"])
 
     return {"table": df, "preds": eval_preds, "y_test": y_eval,
@@ -298,7 +312,7 @@ def run_task_b(X, targets, verbose=True, dev=False):
             "best_rmse_baht": best_rmse,
             "test_index": y_eval.index, "best_model": best, "stage": eval_split,
             "n_features": X_.shape[1], "diag": diag, "regime": regime_df,
-            "ensemble": ENSEMBLE_NAME}
+            "preds_table": preds_table, "ensemble": ENSEMBLE_NAME}
 
 
 def run_one_ticker(ticker, dev=False):
@@ -380,6 +394,14 @@ def save_results(all_results, timestamp):
             rpath = os.path.join(OUTPUT_DIR, rname)
             b["regime"].to_csv(rpath, index=False, encoding="utf-8-sig")
             paths.append(rpath)
+
+        # คำทำนายรายวันของทุกตัวทำนาย -- เอาไปทำกราฟได้โดยไม่ต้องรัน test ซ้ำ
+        if b.get("preds_table") is not None:
+            pname = (f"{t}_taskB_preds_{b['stage']}_{b['n_features']}feat_"
+                     f"{timestamp}.csv")
+            ppath = os.path.join(OUTPUT_DIR, pname)
+            b["preds_table"].to_csv(ppath, encoding="utf-8-sig")
+            paths.append(ppath)
 
     b0 = all_results[0]["b"]
     report_path = os.path.join(

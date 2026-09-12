@@ -311,9 +311,12 @@ def save_results(results, stamp):
     """
     บันทึก path/summary เป็น csv แล้วคืน path ของไฟล์รายงาน (.txt)
 
-    ชื่อไฟล์ใส่จำนวน feature + เวลาที่รัน (แบบเดียวกับ main.py) เพื่อไม่ให้
-    เขียนทับผลเก่า -- feature_selection_path.csv / _summary.csv ที่ไม่มี tag
-    คือผลรอบเดิมบน 34 features (รันก่อนแก้ _prepare) เก็บไว้ย้อนดูได้
+    ชื่อไฟล์ใส่จำนวน feature + ชื่อย่อโมเดล + เวลาที่รัน (แบบเดียวกับ main.py)
+    จึงไม่มีทางเขียนทับผลเก่า และแยกออกได้ว่ารอบไหนรันด้วยโมเดลอะไร
+
+    (ผลรอบเก่าบน 34 features ถูกลบทิ้งแล้ว เพราะรันบน _prepare เวอร์ชันที่ยัง
+     เติม median ให้แถวอุ่นเครื่อง ถ้าอยากได้ใหม่ให้รันด้วย
+     --use-raw-price-levels ซึ่งจะได้ผลบน pipeline ปัจจุบันที่ถูกต้องกว่า)
     """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     model_tag = MODEL_TAGS[results[0]["model"]]
