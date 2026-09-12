@@ -15,7 +15,7 @@ import pandas as pd
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-from config import TICKERS, ANN_SWEEP_HISTORY
+from config import TICKERS, SWEEP_HISTORY
 
 
 def directional_accuracy(y_true, y_pred):
@@ -177,8 +177,16 @@ def rho_significance_note(results_dict, stage="val"):
     if n_sig > 0:
         n_models = len(tested)
         n_tests = n_models * len(TICKERS)
-        n_sweep = sum(c for _, c in ANN_SWEEP_HISTORY)
-        sweep_txt = " + ".join(f"{c} บน {f} feat" for f, c in ANN_SWEEP_HISTORY)
+
+        # จำนวน config ที่แต่ละโมเดลถูกกวาดบน val -- ไม่เท่ากัน ต้องรายงานตามจริง
+        tuned = []
+        for model_name, hist in SWEEP_HISTORY.items():
+            if hist:
+                total = sum(c for _, c in hist)
+                detail = " + ".join(f"{c} บน {f} feat" for f, c in hist)
+                tuned.append(f"{model_name}: {total} ชุด ({detail})")
+            else:
+                tuned.append(f"{model_name}: ไม่ได้จูน (ใช้ค่าตั้งต้น)")
 
         lines.append("     ระวัง 2 เรื่องก่อนสรุปว่า 'เจอสัญญาณจริง':")
         lines.append(f"     (1) การทดสอบหลายครั้ง: ทั้งโปรเจกต์มี {n_models} โมเดล x "
@@ -188,15 +196,19 @@ def rho_significance_note(results_dict, stage="val"):
         lines.append("         และโอกาสเจออย่างน้อย 1 ตัวโดยบังเอิญ "
                      f"= 1 - 0.95^{n_tests} = {(1 - 0.95 ** n_tests) * 100:.1f}%")
         if stage == "val":
-            lines.append("     (2) selection bias: ANN ถูกเลือกค่าพารามิเตอร์จาก val "
-                         f"(กวาด {n_sweep} ชุด = {sweep_txt})")
-            lines.append("         ค่า Rho ของ ANN บน val จึงเป็นค่าที่ 'ผ่านการคัดมาแล้ว' "
-                         "ย่อมเข้าข้างตัวเอง")
+            lines.append("     (2) selection bias: พารามิเตอร์ถูกเลือกจาก val "
+                         "และแต่ละโมเดลได้โอกาสไม่เท่ากัน")
+            for t in tuned:
+                lines.append(f"         - {t}")
+            lines.append("         ค่าที่วัดได้บน val จึง 'ผ่านการคัดมาแล้ว' "
+                         "ย่อมเข้าข้างตัวเอง (โมเดลที่กวาดมากกว่ายิ่งเอียงมากกว่า)")
             lines.append("         ตัวเลขที่ไม่เอียงต้องดูจาก test ซึ่งยังไม่เปิด")
         else:
-            lines.append("     (2) ค่าบน test ไม่ได้ผ่านการคัด: ANN ถูกเลือกค่าพารามิเตอร์"
-                         f"จาก val (กวาด {n_sweep} ชุด = {sweep_txt})")
-            lines.append("         ไม่มีการใช้ test เลือกอะไรเลย -> Rho บน test "
+            lines.append("     (2) ค่าบน test ไม่ได้ผ่านการคัด: พารามิเตอร์ถูกเลือกจาก val "
+                         "โดยแต่ละโมเดลได้โอกาสไม่เท่ากัน")
+            for t in tuned:
+                lines.append(f"         - {t}")
+            lines.append("         ไม่มีการใช้ test เลือกอะไรเลย -> ค่าบน test "
                          "ไม่เอียงจากการจูน")
             lines.append("         ถ้า Rho บน test ต่ำกว่าบน val ชัดเจน = สัญญาณว่าค่าบน val "
                          "เคยเข้าข้างตัวเอง")
