@@ -303,6 +303,10 @@ def run_ticker(ticker, mode, model_name, n_perm, use_raw=None, verbose=True):
 
 
 # ---------------------------------------------------------------
+# ชื่อย่อโมเดลในชื่อไฟล์ -- รันหลายโมเดลแล้วผลไม่ปนกัน
+MODEL_TAGS = {"Random Forest": "rf", "XGBoost": "xgb", "ANN (MLP)": "ann"}
+
+
 def save_results(results, stamp):
     """
     บันทึก path/summary เป็น csv แล้วคืน path ของไฟล์รายงาน (.txt)
@@ -312,7 +316,8 @@ def save_results(results, stamp):
     คือผลรอบเดิมบน 34 features (รันก่อนแก้ _prepare) เก็บไว้ย้อนดูได้
     """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    tag = f"{results[0]['n_features']}feat_{stamp}"
+    model_tag = MODEL_TAGS[results[0]["model"]]
+    tag = f"{results[0]['n_features']}feat_{model_tag}_{stamp}"
 
     path_rows, summary_rows = [], []
     for r in results:
