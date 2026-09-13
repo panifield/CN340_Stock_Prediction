@@ -22,7 +22,8 @@ python main.py
 ผลลัพธ์จะถูกบันทึกเป็น csv ในโฟลเดอร์ `results/`
 
 **โหมด dev** — ใช้ตอนกำลังปรับ feature/พารามิเตอร์ซ้ำๆ
-เทรน+ประเมินบน train/val เท่านั้น ยังไม่แตะ test เลย ไม่บันทึกผล:
+เทรน+ประเมินบน train/val เท่านั้น ยังไม่แตะ test เลย และบันทึก prediction
+ของ validation เป็น CSV แยกตามโมเดล (รวมทุกหุ้น) ใน `results/`:
 
 ```bash
 python main.py --dev
