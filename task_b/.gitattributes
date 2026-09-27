@@ -1,3 +1,5 @@
 # ไฟล์ข้อมูลที่มี SHA-256 กำกับ -- เก็บแบบ byte-for-byte ห้าม git แปลง CRLF/LF
 # (ไม่งั้น clone ใหม่จะได้ SHA-256 ไม่ตรงกับ raw_data_intraday/README.md)
 raw_data_intraday/*.csv -text
+raw_data/*.csv -text
+raw_data_sources/** -text
