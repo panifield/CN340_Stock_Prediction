@@ -15,6 +15,12 @@ tree-based ไม่ต้อง scale
 ใช้ Pipeline ของ sklearn ครอบไว้ ทำให้ scaler ถูก fit
 เฉพาะบน train set โดยอัตโนมัติ -> ไม่มีทาง leak
 
+*** เรื่อง reproducibility ***
+RF / XGBoost ใช้ n_jobs=-1 -> ลำดับการรวมผลแบบขนานไม่คงที่
+ผลจึง "numerically reproducible within floating-point precision" (ต่างได้ระดับ ~1e-18)
+ไม่ได้รับประกันว่าตรงกันทุก bit · การอ้างว่า byte-identical ใช้ได้เฉพาะ artifact
+ที่ตรวจเทียบแล้วจริง (เช่น val CSV ใน regression check)
+
 SimpleImputer เก็บไว้เป็นตาข่ายนิรภัยเท่านั้น -- splits.prepare_xy ตัดแถว
 ที่มี NaN ทิ้งหมดแล้ว (A2) ในทางปฏิบัติ imputer จึงไม่ได้เติมค่าอะไรเลย
 """

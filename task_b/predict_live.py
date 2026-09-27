@@ -39,7 +39,7 @@ KEY = ["prediction_type", "ticker", "target_date", "model"]
 # schema สุดท้ายของ Phase 1C -- ห้ามเปลี่ยนลำดับหลังจากนี้ (§1.5)
 # ใส่ทุกคอลัมน์ที่ Phase 1C จะใช้ตั้งแต่ตอนนี้ แม้บางคอลัมน์ยังไม่มีความหมาย
 # เพื่อไม่ให้ log append-only ไฟล์เดียวมีแถวคนละ schema
-#   half_life  : ยังไม่มี recency weighting -> ค่าว่างเสมอ (§3 จะเริ่มเติม)
+#   half_life  : ค่า half-life ที่ใช้จริง (None -> ค่าว่าง = ไม่ถ่วงน้ำหนัก)
 #   config_tag : จาก config.CONFIG_TAG
 LOG_COLUMNS = [
     "generated_at", "prediction_type", "ticker", "target_date", "data_cutoff",
@@ -47,6 +47,12 @@ LOG_COLUMNS = [
     "predicted_close", "n_features", "dataset_sha256", "code_commit",
     "config_tag", "is_dry_run",
 ]
+
+# dry-run แยกไฟล์ออกจาก production log -- production log มีแต่คำทำนายจริง
+# (แถว dry-run 18 แถวเดิมใน prediction_log.csv เป็น legacy ห้ามลบ/ย้ายเอง)
+# worktree_dirty = True แปลว่าโค้ดที่รันไม่ใช่ code_commit เป๊ะ (ยังมีไฟล์ไม่ commit ใน task_b)
+DRYRUN_LOG_PATH = OUTPUT_DIR / "dryrun" / "prediction_log_dryrun.csv"
+DRYRUN_LOG_COLUMNS = LOG_COLUMNS + ["worktree_dirty"]
 
 BANGKOK = timezone(timedelta(hours=7))
 
@@ -83,6 +89,11 @@ def get_code_commit(dry_run):
     if len(commit) < 7:
         raise RuntimeError(f"อ่าน commit hash ไม่ได้ (ได้ {commit!r})")
     return commit
+
+
+def worktree_dirty():
+    """True ถ้ามีไฟล์ใดใน task_b ต่างจาก HEAD (รวม untracked) -- บันทึกใน dry-run log"""
+    return bool(_git("status", "--porcelain", "--", "."))
 
 
 def check_clean_tree():
@@ -162,24 +173,40 @@ def check_no_duplicate(new_rows, log_path=LOG_PATH):
 # Logger (B4) -- append-only
 # ---------------------------------------------------------------
 
-def append_log(log_path, rows):
+def append_log(log_path, rows, columns=LOG_COLUMNS):
     """
     เขียนต่อท้ายเท่านั้น ห้าม overwrite ห้ามแก้แถวเก่า
     ตรวจ schema ทุกครั้ง -- ห้าม append ผสม schema (§1.5)
     """
-    rows = rows[LOG_COLUMNS]                       # KeyError = ขาดคอลัมน์ -> ต้องพัง
+    rows = rows[columns]                           # KeyError = ขาดคอลัมน์ -> ต้องพัง
     if log_path.exists():
         header = pd.read_csv(log_path, nrows=0).columns.tolist()
-        if header != LOG_COLUMNS:
+        if header != columns:
             raise RuntimeError(
-                f"schema ของ {log_path.name} ไม่ตรง LOG_COLUMNS\n"
-                f"  ในไฟล์: {header}\n  ในโค้ด : {LOG_COLUMNS}\n"
+                f"schema ของ {log_path.name} ไม่ตรงที่โค้ดกำหนด\n"
+                f"  ในไฟล์: {header}\n  ในโค้ด : {columns}\n"
                 "  ห้าม append ผสม schema -- ดู §1.5"
             )
     log_path.parent.mkdir(parents=True, exist_ok=True)
     rows.to_csv(log_path, mode="a", header=not log_path.exists(), index=False)
     print(f"[log] เขียนต่อท้าย {len(rows)} แถว -> "
-          f"{log_path.relative_to(BASE_DIR)}")
+          f"{log_path.relative_to(BASE_DIR) if log_path.is_relative_to(BASE_DIR) else log_path}")
+
+
+def write_prediction_rows(out, dry_run, dirty=None,
+                          log_path=LOG_PATH, dryrun_path=DRYRUN_LOG_PATH):
+    """
+    dry-run -> dryrun_path เท่านั้น (LOG_COLUMNS + worktree_dirty) · ห้ามแตะ production log
+    official -> log_path (LOG_COLUMNS เดิม ไม่เปลี่ยน schema)
+    คืน path ที่เขียนจริง
+    """
+    if dry_run:
+        out = out.copy()
+        out["worktree_dirty"] = bool(dirty)
+        append_log(dryrun_path, out, DRYRUN_LOG_COLUMNS)
+        return dryrun_path
+    append_log(log_path, out, LOG_COLUMNS)
+    return log_path
 
 
 # ---------------------------------------------------------------
@@ -257,7 +284,8 @@ def parse_args():
                    help="จำลองว่าวันนี้คือวันนี้ (ตัดข้อมูลถึงวันนี้) ใช้ตอน dry-run")
     p.add_argument("--dry-run", action="store_true",
                    help="ทดสอบ: ข้าม guard เรื่อง git และ duplicate, "
-                        "บันทึก log ด้วย is_dry_run=True")
+                        "เขียนลง results/dryrun/prediction_log_dryrun.csv "
+                        "(ไม่แตะ production log)")
     # ค่า "same_day_1600" ถูกจงใจไม่ใส่ใน choices
     # schema ของ prediction_log รองรับค่านี้แล้ว แต่ pipeline ยังไม่มี
     # จะเปิดได้เมื่อ Phase 1D (โมเดล 16:00 จากข้อมูลรายชั่วโมง) เสร็จและ freeze แล้วเท่านั้น
@@ -326,14 +354,16 @@ def main():
     if not args.dry_run:
         check_no_duplicate(out)
 
-    append_log(LOG_PATH, out)
+    dirty = worktree_dirty() if args.dry_run else False   # official ผ่าน clean-tree guard แล้ว
+    written = write_prediction_rows(out, args.dry_run, dirty)
 
     print("\n" + "=" * 78)
     print(out[["ticker", "model", "predicted_return", "predicted_close"]]
           .to_string(index=False))
     print("=" * 78)
     if args.dry_run:
-        print("\n*** DRY RUN — แถวใน log มี is_dry_run=True ***")
+        print(f"\n*** DRY RUN — เขียนที่ {written.relative_to(BASE_DIR)} "
+              f"(ไม่แตะ production log) · worktree_dirty={dirty} ***")
     else:
         print("\nอย่าลืม commit + push log:")
         print("  git add task_b/results/prediction_log.csv")

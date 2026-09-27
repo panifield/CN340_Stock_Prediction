@@ -31,7 +31,7 @@ from sklearn.preprocessing import StandardScaler
 
 from config import (
     TICKERS, OUTPUT_DIR, SPLIT_BY_DATE, LOCK_PATH, REQUIRED_LOCK_FIELDS,
-    RECENCY_HALF_LIFE,
+    RECENCY_HALF_LIFE, HISTORICAL_TEST_END,
 )
 from data_loader import load_stock
 from features import build_features, verify_no_leak
@@ -189,7 +189,8 @@ def run_task_b(X, targets, use_test, verbose=True):
         for name, p in eval_preds.items()
     })
     print_table(cost_df.loc[df.index],
-                "งาน B : ต้นทุนการเทรด (diagnostic -- ไม่ใช้เลือกโมเดล)")
+                "งาน B : ต้นทุนการเทรด -- hypothetical close-to-close signal/cost "
+                "diagnostic, not an executable backtest (ไม่ใช้เลือกโมเดล)")
     print(f"\n  ต้นทุนไป-กลับ = {cost_round_trip()*1e4:.1f} bps "
           f"({cost_round_trip()*100:.3f}%)")
     print("  อ่านตารางนี้อย่างไร:")
@@ -197,10 +198,33 @@ def run_task_b(X, targets, use_test, verbose=True):
     print("  - ถ้า net_return < gross_return มาก แปลว่าค่าธรรมเนียมกินกำไรหมด")
     print("  - ตารางนี้ไม่ถูกใช้เลือกโมเดล -- การเลือกใช้ MAE_return เท่านั้น")
     print("  - ผลบน validation ที่โมเดลถูกพัฒนาบนนั้น -- ไม่ใช่หลักฐานว่ากลยุทธ์ทำกำไรได้")
+    print("  - สมมติเข้า/ออกที่ราคา close ได้พอดี (prediction ใช้ข้อมูลถึง close ของ t-1)"
+          " ซึ่งทำจริงไม่ได้ครบถ้วน")
 
     return {"table": df, "preds": eval_preds, "y_eval": y_eval,
             "prev_close_eval": prev_close_eval, "diag": diag,
             "eval_index": y_eval.index, "best_model": best, "stage": eval_split}
+
+
+def truncate_for_mode(df, use_test):
+    """
+    ตัดข้อมูลก่อนสร้าง feature -- ปลอดภัยเพราะ feature ทุกตัวมองย้อนหลังอย่างเดียว
+
+    dev      : ตัดที่ val_end -> test rows ไม่เคยเข้าสู่ pipeline (0.2)
+    เปิด test: ตัดที่ HISTORICAL_TEST_END -> แถวที่ append หลังขอบ historical test
+               (เช่น 2026-08-31 เป็นต้นไป) ไม่ไหลเข้า test โดยเงียบ
+               (chronological_split ถือว่าทุกแถวหลัง val_end เป็น test)
+    """
+    n_before = len(df)
+    if not use_test:
+        df = df.loc[:SPLIT_BY_DATE["val_end"]].copy()
+        print(f"[main] โหมด dev: ตัด test rows ทิ้ง {n_before - len(df)} แถว "
+              f"เหลือ {len(df)} แถว (ถึง {df.index[-1].date()})")
+    else:
+        df = df.loc[:HISTORICAL_TEST_END].copy()
+        print(f"[main] ตัดแถวหลัง HISTORICAL_TEST_END ({HISTORICAL_TEST_END}) ทิ้ง "
+              f"{n_before - len(df)} แถว เหลือ {len(df)} แถว")
+    return df
 
 
 def run_one_ticker(ticker, use_test):
@@ -210,15 +234,7 @@ def run_one_ticker(ticker, use_test):
         print("#  โหมด dev — ใช้แค่ train/val เพื่อพัฒนา ไม่แตะ test")
     print("#" * 78)
 
-    df = load_stock(ticker)
-
-    if not use_test:
-        # ตัดตั้งแต่ก่อนสร้าง feature -- test rows ไม่เคยเข้าสู่ pipeline (0.2)
-        # ปลอดภัยเพราะ feature ทุกตัวมองย้อนหลังอย่างเดียว (rolling / shift)
-        n_before = len(df)
-        df = df.loc[:SPLIT_BY_DATE["val_end"]].copy()
-        print(f"[main] โหมด dev: ตัด test rows ทิ้ง {n_before - len(df)} แถว "
-              f"เหลือ {len(df)} แถว (ถึง {df.index[-1].date()})")
+    df = truncate_for_mode(load_stock(ticker), use_test)
 
     X = build_features(df)
     targets = build_targets(df)

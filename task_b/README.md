@@ -1,11 +1,19 @@
-# งาน B: ทำนายราคาปิด (Regression) — เฟส 1
+# งาน B: ทำนายราคาปิด (Regression) — Phase 1C (tuned) + Phase 1D (pre-registered)
 
 ทำนายราคาปิดของวันถัดไป โดยทำนายผ่าน **return** (ผลตอบแทน) ก่อน
 แล้วค่อยแปลงกลับเป็นราคาบาท — โฟลเดอร์นี้แยกอิสระจาก `task_a/` และ
 `task_c/` โดยสมบูรณ์ ไม่ import ไฟล์จากที่อื่นเลย
 
 โมเดล: **ANN (MLP, เฉลี่ย 10 seeds) + Random Forest + XGBoost**
-ทั้ง 3 ตัวใช้ค่า conservative ที่กำหนดเอง **ยังไม่ได้ปรับจูน** (จูนในเฟส 2)
+**จูนแล้วใน Phase 1C** (`CONFIG_TAG = "phase1c-tuned"`) ด้วย walk-forward 3 folds × 2 หุ้น บน train+val
+ตามแผนที่ commit ก่อนรันใน `TUNING_PLAN.md` — ผลอยู่ใน `results/tuning_*` (ดู post-hoc notes ท้าย `results/tuning_summary.md`)
+
+> **หลังจูน ตาราง fixed validation ของ `main.py --dev` เป็น descriptive development result
+> ไม่ใช่ independent holdout** — 360/362 แถวของ val อยู่ใน evaluation window ที่ใช้เลือก hyperparameter
+> (validation reuse for hyperparameter selection)
+>
+> **historical test (2025-02-26 → 2026-08-28) เคยถูกเปิดอ่านแล้วในรุ่นก่อนของโปรเจกต์**
+> การเปิดครั้งต่อไปต้องมี `PRE_TEST_LOCK.md` ใหม่ และต้องประกาศว่าเป็นการอ่าน test **ครั้งที่สอง**
 
 ---
 
@@ -13,16 +21,21 @@
 
 ```bash
 pip install -r requirements.txt
-python main.py --dev          # พัฒนา: train/val เท่านั้น ไม่แตะ test
-python tests/test_pipeline.py # test 5 ข้อ
+python main.py --dev             # พัฒนา: train/val เท่านั้น ไม่แตะ test
+python tests/test_pipeline.py    # 18 tests (daily pipeline)
+python tests/test_phase1d.py     # 21 tests (Phase 1D builder/metric · ข้อมูลสังเคราะห์ · ~3 นาที)
 ```
 
-รันจากโฟลเดอร์ไหนก็ได้ (`python task_b/main.py --dev` ได้ผลเหมือนกัน)
+รันจากโฟลเดอร์ไหนก็ได้ (`python task_b/main.py --dev`)
 ผลบันทึกที่ `results/<หุ้น>_taskB_val.csv`
+RF / XGBoost ใช้ `n_jobs=-1` → ผล numerically reproducible within floating-point precision
+(val CSV ที่ตรวจใน regression check ตรงกันทุก byte ในการรันที่ผ่านมา แต่ไม่ได้รับประกันทุกเครื่อง)
 
 **`python main.py` (ไม่มี `--dev`) จะเปิด test set** ซึ่งถูกล็อกไว้:
 ต้องมี `PRE_TEST_LOCK.md` ที่กรอกครบ 10 หัวข้อก่อน ไม่งั้นจะ error ทันที
-— **ห้ามสร้างไฟล์นี้ตลอดเฟส 1**
+— **ห้ามสร้างไฟล์นี้จนกว่าผู้ใช้ตัดสินใจเปิด test**
+โหมดนี้ตัดข้อมูลที่ `config.HISTORICAL_TEST_END` (2026-08-28) ก่อนสร้าง feature
+→ แถวที่ append ภายหลังไม่ไหลเข้า historical test
 
 ถ้าเจอ `UnicodeEncodeError` ตอนพิมพ์ภาษาไทย ให้รันด้วย `PYTHONUTF8=1`
 
@@ -39,9 +52,18 @@ python tests/test_pipeline.py # test 5 ข้อ
 |---|---|---:|
 | train | 2016-09-26 → 2023-09-01 | 1,688 |
 | val | 2023-09-04 → 2025-02-25 | 362 |
-| test | 2025-02-26 → 2026-08-28 | 362 |
+| test (historical) | 2025-02-26 → 2026-08-28 | 362 |
+| post-historical-test | 2026-08-31 → 2026-09-25 | 20 |
 
 ในโหมด `--dev` แถวของ test ถูกตัดทิ้งตั้งแต่ก่อนสร้าง feature
+
+ข้อมูลใน `raw_data/` ปัจจุบันถึง **2026-09-25** (หุ้นละ 2,453 แถว · ไฟล์เริ่ม 2016-08-26 แต่ 21 แถวแรก
+เป็น warm-up ของ feature) · 20 แถวล่าสุด append วันที่ 2026-09-27 จาก Investing.com
+(ต้นฉบับ + SHA อยู่ใน `raw_data_sources/investing_20260927/SOURCES.md`)
+
+**สถานะของ 20 แถว 2026-08-31 → 2026-09-25:** post-historical-test, pre-freeze historical rows
+ที่ถูกเห็นบางส่วนแล้วผ่าน Yahoo intraday probe → **ไม่ใช่ prospective, ไม่ใช่ส่วนของ historical test,
+ไม่ใช่ pristine** · ใช้เทรนโมเดล live ได้ (เป็นอดีตที่รู้ผลแล้ว)
 
 ---
 
@@ -56,10 +78,17 @@ python tests/test_pipeline.py # test 5 ข้อ
 | `splits.py` | แบ่งตามวันที่ ไม่สร้าง test partition ในโหมด `--dev` |
 | `models.py` | ANN / RF / XGBoost + `SeedAveragedRegressor` |
 | `baselines.py` | Naive (return = 0) — คู่แข่งหลัก, Mean Return |
-| `evaluate.py` | 5 metric + ตาราง + เทียบกับ Naive |
+| `evaluate.py` | 5 metric + ตาราง + เทียบกับ Naive + `prediction_shape` (diagnostic) |
+| `weighting.py` | recency weights (ปิดอยู่: half_life = None ชนะการจูน) |
+| `trading_costs.py` | ต้นทุน SET + breakeven / signal diagnostic (hypothetical — ไม่ใช่ backtest) |
 | `diagnostics.py` | วิเคราะห์ข้อมูลก่อนเทรน — **train เท่านั้น** |
-| `main.py` | ตัวหลัก + lock gate |
-| `tests/test_pipeline.py` | alignment, dow, NaN, lock gate, seed averaging |
+| `main.py` | ตัวหลัก + lock gate + ตัดข้อมูลตามโหมด |
+| `tune.py` / `TUNING_PLAN.md` | การจูน Phase 1C (ห้ามรันซ้ำ / ห้ามแก้แผน) |
+| `predict_live.py` | next-day prediction · dry-run เขียน `results/dryrun/` เท่านั้น |
+| `tools/` | `check_raw_update.py` (ตรวจ raw_data ใหม่) · `intraday_probe.py` |
+| `intraday_1600.py` / `metrics_1600.py` / `tune_1600.py` / `PHASE1D_PLAN.md` | Phase 1D Mode A (16:00) — pre-registration · ยังไม่ได้รันบนข้อมูลจริง |
+| `tests/test_pipeline.py` | 18 tests: alignment, dow, NaN, lock gate, seed averaging, shape, weighting, costs, fingerprint, dry-run log, historical test cut |
+| `tests/test_phase1d.py` | 21 tests ของ Phase 1D (ข้อมูลสังเคราะห์) |
 | `results_reference/` | ผลของเวอร์ชันก่อนหน้า — backup เท่านั้น ห้ามเป็น input |
 
 ---
@@ -85,7 +114,10 @@ python predict_live.py --target-date 2025-02-25 --as-of 2025-02-24 --dry-run
 python predict_live.py --target-date 2026-09-28
 ```
 
-ผล append ลง `results/prediction_log.csv` ทั้ง 3 โมเดล × 2 หุ้น
+official: ผล append ลง `results/prediction_log.csv` ทั้ง 3 โมเดล × 2 หุ้น
+dry-run: เขียนลง `results/dryrun/prediction_log_dryrun.csv` เท่านั้น (schema เดิม + `worktree_dirty`)
+— production log ไม่ถูกแตะ (18 แถว dry-run เก่าใน production log เป็น legacy ยังไม่ได้ย้าย)
+`dataset_sha256` = SHA-256 เต็ม 64 hex (แถวเก่าที่มี 16 ตัว = legacy)
 
 ### ทำไมนี่ไม่ใช่การเปิด test set
 
@@ -131,9 +163,11 @@ git push
 
 ## อัปเดตข้อมูล
 
-ดาวน์โหลดจาก **investing.com แหล่งเดิมเท่านั้น** แล้ววางทับ `raw_data/*.csv`
-รูปแบบต้องเหมือนเดิมเป๊ะ: `Date,Price,Open,High,Low,Vol. ('000),Change %`
-(วันที่ `MM/DD/YYYY`, `Price` = ราคาปิด, `Vol.` หน่วยพันหุ้น)
+ดาวน์โหลดจาก **investing.com แหล่งเดิมเท่านั้น** แล้ว **append ต่อท้าย** `raw_data/*.csv`
+(แถวเก่าต้องเหมือนเดิมทุก byte) · รูปแบบ canonical: `Date,Price,Open,High,Low,Vol. ('000),Change %`
+(วันที่ `MM/DD/YYYY` เรียงเก่า→ใหม่, `Price` = ราคาปิด, ตัวเลขแบบ `247.0`, `Vol.` หน่วยพันหุ้น
+เช่น `8.65M` → `8650.0`, CRLF, ไม่มี BOM, ไม่มี quote) · เก็บไฟล์ต้นฉบับไว้ใน `raw_data_sources/`
+ตรวจด้วย `python tools/check_raw_update.py <เก่า> <ใหม่> --cross-check raw_data_intraday`
 
 **ต้อง regression check ทุกครั้ง** เพราะ split ใช้วันที่ตายตัว
 การเพิ่มข้อมูลท้ายไฟล์ต้องไม่กระทบ train/val เลย:

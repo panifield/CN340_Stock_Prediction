@@ -77,6 +77,12 @@ def breakeven_report(y_true, y_pred, prev_close):
 
 def signal_economics(y_true, y_pred, cost_rt, threshold=None):
     """
+    hypothetical close-to-close signal/cost diagnostic — not an executable backtest
+
+    prediction ของวัน t ใช้ข้อมูลถึง close ของ t−1 และที่นี่สมมติว่าเข้า/ออกได้
+    ที่ราคา close พอดี ซึ่งทำจริงไม่ได้ครบถ้วน (ไม่มี slippage / spread / ราคาจับคู่จริง)
+    ตัวเลขจึงเป็นแค่ diagnostic ว่าสัญญาณใหญ่กว่าต้นทุนหรือไม่ ไม่ใช่ผลการเทรด
+
     สัญญาณแบบ long / cash เท่านั้น -- ไม่มี short
 
         position(t) = 1  ถ้า predicted_return(t) > threshold   (ซื้อถือ 1 วัน)

@@ -153,3 +153,44 @@
 ข้อสังเกต: ตาราง val ของ `main.py` ไม่ใช่การประเมินอิสระของการจูน (fold 2–3 ทับช่วง val)
 และ KBANK RF หลังจูน **แย่ลง** บน val split เดิม (0.008335 → 0.008390) ทั้งที่ walk-forward ดีขึ้น
 → เตือนอีกครั้งว่าผลบน validation หนึ่งช่วงไม่เสถียร
+
+## Post-hoc interpretation notes (เพิ่มภายหลัง — ไม่มีตัวเลขใดเปลี่ยน)
+
+> เพิ่มโดยมือหลัง tune.py รันเสร็จ (Session 1, 2026-09-27) · เนื้อหาด้านบนและตัวเลขทุกตัวไม่ถูกแก้
+> tune.py ไม่ได้ถูกแก้หรือรันใหม่เพื่อสร้างหัวข้อนี้
+
+**Validation reuse for hyperparameter selection** (คำนวณใหม่จาก implementation จริง:
+truncate ถึง val_end -> features/targets -> prepare_xy -> walk_forward_splits(n_splits=3, min_train=1250))
+
+| หุ้น | แถว fixed validation (หลัง train_end) | อยู่ใน eval window ของการจูน | ไม่ถูกครอบคลุม |
+|---|---|---|---|
+| KBANK | 362 | 360 | 2025-02-24, 2025-02-25 |
+| ADVANC | 362 | 360 | 2025-02-24, 2025-02-25 |
+
+eval windows: fold 1 2021-11-11 -> 2022-12-19 · fold 2 2022-12-20 -> 2024-01-19 · fold 3 2024-01-22 -> 2025-02-21 (ทั้งสองหุ้น)
+- นี่คือ validation reuse ไม่ใช่ leakage: ไม่มีข้อมูลอนาคตเข้า feature/target
+- ตาราง fixed validation ของ `main.py --dev` หลังจูน = descriptive development result
+  **ไม่ใช่ independent holdout** (360/362 แถวถูกใช้เลือก hyperparameter แล้ว)
+
+**StdRatio guard**
+- ทั้ง 51 searched configs ผ่าน guard → guard **ไม่ได้ตัด config ใดในรอบนี้**
+- ผู้ชนะ stage 2 มี low-amplitude predictions (shrinkage เข้าหาค่าเฉลี่ย) — min StdRatio จาก `results/tuning_scores.csv`
+  (3-seed search สำหรับ ANN):
+
+| โมเดล | ผู้ชนะ stage 2 | min StdRatio (6 evaluation) |
+|---|---|---|
+| ANN (MLP) | alpha 7.0, (8, 4) | 0.0836 |
+| Random Forest | depth 4, leaf 50, max_features 0.5 | 0.0894 |
+| XGBoost | depth 2, lr 0.01, subsample 0.8 | 0.0569 |
+
+  ช่วงของผู้ชนะ ≈ 0.057–0.089
+- ANN 10-seed refit (sensitivity แยก ไม่นับในช่วงข้างบน): min StdRatio 0.0636
+- guard ยังมีหน้าที่กันกรณี degenerate ที่รุนแรงกว่านี้ (StdRatio < 0.05) แต่ในรอบนี้ไม่มีกรณีดังกล่าวเกิดขึ้น
+
+**alpha = 7** ถูกเลือกซ้ำภายใต้ validation procedure ที่ต่างกัน (alpha sweep รุ่นก่อนบน fixed val split — `results_reference/ann_sweep_val_29feat.csv` แถว selected: (16,8), alpha 7.0 — กับ walk-forward รอบนี้)
+= some robustness to the choice **ไม่ใช่ independent confirmation** เพราะทั้งสองครั้งใช้ช่วงข้อมูลที่ทับกัน
+
+**Recency weighting:** half_life = None ชนะทั้ง 3 โมเดล
+
+**จำนวน config:** stage 1 (5) + stage 2 (12) = 17 searched configs ต่อโมเดล × 3 = 51
+แถว `2_refit10` ของ ANN = post-selection sensitivity/refit record **ไม่ใช่ searched configuration**

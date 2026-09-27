@@ -31,11 +31,16 @@ def raw_data_path(ticker):
 
 
 def dataset_fingerprint(path):
-    """พิมพ์ลายนิ้วมือของไฟล์ข้อมูล เพื่อยืนยันว่า 'รันโค้ดเดิม' ใช้ข้อมูลเดิมจริง"""
+    """
+    พิมพ์ลายนิ้วมือของไฟล์ข้อมูล เพื่อยืนยันว่า 'รันโค้ดเดิม' ใช้ข้อมูลเดิมจริง
+
+    คืน SHA-256 เต็ม 64 hex (ค่านี้ลง dataset_sha256 ของ prediction log)
+    พิมพ์แค่ 16 ตัวแรกให้อ่านง่าย · แถวเก่าใน prediction_log.csv ที่มี 16 ตัว = legacy
+    """
     raw = Path(path).read_bytes()
-    h = hashlib.sha256(raw).hexdigest()[:16]
+    h = hashlib.sha256(raw).hexdigest()
     df = pd.read_csv(path)
-    print(f"[data] {Path(path).name}  rows={len(df)}  sha256={h}")
+    print(f"[data] {Path(path).name}  rows={len(df)}  sha256={h[:16]}...")
     return h
 
 

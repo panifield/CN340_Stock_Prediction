@@ -335,6 +335,63 @@ def test_cost_and_tick():
     assert tick_size(400) == 2.00
 
 
+def test_fingerprint_full_sha256():
+    """dataset_fingerprint คืน SHA-256 เต็ม 64 hex (แถว 16 ตัวใน log เก่า = legacy)"""
+    import hashlib
+    import re
+    import tempfile
+    from pathlib import Path
+    from data_loader import dataset_fingerprint
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "x.csv"
+        p.write_bytes(b"a,b\r\n1,2\r\n")
+        h = dataset_fingerprint(p)
+        assert re.fullmatch(r"[0-9a-f]{64}", h)
+        assert h == hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def _log_rows(dry_run):
+    from predict_live import LOG_COLUMNS
+    row = {c: "x" for c in LOG_COLUMNS}
+    row["is_dry_run"] = dry_run
+    return pd.DataFrame([row])
+
+
+def test_dryrun_not_in_production_log():
+    """dry-run เขียนเฉพาะไฟล์ dryrun (+ worktree_dirty) · official เขียน production schema เดิม"""
+    import tempfile
+    from pathlib import Path
+    from predict_live import (write_prediction_rows, LOG_COLUMNS,
+                              DRYRUN_LOG_COLUMNS, DRYRUN_LOG_PATH, LOG_PATH)
+    assert DRYRUN_LOG_PATH != LOG_PATH
+    assert DRYRUN_LOG_COLUMNS == LOG_COLUMNS + ["worktree_dirty"]
+    with tempfile.TemporaryDirectory() as d:
+        prod, dry = Path(d) / "prod.csv", Path(d) / "dryrun" / "dry.csv"
+        written = write_prediction_rows(_log_rows(True), True, dirty=True,
+                                        log_path=prod, dryrun_path=dry)
+        assert written == dry and dry.exists() and not prod.exists()
+        got = pd.read_csv(dry)
+        assert got.columns.tolist() == DRYRUN_LOG_COLUMNS
+        assert bool(got["worktree_dirty"].iloc[0]) is True
+        write_prediction_rows(_log_rows(False), False, log_path=prod, dryrun_path=dry)
+        assert pd.read_csv(prod).columns.tolist() == LOG_COLUMNS
+        assert len(pd.read_csv(dry)) == 1                   # official ไม่แตะไฟล์ dryrun
+
+
+def test_historical_test_end_truncation():
+    """แถวที่ append หลัง HISTORICAL_TEST_END ต้องไม่ไหลเข้า historical test (index สังเคราะห์)"""
+    from config import HISTORICAL_TEST_END, SPLIT_BY_DATE
+    from main import truncate_for_mode
+    idx = pd.bdate_range("2023-01-02", "2026-10-30")
+    df = pd.DataFrame({"Close": np.arange(len(idx), dtype=float)}, index=idx)
+    t = truncate_for_mode(df, use_test=True)
+    assert t.index[-1] == pd.Timestamp(HISTORICAL_TEST_END)
+    assert (t.index <= pd.Timestamp(HISTORICAL_TEST_END)).all()
+    assert len(df) - len(t) == (idx > pd.Timestamp(HISTORICAL_TEST_END)).sum()
+    d = truncate_for_mode(df, use_test=False)
+    assert d.index[-1] <= pd.Timestamp(SPLIT_BY_DATE["val_end"])
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     failed = 0

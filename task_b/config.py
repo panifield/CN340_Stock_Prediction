@@ -38,6 +38,10 @@ SPLIT_BY_DATE = {
     "train_end": "2023-09-01",   # train: 2016-09-26 -> 2023-09-01   1,688 วัน
     "val_end":   "2025-02-25",   # val:   2023-09-04 -> 2025-02-25     362 วัน
 }                                # test:  2025-02-26 -> 2026-08-28     362 วัน
+# ขอบปลายของ historical test (ไม่ได้อยู่ใน SPLIT_BY_DATE เพราะเดิม test = "ทุกแถวหลัง val_end")
+# เมื่อ append ข้อมูลใหม่ต่อท้าย raw_data/ แถวเหล่านั้นต้องไม่ไหลเข้า historical test เงียบ ๆ
+# -> main.py โหมดเปิด test ตัดข้อมูลที่วันนี้ก่อนสร้าง feature (historical test = 362 แถวเดิม)
+HISTORICAL_TEST_END = "2026-08-28"
 TRAIN_RATIO = None               # ไม่ใช้แล้ว -- boundary มาจากวันที่เท่านั้น
 VAL_RATIO = None
 
