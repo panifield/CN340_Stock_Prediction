@@ -148,7 +148,8 @@ def append_log(rows, log_path=LOG_PATH):
 # ตัวหลัก
 # ---------------------------------------------------------------
 
-def predict_one_ticker(ticker, target_date, as_of=None, verbose=True):
+def predict_one_ticker(ticker, target_date, as_of=None, expected_cutoff=None,
+                       verbose=True):
     """เทรนด้วยข้อมูลที่รู้ผลแล้วทั้งหมด แล้วทำนาย target_date"""
     print("\n" + "#" * 78)
     print(f"#  หุ้น: {ticker}  ->  ทำนาย {pd.Timestamp(target_date).date()}")
@@ -172,6 +173,18 @@ def predict_one_ticker(ticker, target_date, as_of=None, verbose=True):
           f"({X_prep.index[0].date()} -> {X_prep.index[-1].date()})")
 
     X_live, prev_close, data_cutoff = build_live_feature(df, target_date)
+
+    # ตรวจ "ทุกหุ้น" แยกกัน -- KBANK กับ ADVANC อาจมีวันสุดท้ายไม่เท่ากัน
+    # ถ้า download มาไม่พร้อมกัน (§1.3) · ตรวจก่อนเทรน จะได้ fail เร็ว
+    if expected_cutoff is not None:
+        exp = pd.Timestamp(expected_cutoff)
+        if data_cutoff != exp:
+            raise RuntimeError(
+                f"{ticker}: data_cutoff จริง = {data_cutoff.date()} "
+                f"แต่ --expected-cutoff = {exp.date()}\n"
+                "  ถ้าข้อมูลเก่ากว่าที่คาด -> ไป update raw_data/ ก่อน\n"
+                "  ถ้าข้อมูลใหม่กว่าที่คาด -> แก้ --expected-cutoff ให้ตรงความจริง"
+            )
 
     fitted = fit_live_models(X_prep, y_prep)
 
@@ -213,6 +226,10 @@ def parse_args():
     p.add_argument("--prediction-type", default="next_day",
                    choices=["next_day"],   # same_day_1600 ยังไม่ implement -- ห้ามเปิด
                    help="ชนิดการทำนาย (ตอนนี้มีแค่ next_day)")
+    # ไม่ใช้ "ห่างไม่เกิน N วัน" เพราะวันหยุดตลาดไทยเดาล่วงหน้าไม่ได้
+    # บังคับให้คนพิมพ์วันที่คาดหวังเอง -> แรงกว่าและตรวจย้อนหลังได้ (§1.3)
+    p.add_argument("--expected-cutoff", default=None,
+                   help="YYYY-MM-DD วันสุดท้ายของข้อมูลที่คาดว่าจะมี (บังคับตอน official)")
     return p.parse_args()
 
 
@@ -225,6 +242,14 @@ def main():
             "--as-of ใช้ได้เฉพาะกับ --dry-run เท่านั้น\n"
             "  --as-of มีไว้ย้อนเวลาเพื่อทดสอบระบบ ไม่ใช่เพื่อทำนายจริง\n"
             "  official prediction ต้องใช้ข้อมูลล่าสุดที่มีเสมอ"
+        )
+
+    # บังคับตอน official (§1.3)
+    if not args.dry_run and args.expected_cutoff is None:
+        raise ValueError(
+            "official prediction ต้องใส่ --expected-cutoff YYYY-MM-DD\n"
+            "  = วันทำการล่าสุดที่ควรมีใน raw_data/\n"
+            "  guard นี้กัน 'ลืม update ข้อมูล' ซึ่งตรวจด้วย target_date > data_cutoff ไม่เจอ"
         )
 
     print("=" * 78)
@@ -245,7 +270,8 @@ def main():
     rows = []
     for ticker in TICKERS:
         rows.extend(predict_one_ticker(ticker, args.target_date,
-                                       as_of=args.as_of))
+                                       as_of=args.as_of,
+                                       expected_cutoff=args.expected_cutoff))
 
     out = pd.DataFrame(rows)
     out["generated_at"] = generated_at
