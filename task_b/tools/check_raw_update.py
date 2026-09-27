@@ -16,6 +16,12 @@ tools/check_raw_update.py — ตรวจไฟล์ raw_data ชุดให�
 ถ้า investing.com revise ราคาย้อนหลัง โมเดล live จะเปลี่ยนโดยไม่รู้ตัว
 ส่วน regression check ด้วย main.py --dev ตรวจได้แค่ถึง val_end จึงไม่พอ
 
+option --cross-check raw_data_intraday/ (§6.7):
+  เทียบราคาปิดของ "วันที่เพิ่มใหม่" กับ close_bar16 จากไฟล์รายชั่วโมง (Yahoo)
+  วันไหนต่างเกิน ~1 บาท พิมพ์ออกมาให้ตรวจด้วยตา
+  -> เป็นคำเตือนเท่านั้น ไม่กระทบ exit code (รู้อยู่แล้วว่าสองแหล่งต่างกัน)
+  *** ไม่เอาข้อมูล Yahoo ไปเติม raw_data/ เด็ดขาด -- ใช้เป็นเครื่องตรวจทานอย่างเดียว ***
+
 exit code: 0 = ผ่าน, 1 = ข้อมูลเก่าถูกแก้ / ไฟล์หาย / อ่านไม่ได้
 """
 
@@ -30,6 +36,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # ใช้นิยามรูปแบบไฟล์ตัวเดียวกับ data_loader -- ห้ามเขียนรูปแบบซ้ำ
 from config import RAW_DATA_SUFFIX
 from data_loader import INVESTING_DATE_FORMAT, INVESTING_VOLUME_COL
+
+CROSS_CHECK_WARN_BAHT = 1.0
 
 COMPARE = {"Open": "Open", "High": "High", "Low": "Low",
            "Close": "Price", "Volume": INVESTING_VOLUME_COL}
@@ -60,8 +68,37 @@ def warn_order(name, df):
               f"(เช่น {bad[:5]})")
 
 
-def check_ticker(old_path, new_path):
-    """คืน True ถ้าผ่าน"""
+def cross_check(new_path, added, intraday_dir):
+    """
+    เทียบ Close ของวันที่เพิ่มใหม่กับ close_bar16 (Yahoo) -- คำเตือนเท่านั้น (§6.7)
+    ไม่คืนค่า pass/fail: สองแหล่งต่างกันเฉลี่ย 0.33-0.69 บาทอยู่แล้ว (§6.2)
+    """
+    from intraday_probe import read_hourly, bars_by_hour   # อยู่ใน tools/ เดียวกัน
+
+    stem = new_path.name.replace(RAW_DATA_SUFFIX, "")
+    files = sorted(intraday_dir.glob(f"{stem}_BK_1h*.csv"))
+    if not files:
+        print(f"  [cross-check] ไม่พบไฟล์รายชั่วโมงของ {stem} ใน {intraday_dir} -- ข้าม")
+        return
+    c16 = bars_by_hour(read_hourly(files[0]))[16].dropna()
+    new = read_raw(new_path)
+    new = new[~new.index.duplicated()]
+    days = added.intersection(c16.index)
+    if not len(days):
+        print(f"  [cross-check] วันที่เพิ่มใหม่ไม่ทับกับ {files[0].name} -- ไม่มีอะไรให้เทียบ")
+        return
+    diff = (new.loc[days, "Close"] - c16.loc[days]).abs()
+    far = diff[diff > CROSS_CHECK_WARN_BAHT]
+    print(f"  [cross-check] วันที่เพิ่มใหม่ {len(days)} วัน vs close_bar16 ({files[0].name}): "
+          f"mean|ต่าง| {diff.mean():.4f} บาท · ต่างเกิน {CROSS_CHECK_WARN_BAHT:g} บาท "
+          f"{len(far)} วัน")
+    for d, v in far.items():
+        print(f"    ?? เตือน {d.date()}: investing {new.loc[d, 'Close']} "
+              f"vs close_bar16 {c16.loc[d]} (ต่าง {v:.2f} บาท) -- ตรวจด้วยตา")
+
+
+def check_ticker(old_path, new_path, intraday_dir=None):
+    """คืน True ถ้าผ่าน (--cross-check เป็นคำเตือน ไม่กระทบผล)"""
     print(f"\n=== {old_path.name} ===")
     if not new_path.exists():
         print(f"  !! ไม่พบไฟล์ใหม่ {new_path}")
@@ -91,6 +128,9 @@ def check_ticker(old_path, new_path):
         print(f"  !! เตือน: วันที่มีในไฟล์เก่าแต่หายจากไฟล์ใหม่ {len(removed)} วัน: "
               f"{[str(d.date()) for d in removed]}")
 
+    if intraday_dir is not None:
+        cross_check(new_path, added, intraday_dir)
+
     if diff_mask.any():
         print(f"  !! ข้อมูลช่วงที่ทับกันถูกแก้ {int(diff_mask.sum())} แถว:")
         cols = [f"{c}_{s}" for c in COMPARE for s in ("old", "new")]
@@ -106,6 +146,9 @@ def main():
     p = argparse.ArgumentParser(description="ตรวจ raw_data ชุดใหม่เทียบชุดเก่า")
     p.add_argument("old_dir", type=Path, help="โฟลเดอร์ raw_data เดิม (backup)")
     p.add_argument("new_dir", type=Path, help="โฟลเดอร์ raw_data ใหม่")
+    p.add_argument("--cross-check", type=Path, default=None, metavar="INTRADAY_DIR",
+                   help="เทียบวันที่เพิ่มใหม่กับ close_bar16 ใน raw_data_intraday/ "
+                        "(คำเตือนเท่านั้น)")
     args = p.parse_args()
 
     files = sorted(args.old_dir.glob(f"*{RAW_DATA_SUFFIX}"))
@@ -113,7 +156,7 @@ def main():
         print(f"!! ไม่พบไฟล์ *{RAW_DATA_SUFFIX} ใน {args.old_dir}")
         sys.exit(1)
 
-    ok = all([check_ticker(f, args.new_dir / f.name) for f in files])
+    ok = all([check_ticker(f, args.new_dir / f.name, args.cross_check) for f in files])
     print("\n" + ("ผ่านทุกไฟล์" if ok else "!! ไม่ผ่าน -- ห้าม commit ข้อมูลชุดนี้ หาสาเหตุก่อน"))
     sys.exit(0 if ok else 1)
 

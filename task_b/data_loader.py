@@ -42,6 +42,12 @@ def dataset_fingerprint(path):
 def load_from_investing(ticker, verbose=True):
     """อ่านไฟล์ csv จาก investing.com แล้วแปลงเป็น Open/High/Low/Close/Volume"""
     path = raw_data_path(ticker)
+    # ไฟล์ intraday เป็นแหล่งข้อมูลอื่น (Yahoo) ห้ามหลุดเข้า pipeline รายวัน (§6.5)
+    if "_1h" in path.name or "intraday" in str(path):
+        raise ValueError(
+            f"{path.name} เป็นข้อมูล intraday จากคนละแหล่ง "
+            "ห้ามโหลดเข้า pipeline รายวัน"
+        )
     if not path.exists():
         raise FileNotFoundError(
             f"ไม่พบ {path}\n"
