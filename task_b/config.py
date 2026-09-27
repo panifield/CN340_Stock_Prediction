@@ -62,12 +62,14 @@ USE_DAY_OF_WEEK = True
 RANDOM_STATE = 42
 
 # ---------------------------------------------------------------
-# *** ทั้ง 3 โมเดลด้านล่าง "ไม่ได้จูนบน validation" เหมือนกันหมด ***
-# เป็นค่า conservative ที่เลือกจากหลักการ: ข้อมูล train 1,688 แถว สัญญาณอ่อนมาก
-# จึงเลือกโมเดลความจุต่ำ + regularization จริงจัง เพื่อไม่ให้จำ noise
-#
-# การจูนจริงอยู่ในเฟส 2 ซึ่งจะทำกับทั้ง 3 โมเดลภายใต้ walk-forward + protocol
-# เดียวกัน -- ไม่ใช่ทำเฉพาะบางตัวแล้วเทียบกัน
+# *** ทั้ง 3 โมเดลด้านล่าง "จูนแล้ว" ด้วย protocol เดียวกัน (Phase 1C §4, ข้อ 11) ***
+# ที่มา: tune.py รันวันที่ 2026-09-27 ตามแผนที่ commit ไว้ก่อนใน TUNING_PLAN.md
+#        expanding window 3 folds x 2 หุ้น บน train+val (ไม่แตะ test)
+#        17 configs ต่อโมเดลเท่ากัน (half-life 5 + hyperparameter 12)
+#        ค่าชุดเดียวใช้ทั้ง KBANK และ ADVANC
+#        จัดอันดับด้วย mean MAE_return ในบรรดา config ที่ผ่าน validity guard StdRatio >= 0.05
+#        ผลเต็ม: results/tuning_scores.csv, tuning_stage*_*.csv, tuning_summary.md
+# ค่า Phase 1 เดิม (ก่อนจูน) เขียนกำกับไว้ในแต่ละตัว -- เป็นจุดเริ่มของ stage 1
 # ---------------------------------------------------------------
 
 # ค่าเดิมของ v1 คือ (64,32) alpha=1e-3 ซึ่ง overfit หนัก
@@ -78,11 +80,17 @@ RANDOM_STATE = 42
 #
 #   alpha = 1.0 เป็นค่า L2 ที่กำหนดแบบ conservative ให้แรงกว่า default ของ sklearn
 #   (1e-4) อย่างชัดเจน เพื่อจำกัดความซับซ้อนของ ANN ในเฟส 1
-#   *** ไม่ได้เลือกจากผล validation -- ค่าที่เหมาะสมจริงจะค้นหาในเฟส 2 ***
+#
+# ANN -- จูนแล้ว (ข้อ 11) · Phase 1 เดิม: hidden (16, 8), alpha 1.0
+# ที่มา: results/tuning_stage2_params.csv รันวันที่ 2026-09-27 · 12 configs (เท่ากับ RF และ XGB)
+#        ผู้ชนะ (3 seeds): alpha 7.0, hidden (8, 4) = 0.0092176323 mean MAE_return
+#        ค่าที่แพ้ที่ใกล้ที่สุด: alpha 7.0, hidden (16, 8) = 0.0092171125 (ต่ำกว่า -5.2e-07
+#        แต่ต่างไม่ถึง 1e-5 -> กฎเสมอเลือก hidden เล็กกว่า)
+#        refit 10 seeds = 0.0091994160 (รายงานเท่านั้น) · min StdRatio 10 seeds = 0.0636
 ANN_PARAMS = {
-    "hidden_layer_sizes": (16, 8),
+    "hidden_layer_sizes": (8, 4),
     "activation": "relu",
-    "alpha": 1.0,
+    "alpha": 7.0,
     "solver": "adam",
     "learning_rate_init": 1e-3,
     # เดิม 500 -- ANN ชน ceiling ทั้ง 20/20 fit (10 seeds x 2 หุ้น) โดย loss
@@ -107,19 +115,32 @@ ANN_SEEDS = list(range(10))
 # ต้นไม้ลึกจำ noise ได้ง่าย -> จำกัดความลึกและบังคับให้ leaf ใหญ่พอ
 # (ไม่ใช่ค่า default ของ sklearn ซึ่งเป็น max_depth=None, min_samples_leaf=1
 #  ซึ่งปล่อยให้ต้นไม้โตจนจำ training set ได้หมด)
+#
+# RF -- จูนแล้ว (ข้อ 11) · Phase 1 เดิม: depth 8, leaf 20, max_features 1.0 (default)
+# ที่มา: results/tuning_stage2_params.csv รันวันที่ 2026-09-27 · 12 configs
+#        ผู้ชนะ: depth 4, leaf 50, max_features 0.5 = 0.0091666015 mean MAE_return
+#        ค่าที่แพ้ที่ใกล้ที่สุด: depth 4, leaf 20, max_features 0.5 = 0.0091671180 (+5.2e-07)
+#        (depth 4 ทุกตัวเสมอกัน -> กฎเสมอเลือก depth ตื้นสุด แล้ว score ต่ำสุด)
 RF_PARAMS = {
     "n_estimators": 400,
-    "max_depth": 8,
-    "min_samples_leaf": 20,
+    "max_depth": 4,
+    "min_samples_leaf": 50,
+    "max_features": 0.5,
     "n_jobs": -1,
     "random_state": RANDOM_STATE,
 }
 
 # depth ตื้น + lr ต่ำ + subsample = ค่ามาตรฐานสาย conservative สำหรับ tabular ที่ noise สูง
+#
+# XGB -- จูนแล้ว (ข้อ 11) · Phase 1 เดิม: depth 3, lr 0.05, subsample 0.8
+# ที่มา: results/tuning_stage2_params.csv รันวันที่ 2026-09-27 · 12 configs
+#        ผู้ชนะ: depth 2, lr 0.01, subsample 0.8 = 0.0091660517 mean MAE_return
+#        ค่าที่แพ้ที่ใกล้ที่สุด: depth 2, lr 0.01, subsample 1.0 = 0.0091789446 (+1.29e-05)
+#        min StdRatio ของผู้ชนะ = 0.0569 (ผ่าน guard 0.05 แบบเฉียด)
 XGB_PARAMS = {
     "n_estimators": 300,
-    "max_depth": 3,
-    "learning_rate": 0.05,
+    "max_depth": 2,
+    "learning_rate": 0.01,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
     "reg_lambda": 1.0,
@@ -154,7 +175,7 @@ REQUIRED_LOCK_FIELDS = [
 # ต้องเปลี่ยนค่านี้ทุกครั้งที่แก้ ANN_PARAMS / RF_PARAMS / XGB_PARAMS
 # หรือ RECENCY_HALF_LIFE เพื่อให้แยกได้ว่าแถวไหนมาจากโมเดลชุดไหน
 # ---------------------------------------------------------------
-CONFIG_TAG = "phase1b-untuned"
+CONFIG_TAG = "phase1c-tuned"     # เดิม "phase1b-untuned" -- เปลี่ยนเพราะจูนแล้ว (§4.9)
 
 if not CONFIG_TAG.strip():
     raise ValueError("config.CONFIG_TAG ต้องไม่ว่าง")
@@ -169,7 +190,12 @@ if not CONFIG_TAG.strip():
 # เป็น dict "ต่อโมเดล" เพราะ §4 stage 1 เลือก half-life แยกแต่ละโมเดล
 # (ใช้ค่าเดียวกันทั้ง KBANK และ ADVANC -- เหมือน ANN_PARAMS/RF_PARAMS/XGB_PARAMS)
 # key ต้องตรงกับชื่อใน models.get_regressors() ทุกตัวอักษร
-# ค่าทั้งหมดถูกเลือกด้วย §4 stage 1 -- ตอนนี้ยังเป็น None ทั้งหมด
+# ค่าทั้งหมดถูกเลือกด้วย §4 stage 1 (results/tuning_stage1_halflife.csv, 2026-09-27)
+# grid [None, 1000, 500, 250, 125] -> None ชนะทั้ง 3 โมเดล
+#   ANN None 0.0098041 vs 500 0.0098395 (+3.5e-05)
+#   RF  None 0.0091967 vs 1000 0.0092051 (+8.5e-06 < 1e-5 -> เสมอ, กฎเลือกถ่วงน้อยกว่า = None)
+#   XGB None 0.0094121 vs 1000 0.0094812 (+6.9e-05)
+# => recency weighting ไม่ช่วยภายใต้ protocol นี้ -- โค้ดยังอยู่ แต่ปิดตามผลจูน
 RECENCY_HALF_LIFE = {
     "ANN (MLP)":     None,
     "Random Forest": None,
