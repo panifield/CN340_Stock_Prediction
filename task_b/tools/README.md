@@ -1,8 +1,35 @@
 # tools/
 
+## fetch_yahoo_daily.py — ตัวเชื่อมข้อมูลรายวัน (Yahoo → รูปแบบ Investing)
+
+```bash
+python tools/fetch_yahoo_daily.py --check-only                         # ดึง + ตรวจ
+python tools/fetch_yahoo_daily.py                                      # เขียน .staging/yahoo_<YYYYMMDD>/*.csv
+python tools/append_investing.py .staging/yahoo_<YYYYMMDD>/*.csv --source yahoo
+```
+
+- ตรวจช่วงทับ ~30 วันทำการ: วันที่ต้องตรงกัน และ Open/High/Low/Close ต้อง**เท่ากับ raw_data เป๊ะ** ไม่งั้นหยุด
+- Volume ต่างได้ (Investing ปัด 3 หลัก / Yahoo แก้ย้อนหลัง) → เตือนเท่านั้น
+- ตัด "แถวผีวันหยุด" ของ Yahoo (Volume 0 + ราคาแบน เช่น 2026-08-12) · ตัดแถววันนี้ถ้ายังไม่ถึง 18:00
+- ไม่มีวันใหม่ → exit 3 · ไม่เขียน raw_data/ เอง
+
+## fetch_yahoo_intraday.py — ตัวเชื่อมข้อมูลรายชั่วโมง (Yahoo → live snapshot 16:00)
+
+```bash
+python tools/fetch_yahoo_intraday.py                                   # ทุกหุ้น -> raw_data_intraday_live/<YYYYMMDD>/
+python tools/fetch_yahoo_intraday.py --no-save --out-dir <dir>         # ทดสอบรูปแบบ ไม่บันทึก
+```
+
+รูปแบบเดียวกับไฟล์ล็อก (ตรวจแล้วว่าแท่งที่ทับตรงกันทุกค่า) · `downloaded_at` = เวลาเริ่มดาวน์โหลด (ระมัดระวังกว่า)
+
+## check_env.py — เวอร์ชัน library ตรง pin ไหม
+
+`python tools/check_env.py` → exit 1 ถ้าไม่ตรง · official prediction เรียกตรวจนี้เองและหยุดถ้าไม่ตรง
+
+
 ## check_raw_update.py — ตรวจ raw_data ชุดใหม่ก่อน commit
 
-ใช้ทุกครั้งที่อัปเดต `raw_data/*.csv` จาก investing.com (แหล่งเดิมเท่านั้น)
+ใช้ทุกครั้งที่อัปเดต `raw_data/*.csv` (append_investing.py เรียกให้อัตโนมัติ)
 
 ```bash
 cp -r raw_data raw_data_backup_20260828
@@ -82,4 +109,4 @@ python tools/check_snapshot_1600.py --date 2026-09-29                         # 
 - snapshot เก็บที่ `raw_data_intraday_live/<YYYYMMDD>/` แบบ byte-for-byte พร้อม `.meta.json` · ห้ามแก้หลังบันทึก
 - `check_snapshot_1600.py` ต่อท้าย `results/dryrun/availability_1600.csv`: เวลาดาวน์โหลด, แท่งที่มี,
   แท่ง 15:00 เปลี่ยนไหมเมื่อเทียบกับ snapshot ที่ดาวน์โหลดทีหลัง, แท่งที่ไม่ตรงไฟล์ล็อก
-- ขั้นตอนเปิดใช้ 16:00 จริงอยู่ใน `README.md` หัวข้อ Phase 1D
+- ขั้นตอนใช้งาน 16:00 ประจำวันอยู่ใน `README.md` หัวข้อ Phase 1D (`daily_1600.py`)

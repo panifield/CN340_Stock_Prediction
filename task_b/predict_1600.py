@@ -9,7 +9,7 @@ predict_1600.py — Phase 1D (Mode A) live pipeline
     python predict_1600.py --target-date 2026-09-25 --dry-run
     # dry-run กับ live snapshot (ทดสอบ real-time availability)
     python predict_1600.py --target-date 2026-09-29 --dry-run --latest-snapshot
-    # official (หลัง human freeze + PHASE1D_LIVE_APPROVAL.md commit แล้วเท่านั้น)
+    # official (วันทำการ 16:00–16:30 · โค้ดและ log รอบก่อน commit แล้ว)
     python predict_1600.py --target-date 2026-09-29 --official --latest-snapshot
 
 dry-run  -> results/dryrun/prediction_1600_dryrun.csv เท่านั้น
@@ -17,13 +17,17 @@ official -> results/prediction_log.csv (schema เดิม · prediction_type =
             + results/prediction_log_1600_meta.csv (sidecar: เวลา/แหล่ง snapshot ที่ schema เดิมไม่มีช่อง)
 
 Guard ของ official (ผิดข้อเดียว = ไม่เขียนอะไรเลย):
-  1. PHASE1D_LIVE_APPROVAL.md มีอยู่ · commit แล้ว · หัวข้อครบ · target >= FIRST_OFFICIAL_DATE
-     (human เขียนหลังพิสูจน์ real-time availability -- โค้ดไม่สร้างไฟล์นี้เอง)
-  2. *.py / PHASE1D_PLAN.md / results/phase1d/ / ไฟล์อนุมัติ commit แล้วและไม่มีการแก้ค้าง
-  3. prediction log + sidecar รอบก่อน commit แล้ว
-  4. เวลาตอนรัน: วันเดียวกับ target และ 16:00 <= now < 16:30 (+07:00)
+  1. เวอร์ชัน library ตรง requirements.txt
+  2. เวลาตอนรัน: วันเดียวกับ target และ 16:00 <= now < 16:30 (+07:00)
+  3. *.py / PHASE1D_PLAN.md / results/phase1d/ commit แล้วและไม่มีการแก้ค้าง
+  4. prediction log + sidecar รอบก่อน commit แล้ว
   5. ใช้ live snapshot แหล่ง Yahoo ที่ดาวน์โหลด ณ/หลัง 16:00 ของวันนั้น · มีแท่ง 10, 11, 12, 14, 15
   6. key (prediction_type, ticker, target_date, model) ต้องยังไม่มีใน log
+
+ไม่มีขั้นอนุมัติล่วงหน้า (PHASE1D_LIVE_APPROVAL.md ถูกยกเลิก 2026-09-28 -- ดู PHASE1D_PLAN.md ข้อ 18)
+real-time availability ตรวจ "หลังเกิด" ทุกวันแทน: record_outcomes.py บันทึก prev_close_match
+(close_bar15 ที่ใช้ทำนาย เทียบ snapshot หลัง 17:00) และ tools/check_snapshot_1600.py บันทึก
+bar15_changed_vs_later ลง results/dryrun/availability_1600.csv
 
 ถ้า target_date เป็น eligible labeled day ในข้อมูล จะตรวจเพิ่มว่า X_live เท่ากับ X ของ
 historical builder และ train_days ถูกต้อง
@@ -41,13 +45,12 @@ from intraday_1600 import BANGKOK, BASE_DIR, build_1600_live_feature, build_data
 from live_1600 import (LIVE_DIR, SnapshotError, bars_for_prediction, latest_snapshot_for,
                        load_snapshot)
 from tune_1600 import GRIDS, LIVE_ANN_SEEDS, TICKERS, fit_predict, make_live_model
+from tools.check_env import require_pinned_env
 
 SCORES_PATH = BASE_DIR / "results" / "phase1d" / "phase1d_scores.csv"
 DRYRUN_PATH = BASE_DIR / "results" / "dryrun" / "prediction_1600_dryrun.csv"
 LOG_PATH = BASE_DIR / "results" / "prediction_log.csv"
 SIDECAR_PATH = BASE_DIR / "results" / "prediction_log_1600_meta.csv"
-APPROVAL_PATH = BASE_DIR / "PHASE1D_LIVE_APPROVAL.md"
-APPROVAL_FIELDS = ["APPROVED_BY:", "AVAILABILITY_EVIDENCE:", "FIRST_OFFICIAL_DATE:", "FREEZE_COMMIT:"]
 PREDICTION_TYPE = "same_day_1600"
 CONFIG_TAG_1600 = "phase1d-modeA"
 DEADLINE = (16, 30)
@@ -142,31 +145,10 @@ def predict_ticker(ticker, target, winners, bars, info):
 # ---------------------------------------------------------------
 # official guards
 # ---------------------------------------------------------------
-def check_approval(target, path=APPROVAL_PATH, git=_git):
-    if not path.exists():
-        raise GuardError(
-            f"ไม่พบ {path.name} -- official same_day_1600 ยังไม่เปิด\n"
-            "  ต้องพิสูจน์ real-time availability (live dry-run หลายวัน) แล้วให้คนเขียนไฟล์นี้ + commit")
-    text = path.read_text(encoding="utf-8")
-    vals = {}
-    for f in APPROVAL_FIELDS:
-        if f not in text:
-            raise GuardError(f"{path.name} ขาดหัวข้อ {f}")
-        vals[f] = text.split(f, 1)[1].splitlines()[0].strip()
-        if not vals[f]:
-            raise GuardError(f"{path.name} หัวข้อ {f} ว่าง")
-    first = pd.Timestamp(vals["FIRST_OFFICIAL_DATE:"]).normalize()
-    if target < first:
-        raise GuardError(f"target {target.date()} อยู่ก่อน FIRST_OFFICIAL_DATE {first.date()}")
-    git("ls-files", "--error-unmatch", path.name)
-    return vals
-
-
 def check_clean(git=_git):
-    dirty = git("status", "--porcelain", "--", "*.py", "PHASE1D_PLAN.md", "results/phase1d",
-                APPROVAL_PATH.name)
+    dirty = git("status", "--porcelain", "--", "*.py", "PHASE1D_PLAN.md", "results/phase1d")
     if dirty:
-        raise GuardError("โค้ด/แผน/ผลค้นหา/ไฟล์อนุมัติ ยังไม่ commit:\n" + dirty)
+        raise GuardError("โค้ด/แผน/ผลค้นหา ยังไม่ commit:\n" + dirty)
     pending = git("status", "--porcelain", "--", "results/prediction_log.csv",
                   "results/prediction_log_1600_meta.csv")
     if pending:
@@ -266,9 +248,9 @@ def main(argv=None, now=None, live_root=LIVE_DIR):
 
     use_live = args.latest_snapshot or args.snapshot
     if args.official:
-        check_approval(target)
-        check_clean()
+        require_pinned_env()             # เวอร์ชัน library ต้องตรง requirements.txt (INTEGRATION.md ข้อ 5)
         check_time_window(target, now)
+        check_clean()
         if not use_live:
             raise GuardError("official ต้องใช้ live snapshot (--latest-snapshot หรือ --snapshot)")
 

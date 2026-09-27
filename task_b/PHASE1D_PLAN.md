@@ -257,6 +257,13 @@ cost = `cost_round_trip()` (สัดส่วน) · tick = `tick_size(C15)` (�
 · outcome `close_bar16` จาก Yahoo download ภายหลัง พร้อมเวลาดาวน์โหลดและ SHA ·
 freeze candidate ไม่ใช่หลักฐานว่า real-time pipeline พร้อมใช้งาน
 
+> **แก้ไข 2026-09-28 (ตัดสินใจโดยทีม):** ยกเลิกขั้น "พิสูจน์ real-time availability ก่อน + ไฟล์
+> `PHASE1D_LIVE_APPROVAL.md`" เพื่อให้เชื่อมกับงานของทีมและเริ่มทดสอบจริงได้ทันที · guard อื่นของ official
+> ยังอยู่ครบ (16:00–16:30 · โค้ด/log commit แล้ว · snapshot Yahoo หลัง 16:00 มีแท่งบังคับครบ · ห้ามซ้ำ) ·
+> real-time availability เปลี่ยนเป็น **ตรวจหลังเกิดทุกวัน**: `prev_close_match` ใน `results/outcomes.csv`
+> และ `bar15_changed_vs_later` ใน `results/dryrun/availability_1600.csv` · วันที่ไม่ผ่านต้องรายงานแยก/ตัดออก
+> การแก้นี้ไม่เปลี่ยน feature / grid / rule / metric (ข้อ 19)
+
 ## 19. Freeze
 
 หลัง Session 2 ห้ามเปลี่ยน feature / grid / rule / metric · การเปลี่ยนใด ๆ = "รอบที่สอง" ต้องมีแผนใหม่ + commit ก่อน

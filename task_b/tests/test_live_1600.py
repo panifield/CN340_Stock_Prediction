@@ -117,21 +117,13 @@ def test_time_window():
         _raises(P.GuardError, P.check_time_window, t, pd.Timestamp(bad))
 
 
-def test_approval_file_rules():
-    t = pd.Timestamp("2026-10-05")
-    ok_git = lambda *a: ""                                          # noqa: E731
-    with tempfile.TemporaryDirectory() as d:
-        f = Path(d) / "PHASE1D_LIVE_APPROVAL.md"
-        _raises(P.GuardError, P.check_approval, t, f, ok_git, match="ไม่พบ")
-        full = ("APPROVED_BY: x\nAVAILABILITY_EVIDENCE: results/dryrun/availability_1600.csv\n"
-                "FIRST_OFFICIAL_DATE: 2026-10-05\nFREEZE_COMMIT: abc\n")
-        f.write_text(full.replace("APPROVED_BY: x\n", ""), encoding="utf-8")
-        _raises(P.GuardError, P.check_approval, t, f, ok_git, match="APPROVED_BY")
-        f.write_text(full.replace("FREEZE_COMMIT: abc", "FREEZE_COMMIT:"), encoding="utf-8")
-        _raises(P.GuardError, P.check_approval, t, f, ok_git, match="ว่าง")
-        f.write_text(full, encoding="utf-8")
-        _raises(P.GuardError, P.check_approval, pd.Timestamp("2026-10-02"), f, ok_git, match="ก่อน")
-        assert P.check_approval(t, f, ok_git)["FIRST_OFFICIAL_DATE:"] == "2026-10-05"
+def test_check_clean_rules():
+    P.check_clean(lambda *a: "")                                    # สะอาด -> ผ่าน
+    _raises(P.GuardError, P.check_clean, lambda *a: " M predict_1600.py" if "*.py" in a else "",
+            match="ยังไม่ commit")
+    _raises(P.GuardError, P.check_clean,
+            lambda *a: " M results/prediction_log.csv" if "results/prediction_log.csv" in a else "",
+            match="log รอบก่อน")
 
 
 def _rows():
@@ -160,9 +152,10 @@ def test_official_write_schema_and_duplicate():
         _raises(P.GuardError, P.check_no_duplicate, _rows(), log, match="ซ้ำ")
 
 
-def test_official_refused_without_approval_and_future_date():
+def test_official_needs_no_approval_but_refused_outside_window_and_future_date():
+    assert not hasattr(P, "check_approval")                          # ยกเลิกขั้นอนุมัติแล้ว (2026-09-28)
     _raises(P.GuardError, P.main, ["--target-date", "2026-09-25", "--official", "--latest-snapshot"],
-            now="2026-09-25T16:05:00+07:00", match="ไม่พบ")
+            now="2026-09-25T16:45:00+07:00", match="16:00–16:30")
     _raises(ValueError, P.main, ["--target-date", "2026-10-01", "--dry-run"],
             now="2026-09-28T16:05:00+07:00", match="อนาคต")
 
