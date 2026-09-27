@@ -15,7 +15,7 @@ tree-based ไม่ต้อง scale
 ใช้ Pipeline ของ sklearn ครอบไว้ ทำให้ scaler ถูก fit
 เฉพาะบน train set โดยอัตโนมัติ -> ไม่มีทาง leak
 
-SimpleImputer เก็บไว้เป็นตาข่ายนิรภัยเท่านั้น -- main._prepare ตัดแถว
+SimpleImputer เก็บไว้เป็นตาข่ายนิรภัยเท่านั้น -- splits.prepare_xy ตัดแถว
 ที่มี NaN ทิ้งหมดแล้ว (A2) ในทางปฏิบัติ imputer จึงไม่ได้เติมค่าอะไรเลย
 """
 

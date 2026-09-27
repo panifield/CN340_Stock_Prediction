@@ -50,26 +50,34 @@ def regression_metrics(y_true, y_pred, prev_close=None):
     return m
 
 
-def results_table(results_dict, sort_by=None, ascending=True, decimals=6):
+def results_table(results_dict, sort_by=None, ascending=True):
     """
     results_dict = {ชื่อโมเดล: dict ของ metric}
-    คืน DataFrame เรียงตาม metric ที่เลือก
+    คืน DataFrame เรียงตาม metric ที่เลือก **แบบ full precision**
 
-    decimals=6: MAE_return อยู่ราว 0.008-0.01 และโมเดลต่างกันที่หลักที่ 5
-    ถ้าปัด 4 ตำแหน่ง (แบบ v1) จะแยกโมเดลไม่ออก
+    ไม่ปัดทศนิยมที่นี่ (A2): ค่าที่ปัดแล้วไม่ควรไหลเข้า compare_to_baseline()
+    หรือลง CSV เพราะ CSV เป็น artifact สำหรับ audit
+    ตอนนี้โมเดลต่างกันที่ราว 4e-5 จึงยังไม่กระทบ verdict
+    แต่ถ้าวันหนึ่งต่างกัน 3e-7 การปัดอาจพลิกผลแพ้/ชนะได้
+    การปัดทำตอนแสดงผลเท่านั้น -> print_table()
     """
     df = pd.DataFrame(results_dict).T
     if sort_by and sort_by in df.columns:
         df = df.sort_values(sort_by, ascending=ascending)
-    return df.round(decimals)
+    return df
 
 
-def print_table(df, title=""):
-    """พิมพ์ตารางพร้อมหัวข้อ"""
+def print_table(df, title="", decimals=6):
+    """
+    พิมพ์ตารางพร้อมหัวข้อ -- ปัดทศนิยมที่นี่ที่เดียว
+
+    decimals=6: MAE_return อยู่ราว 0.008-0.01 และโมเดลต่างกันที่หลักที่ 5
+    ถ้าปัด 4 ตำแหน่ง (แบบ v1) จะแยกโมเดลไม่ออก
+    """
     print(f"\n{'='*78}")
     print(f"  {title}")
     print(f"{'='*78}")
-    print(df.to_string())
+    print(df.round(decimals).to_string())
 
 
 def compare_to_baseline(df, metric, model_name,

@@ -85,7 +85,14 @@ ANN_PARAMS = {
     "alpha": 1.0,
     "solver": "adam",
     "learning_rate_init": 1e-3,
-    "max_iter": 500,
+    # เดิม 500 -- ANN ชน ceiling ทั้ง 20/20 fit (10 seeds x 2 หุ้น) โดย loss
+    # ยังลดต่ออีก 0.1-1.8% ทุก 50 iterations แปลว่า optimizer ยังเดินอยู่จริง
+    # ทดสอบด้วย ceiling 3000 แล้วทุก seed หยุดเองที่ 502-869 iterations
+    # => 500 เป็น ceiling ที่ต่ำเกินไป ไม่ใช่ว่าโมเดล converge แล้ว
+    #
+    # การแก้นี้ *ไม่ใช่* การจูนบน validation -- เหตุผลมาจาก training convergence
+    # ล้วนๆ (ConvergenceWarning + loss curve) ไม่ได้ดูค่า MAE ของ val เลย
+    "max_iter": 3000,
     # ปิด early_stopping: MLPRegressor จะ shuffle แบ่ง val ของตัวเองออกจาก train
     # ซึ่งขัดกับหลัก "ห้าม shuffle" ของ time series
     "early_stopping": False,

@@ -20,7 +20,6 @@ main.py — งาน B (ราคาปิด / return)
 
 import argparse
 
-import numpy as np
 import pandas as pd
 
 # ไม่ suppress warning (E1): อาจซ่อน ConvergenceWarning ของ MLP ที่ต้องรู้
@@ -37,7 +36,7 @@ from data_loader import load_stock
 from features import build_features, verify_no_leak
 from targets import build_targets
 from diagnostics import run_all_diagnostics
-from splits import chronological_split
+from splits import chronological_split, prepare_xy
 from models import get_regressors
 from baselines import get_regression_baselines
 from evaluate import regression_metrics, results_table, print_table, compare_to_baseline
@@ -75,39 +74,6 @@ def verify_lock(path=LOCK_PATH):
     print(f"[lock] ผ่านการตรวจ: {path.name} มีหัวข้อครบ {len(REQUIRED_LOCK_FIELDS)} ข้อ")
 
 
-def _prepare(X, y, extra=None):
-    """
-    จัด X และ y ให้ index ตรงกัน แล้วตัดแถวที่มี NaN ออก (A2)
-
-    NaN ช่วงต้นชุดเกิดจาก rolling indicator ที่ยังมีข้อมูลย้อนหลังไม่ครบ
-    จึงเป็นค่าที่ "ยังนิยามไม่ได้" ไม่ใช่ missing value ทั่วไป
-    แม้ SimpleImputer จะ fit จาก train เท่านั้น การเติม median ก็ไม่ได้ทำให้
-    indicator นั้นมีความหมายขึ้นมา -> ตัดแถวทิ้งแทน
-    """
-    idx = X.index.intersection(y.dropna().index)
-    X = X.loc[idx]
-    y = y.loc[idx]
-
-    ok = X.notna().all(axis=1)            # มี NaN แม้แต่ตัวเดียว = ตัดทิ้ง
-    n_drop = int((~ok).sum())
-    if n_drop:
-        pos = np.where(~ok.values)[0]
-        run = 0
-        while run < len(pos) and pos[run] == run:
-            run += 1
-        if run == n_drop:
-            print(f"[prepare] ตัด {n_drop} แถวอุ่นเครื่องต้นชุด (ต่อเนื่องกัน)")
-        else:
-            print(f"[prepare] !! เตือน: มี {n_drop - run} แถวที่ NaN อยู่กลางชุด "
-                  f"-- ตรวจ features.py ว่ามีตัวหารเป็นศูนย์ไหม")
-    X, y = X[ok], y[ok]
-
-    if extra is not None:
-        extra = extra.loc[X.index]
-        return X, y, extra
-    return X, y
-
-
 def run_task_b(X, targets, use_test, verbose=True):
     dev = not use_test
     print("\n" + "=" * 78)
@@ -118,7 +84,7 @@ def run_task_b(X, targets, use_test, verbose=True):
 
     y = targets["y_return"]
     extra = targets[["prev_close", "close"]]
-    X_, y_, extra_ = _prepare(X, y, extra)
+    X_, y_, extra_ = prepare_xy(X, y, extra)
 
     parts = chronological_split(X_, y_, verbose=verbose, name="งาน B",
                                 include_test=use_test)

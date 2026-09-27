@@ -5,11 +5,12 @@ targets.py — งาน B (ราคาปิด / return)
 
 *** ทำไมงาน B ต้องทำนาย return ไม่ใช่ราคาดิบ ? ***
 
-1. Random Forest / XGBoost extrapolate ไม่ได้
-   ต้นไม้ทำนายด้วยค่าเฉลี่ยของ leaf node
-   ค่าที่ทำนายจะไม่มีวันเกิน max ที่เคยเห็นตอนเทรน
-   ถ้าเทรนช่วงราคา 100-150 แล้ว test ช่วง 150-200
-   -> โมเดลจะทำนายตันอยู่ที่ 150 กราฟจะแบนน่าเกลียด
+1. Tree-based models ไม่สามารถ extrapolate trend ออกนอก feature range
+   ได้ตามธรรมชาติ
+   Random Forest ถูกจำกัดด้วยค่าเฉลี่ยใน leaf ส่วน boosted trees อย่าง
+   XGBoost แม้ไม่ถูก bound แบบเดียวกัน (เพราะเป็นผลรวมของหลายต้น)
+   แต่ยังมีข้อจำกัดในการ extrapolate นอก distribution ที่เห็นระหว่าง train
+   ถ้าเทรนช่วงราคา 100-150 แล้ว test ช่วง 150-200 กราฟจะแบนผิดปกติ
 
 2. ราคาดิบเป็น non-stationary (มี trend)
    ส่วน return เป็น stationary -> โมเดลเรียนรู้ได้ถูกต้องกว่า

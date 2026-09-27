@@ -22,6 +22,45 @@ import pandas as pd
 from config import SPLIT_BY_DATE
 
 
+def prepare_xy(X, y, extra=None, verbose=True):
+    """
+    จัด X และ y ให้ index ตรงกัน แล้วตัดแถวที่มี NaN ออก (A2)
+
+    *** ฟังก์ชันนี้ต้องถูกใช้โดยทุกเส้นทางที่เตรียมข้อมูลเข้าโมเดล ***
+    ทั้ง main.py (historical) และ predict_live.py (live)
+    ห้ามเขียน logic การเตรียมข้อมูลขึ้นมาใหม่ที่อื่นเด็ดขาด
+    ถ้าเขียนใหม่แล้วลืมตัดแถว warm-up บั๊ก A2 จะกลับมาเงียบๆ
+    เฉพาะในเส้นทางนั้น โดยที่ pipeline หลักยังถูกอยู่ = จับไม่ได้
+
+    NaN ช่วงต้นชุดเกิดจาก rolling indicator ที่ยังมีข้อมูลย้อนหลังไม่ครบ
+    จึงเป็นค่าที่ "ยังนิยามไม่ได้" ไม่ใช่ missing value ทั่วไป
+    แม้ SimpleImputer จะ fit จาก train เท่านั้น การเติม median ก็ไม่ได้ทำให้
+    indicator นั้นมีความหมายขึ้นมา -> ตัดแถวทิ้งแทน
+    """
+    idx = X.index.intersection(y.dropna().index)
+    X = X.loc[idx]
+    y = y.loc[idx]
+
+    ok = X.notna().all(axis=1)            # มี NaN แม้แต่ตัวเดียว = ตัดทิ้ง
+    n_drop = int((~ok).sum())
+    if n_drop and verbose:
+        pos = np.where(~ok.values)[0]
+        run = 0
+        while run < len(pos) and pos[run] == run:
+            run += 1
+        if run == n_drop:
+            print(f"[prepare] ตัด {n_drop} แถวอุ่นเครื่องต้นชุด (ต่อเนื่องกัน)")
+        else:
+            print(f"[prepare] !! เตือน: มี {n_drop - run} แถวที่ NaN อยู่กลางชุด "
+                  f"-- ตรวจ features.py ว่ามีตัวหารเป็นศูนย์ไหม")
+    X, y = X[ok], y[ok]
+
+    if extra is not None:
+        extra = extra.loc[X.index]
+        return X, y, extra
+    return X, y
+
+
 def chronological_split(X, y, verbose=True, name="", include_test=True):
     """
     แบ่งตามเวลา คืน dict ของ (X, y) แต่ละชุด
