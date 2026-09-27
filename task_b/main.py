@@ -39,7 +39,10 @@ from diagnostics import run_all_diagnostics
 from splits import chronological_split, prepare_xy
 from models import get_regressors
 from baselines import get_regression_baselines
-from evaluate import regression_metrics, results_table, print_table, compare_to_baseline
+from evaluate import (
+    regression_metrics, results_table, print_table, compare_to_baseline,
+    prediction_shape,
+)
 
 PRIMARY_METRIC = "MAE_return"
 
@@ -155,6 +158,17 @@ def run_task_b(X, targets, use_test, verbose=True):
     print("  - ตัดสินด้วย MAE_return เทียบกับ Baseline: Naive (RW) เป็นหลัก")
     print("  - MAE_baht / RMSE_baht ใช้อธิบายขนาด error เป็นบาทเท่านั้น")
     print("  - R2_return < 0 แปลว่าแย่กว่าการทายค่าเฉลี่ยของชุดนั้น")
+
+    # ตารางที่ 2 (§2) -- diagnostic แยกจากตารางหลัก พิมพ์อย่างเดียว ไม่ลง CSV
+    # ไม่ถูกใช้เลือกโมเดล (best เลือกด้วย MAE_return ไปแล้วด้านบน)
+    shape_df = results_table(
+        {name: prediction_shape(y_eval, p) for name, p in eval_preds.items()}
+    )
+    print_table(shape_df.loc[df.index],       # เรียงลำดับเดียวกับตารางหลัก
+                "งาน B : รูปร่างการทำนาย (diagnostic -- ไม่ใช้เลือกโมเดล)")
+    print("\n  อ่านตารางนี้อย่างไร:")
+    print("  - StdRatio ใกล้ 0 = โมเดลยุบเป็นค่าคงที่ (ถึงจะได้ MAE ดีก็ไม่นับว่าทำนายได้)")
+    print("  - ตารางนี้ไม่ถูกใช้เลือกโมเดล -- การเลือกใช้ MAE_return เท่านั้น")
 
     return {"table": df, "preds": eval_preds, "y_eval": y_eval,
             "prev_close_eval": prev_close_eval, "diag": diag,

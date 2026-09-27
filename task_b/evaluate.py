@@ -105,3 +105,41 @@ def compare_to_baseline(df, metric, model_name,
         f"  ผลสรุป ({metric}) : โมเดล ML {verdict} naive "
         f"(ต่างกัน {abs(model_val - base_val):.6f})"
     )
+
+
+def prediction_shape(y_true, y_pred):
+    """
+    รูปร่างของการทำนาย -- diagnostic เท่านั้น ห้ามใช้เลือกโมเดล (§2)
+
+    StdRatio : std(pred)/std(true)  = โมเดลกล้าแกว่งกว้างกี่เท่าของความจริง
+               ~0    = โมเดลยุบเป็นค่าคงที่ (ไม่ได้ทำนายอะไร)
+               ~1    = แกว่งกว้างเท่าความจริง
+               >1    = แกว่งกว้างกว่าความจริง
+    Bias     : mean(pred - true)    = เอียงเป็นระบบไปทางไหน
+    Rho      : corr(pred, true)     = ทิศทางตรงกันแค่ไหน
+
+    บทบาท: ไม่ใช้จัดอันดับโมเดล/config (การจัดอันดับใช้ MAE_return เท่านั้น)
+           แต่ StdRatio ใช้เป็น validity guard ที่ประกาศล่วงหน้าใน tune.py ได้ (§4.6)
+           เพื่อกันคำตอบเสื่อม (โมเดลยุบเป็นค่าคงที่)
+
+    *** ห้ามเพิ่ม p-value / confidence interval / significance test ใด ๆ ลงในฟังก์ชันนี้ ***
+    """
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+
+    # ใช้ np.ptp (max - min) ตรวจว่า "มีการกระจายจริงไหม" ไม่ใช่ std -- ดู §2.3
+    # std ของอาร์เรย์ค่าคงที่ (np.full) ได้ ~1e-19 ไม่ใช่ 0 เพราะ rounding ตอนหา mean
+    # แต่ ptp ได้ 0 เป๊ะเมื่อทุกสมาชิกเท่ากันบิตต่อบิต
+    # ข้อจำกัด: ถ้าค่าคงที่ถูกสร้างด้วยการสะสม (เช่น cumsum/arange) ptp อาจได้ ~5e-18
+    # และบั๊กจะกลับมา -- test_shape_real_baselines จึงตรวจ baseline ตัวจริง
+    # ptp ใช้ตรวจการกระจายเท่านั้น สูตร StdRatio ยังเป็น std(pred)/std(true)
+    true_varies = np.ptp(y_true) > 0
+    pred_varies = np.ptp(y_pred) > 0
+
+    return {
+        "StdRatio": (float(y_pred.std() / y_true.std()) if pred_varies else 0.0)
+                    if true_varies else np.nan,
+        "Bias": float((y_pred - y_true).mean()),
+        "Rho": float(np.corrcoef(y_pred, y_true)[0, 1])
+               if (pred_varies and true_varies) else np.nan,
+    }

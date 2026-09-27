@@ -182,6 +182,44 @@ def test_live_feature_matches_history():
             raise AssertionError(f"build_live_feature ต้อง fail: {why}")
 
 
+def test_shape_constant_prediction():
+    """ทำนายค่าคงที่ -> StdRatio == 0.0 เป๊ะ และ Rho เป็น NaN (§2.3)"""
+    from evaluate import prediction_shape
+    y_true = np.random.default_rng(0).normal(0, 0.01, 362)
+    s = prediction_shape(y_true, np.full(362, 0.001))
+    assert s["StdRatio"] == 0.0, s
+    assert np.isnan(s["Rho"]), s
+
+
+def test_shape_constant_truth():
+    """ค่าจริงคงที่ -> StdRatio และ Rho เป็น NaN (§2.3)"""
+    from evaluate import prediction_shape
+    y_pred = np.random.default_rng(1).normal(0, 0.01, 362)
+    s = prediction_shape(np.full(362, 0.001), y_pred)
+    assert np.isnan(s["StdRatio"]) and np.isnan(s["Rho"]), s
+
+
+def test_shape_real_baselines():
+    """
+    baseline ตัวจริงทั้งสองต้องได้ StdRatio == 0.0 และ Rho NaN (§2.3)
+    ใช้ y_train จริงของ KBANK (ถึง train_end) เพื่อให้ Mean Return
+    เป็นค่าเฉลี่ยจริงที่เคยทำให้ std ได้ ~1e-19
+    """
+    from evaluate import prediction_shape
+    from baselines import get_regression_baselines
+    from targets import build_targets
+    df = _dev_df()
+    y = build_targets(df, verbose=False)["y_return"].dropna()
+    y_train = y.loc[:SPLIT_BY_DATE["train_end"]]
+    y_eval = y.loc[y.index > pd.Timestamp(SPLIT_BY_DATE["train_end"])]
+    base = get_regression_baselines(y_train, y_eval)
+    assert set(base) == {"Baseline: Naive (RW)", "Baseline: Mean Return"}
+    for name, p in base.items():
+        s = prediction_shape(y_eval, p)
+        assert s["StdRatio"] == 0.0, (name, s)
+        assert np.isnan(s["Rho"]), (name, s)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     failed = 0
