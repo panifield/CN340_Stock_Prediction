@@ -88,8 +88,11 @@ def build_market_features(df):
     f = pd.DataFrame(index=df.index)
 
     # --- ผลตอบแทน (return) : ตัวสำคัญที่สุด เพราะเป็น stationary ---
+    # fill_method=None ทุกที่: ไม่ต้องการให้ pandas forward-fill ค่า NaN
+    # ถ้ามีรูโหว่กลางชุดต้องได้ NaN ออกมาให้ prepare_xy เตือน ไม่ใช่ถูกเติมเงียบๆ
+    # (สำคัญกับ build_live_feature ที่ต่อแถวเปล่าท้าย df)
     for lag in LAG_DAYS:
-        f[f"ret_{lag}d"] = close.pct_change(lag)
+        f[f"ret_{lag}d"] = close.pct_change(lag, fill_method=None)
 
     # --- รูปทรงแท่งเทียน (normalize ด้วยราคา -> ไม่มีปัญหา scale) ---
     f["hl_range"] = (high - low) / close
@@ -109,7 +112,7 @@ def build_market_features(df):
                                     / close.rolling(b).mean())
 
     # --- ความผันผวน ---
-    ret1 = close.pct_change()
+    ret1 = close.pct_change(fill_method=None)
     for w in VOL_WINDOWS:
         f[f"volatility_{w}d"] = ret1.rolling(w).std()
 
@@ -122,7 +125,7 @@ def build_market_features(df):
     f["bb_position"] = bollinger_position(close)
 
     # --- ปริมาณซื้อขาย (อัตราส่วน ไม่ใช่ค่าดิบ) ---
-    f["volume_change"] = volume.pct_change()
+    f["volume_change"] = volume.pct_change(fill_method=None)
     f["volume_over_ma20"] = volume / volume.rolling(20).mean()
 
     return f
@@ -158,6 +161,69 @@ def build_features(df, verbose=True):
               f"(market {market.shape[1]} ตัว shift(1) แล้ว + "
               f"calendar {out.shape[1] - market.shape[1]} ตัวไม่ shift)")
     return out
+
+
+def build_live_feature(df, target_date, verbose=True):
+    """
+    สร้าง feature 1 แถวสำหรับวันที่ target_date ซึ่งยังไม่มีข้อมูลราคา (B1)
+
+        market features  = indicator ของวันซื้อขายล่าสุดใน df
+        calendar feature = DOW ของ target_date เอง
+
+    วิธี: เติมแถวเปล่าของ target_date ต่อท้าย df แล้วเรียก build_features()
+    ตัวเดิม -- ห้ามเขียน logic สร้าง feature ขึ้นมาใหม่ ไม่งั้นวันหนึ่ง
+    สองเส้นทางจะไม่ตรงกันแล้วจับไม่ได้
+
+    ปลอดภัยเพราะ indicator ทุกตัวมองย้อนหลัง (rolling / pct_change)
+    แถว NaN ที่ต่อท้ายจึงไม่กระทบค่าของแถวก่อนหน้า และ shift(1) ทำให้
+    แถว target_date ได้ indicator ของวันซื้อขายล่าสุด ส่วน calendar feature
+    ได้ DOW ของ target_date เอง -- ตรงตามที่ต้องการพอดี
+
+    คืน (X_live, prev_close, data_cutoff)
+      X_live      DataFrame 1 แถว คอลัมน์ตรงกับ build_features() ทุกประการ
+      prev_close  ราคาปิดของวันซื้อขายล่าสุด (ใช้แปลง return -> ราคา)
+      data_cutoff วันสุดท้ายที่มีข้อมูลจริง
+    """
+    target = pd.Timestamp(target_date)
+
+    if target.dayofweek >= 5:
+        raise ValueError(f"{target.date()} เป็นวันเสาร์/อาทิตย์ ตลาดไม่เปิด")
+    # หมายเหตุ: ไม่ตรวจวันหยุด SET เพราะปฏิทินไทยเดาไม่ได้
+    # ผู้ใช้ต้องเป็นคนระบุ --target-date ที่ถูกต้องเอง
+
+    if target in df.index:
+        raise ValueError(
+            f"{target.date()} มีข้อมูลอยู่แล้วใน raw_data -- "
+            f"นี่ไม่ใช่การทำนายอนาคต ตรวจ --target-date อีกครั้ง"
+        )
+    if target <= df.index[-1]:
+        raise ValueError(
+            f"target_date {target.date()} ต้องอยู่หลังวันสุดท้ายของข้อมูล "
+            f"({df.index[-1].date()})"
+        )
+
+    data_cutoff = df.index[-1]
+    prev_close = float(df["Close"].iloc[-1])
+
+    # เติมแถวเปล่า -> indicator ของแถวก่อนหน้าไม่เปลี่ยน เพราะ rolling มองย้อนหลัง
+    blank = pd.DataFrame({c: [np.nan] for c in df.columns}, index=[target])
+    df_ext = pd.concat([df, blank])
+
+    X_all = build_features(df_ext, verbose=False)
+    X_live = X_all.loc[[target]]
+
+    # market feature ต้องครบ ถ้ามี NaN แปลว่าข้อมูลท้าย df ไม่สมบูรณ์
+    bad = X_live.columns[X_live.isna().any()].tolist()
+    if bad:
+        raise ValueError(
+            f"feature ของ {target.date()} มี NaN: {bad}\n"
+            f"ตรวจว่าข้อมูลถึง {data_cutoff.date()} ครบและไม่มีรูโหว่"
+        )
+
+    if verbose:
+        print(f"[live] สร้าง feature {X_live.shape[1]} ตัว สำหรับ {target.date()}")
+        print(f"[live] ใช้ข้อมูลถึง {data_cutoff.date()}  prev_close = {prev_close}")
+    return X_live, prev_close, data_cutoff
 
 
 def verify_no_leak(df, features, sample_idx=100):

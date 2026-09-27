@@ -22,6 +22,7 @@ SimpleImputer เก็บไว้เป็นตาข่ายนิรภั
 import numpy as np
 
 from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.compose import TransformedTargetRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
@@ -80,3 +81,31 @@ def get_regressors():
     rf = _unscaled(RandomForestRegressor(**RF_PARAMS))
     xgb = _unscaled(XGBRegressor(**XGB_PARAMS))
     return {"ANN (MLP)": ann, "Random Forest": rf, "XGBoost": xgb}
+
+
+def fit_live_models(X, y, verbose=True):
+    """
+    เทรนโมเดลทั้ง 3 ตัวด้วยข้อมูลทั้งหมดที่มี y จริงแล้ว (B2)
+    ใช้สำหรับ prospective prediction เท่านั้น
+
+    *** ต่างจาก main.py โดยตั้งใจ ***
+    main.py เทรนถึง train_end (2023-09-01) เพื่อประเมินบน val
+    ส่วนที่นี่เทรนถึงวันล่าสุด เพราะ "การทดสอบ" คืออนาคตที่ยังไม่เกิด
+    ไม่ใช่ข้อมูลที่กันไว้ -- ช่วงที่เคยเป็น historical test ก็เป็นแค่
+    labeled data ที่รู้ผลแล้ว ณ เวลาที่ทำนายวันข้างหน้า
+
+    *** ห้ามเอาโมเดลจากฟังก์ชันนี้ไปรายงานเป็นผล test set เด็ดขาด ***
+    มันเห็นช่วง test ไปแล้ว -- คนละวัตถุประสงค์ คนละไฟล์ คนละ log
+    """
+    fitted = {}
+    for name, model in get_regressors().items():
+        if verbose:
+            print(f"    เทรน {name} บน {len(y)} แถว ...", end=" ", flush=True)
+        wrapped = TransformedTargetRegressor(
+            regressor=model, transformer=StandardScaler()
+        )
+        wrapped.fit(X, y)
+        fitted[name] = wrapped
+        if verbose:
+            print("เสร็จ")
+    return fitted

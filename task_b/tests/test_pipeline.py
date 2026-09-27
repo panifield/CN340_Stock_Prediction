@@ -22,7 +22,7 @@ from sklearn.tree import DecisionTreeRegressor
 
 from config import SPLIT_BY_DATE, REQUIRED_LOCK_FIELDS, TICKERS
 from data_loader import load_stock
-from features import build_features, build_market_features
+from features import build_features, build_market_features, build_live_feature
 from models import SeedAveragedRegressor
 from main import verify_lock
 
@@ -139,6 +139,47 @@ def test_seed_averaging_is_mean():
     # ต้อง clone ได้ (Pipeline / TransformedTargetRegressor clone มันทุกครั้ง)
     c = clone(SeedAveragedRegressor(base, seeds=seeds))
     assert c.seeds == seeds and not hasattr(c, "estimators_")
+
+
+def test_live_feature_matches_history():
+    """
+    build_live_feature() ต้องให้ค่าเท่ากับที่ build_features() ให้
+    ถ้าข้อมูลของวันนั้นมีอยู่จริง -- ถ้าไม่เท่า แปลว่าเส้นทาง live
+    กับ historical แยกจากกันแล้ว ซึ่งเป็นสิ่งที่ห้ามเกิด
+
+    ใช้วันใน val เท่านั้น (2025-02-25) ไม่แตะ test
+    """
+    cutoff, target = pd.Timestamp("2025-02-24"), pd.Timestamp("2025-02-25")
+    for ticker in TICKERS:
+        df = _dev_df(ticker)                       # ถึง val_end = 2025-02-25
+        hist = df.loc[:cutoff]                     # ตัดก่อน target 1 วัน
+
+        X_live, prev_close, dc = build_live_feature(hist, target, verbose=False)
+        assert dc == cutoff, f"data_cutoff ต้องเป็น {cutoff.date()}"
+        assert prev_close == float(df.loc[cutoff, "Close"])
+        assert X_live.shape == (1, 29)
+        assert not X_live.isna().any().any(), "X_live ต้องไม่มี NaN"
+
+        # market feature ต้องตรงกับที่คำนวณจากข้อมูลจริงทั้งชุด
+        X_full = build_features(df, verbose=False)
+        prev_cols = [c for c in X_live.columns if c.endswith("_prev")]
+        assert np.allclose(X_live[prev_cols].to_numpy(float),
+                           X_full.loc[[target], prev_cols].to_numpy(float)), (
+            f"{ticker}: live feature ไม่ตรงกับ historical feature ของวันเดียวกัน")
+
+        # calendar ต้องเป็นของ target ไม่ใช่ของ cutoff (2025-02-25 = อังคาร)
+        assert X_live["dow_1"].iloc[0] == 1
+        assert X_live[[f"dow_{d}" for d in range(5)]].iloc[0].sum() == 1
+
+        # guard: วันที่มีข้อมูลแล้ว / อยู่ในอดีต / เสาร์-อาทิตย์ ต้อง error
+        for bad_date, why in [(cutoff, "มีข้อมูลแล้ว"),
+                              (pd.Timestamp("2024-01-02"), "อยู่ในอดีต"),
+                              (pd.Timestamp("2025-03-01"), "วันเสาร์")]:
+            try:
+                build_live_feature(hist, bad_date, verbose=False)
+            except ValueError:
+                continue
+            raise AssertionError(f"build_live_feature ต้อง fail: {why}")
 
 
 if __name__ == "__main__":
