@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from config import TICKERS, OUTPUT_DIR, BASE_DIR
+from config import TICKERS, OUTPUT_DIR, BASE_DIR, CONFIG_TAG
 from data_loader import load_stock, raw_data_path, dataset_fingerprint
 from features import build_features, build_live_feature
 from targets import build_targets
@@ -36,11 +36,16 @@ LOG_PATH = OUTPUT_DIR / "prediction_log.csv"
 # key ที่ห้ามซ้ำใน log (เฉพาะแถวที่ไม่ใช่ dry-run)
 KEY = ["prediction_type", "ticker", "target_date", "model"]
 
+# schema สุดท้ายของ Phase 1C -- ห้ามเปลี่ยนลำดับหลังจากนี้ (§1.5)
+# ใส่ทุกคอลัมน์ที่ Phase 1C จะใช้ตั้งแต่ตอนนี้ แม้บางคอลัมน์ยังไม่มีความหมาย
+# เพื่อไม่ให้ log append-only ไฟล์เดียวมีแถวคนละ schema
+#   half_life  : ยังไม่มี recency weighting -> ค่าว่างเสมอ (§3 จะเริ่มเติม)
+#   config_tag : จาก config.CONFIG_TAG
 LOG_COLUMNS = [
-    "generated_at", "prediction_type", "ticker", "target_date",
-    "data_cutoff", "train_rows", "model", "predicted_return",
-    "prev_close", "predicted_close", "n_features",
-    "dataset_sha256", "code_commit", "is_dry_run",
+    "generated_at", "prediction_type", "ticker", "target_date", "data_cutoff",
+    "train_rows", "half_life", "model", "predicted_return", "prev_close",
+    "predicted_close", "n_features", "dataset_sha256", "code_commit",
+    "config_tag", "is_dry_run",
 ]
 
 BANGKOK = timezone(timedelta(hours=7))
@@ -157,12 +162,22 @@ def check_no_duplicate(new_rows, log_path=LOG_PATH):
 # Logger (B4) -- append-only
 # ---------------------------------------------------------------
 
-def append_log(rows, log_path=LOG_PATH):
-    """เขียนต่อท้ายเท่านั้น ห้าม overwrite ห้ามแก้แถวเก่า"""
+def append_log(log_path, rows):
+    """
+    เขียนต่อท้ายเท่านั้น ห้าม overwrite ห้ามแก้แถวเก่า
+    ตรวจ schema ทุกครั้ง -- ห้าม append ผสม schema (§1.5)
+    """
+    rows = rows[LOG_COLUMNS]                       # KeyError = ขาดคอลัมน์ -> ต้องพัง
+    if log_path.exists():
+        header = pd.read_csv(log_path, nrows=0).columns.tolist()
+        if header != LOG_COLUMNS:
+            raise RuntimeError(
+                f"schema ของ {log_path.name} ไม่ตรง LOG_COLUMNS\n"
+                f"  ในไฟล์: {header}\n  ในโค้ด : {LOG_COLUMNS}\n"
+                "  ห้าม append ผสม schema -- ดู §1.5"
+            )
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    header = not log_path.exists()
-    with open(log_path, "a", encoding="utf-8-sig", newline="") as f:
-        rows.to_csv(f, header=header, index=False)
+    rows.to_csv(log_path, mode="a", header=not log_path.exists(), index=False)
     print(f"[log] เขียนต่อท้าย {len(rows)} แถว -> "
           f"{log_path.relative_to(BASE_DIR)}")
 
@@ -301,13 +316,15 @@ def main():
     out["prediction_type"] = args.prediction_type
     out["target_date"] = pd.Timestamp(args.target_date).date().isoformat()
     out["code_commit"] = commit
+    out["half_life"] = None                  # ยังไม่มี recency weighting (§3)
+    out["config_tag"] = CONFIG_TAG
     out["is_dry_run"] = args.dry_run
     out = out[LOG_COLUMNS]
 
     if not args.dry_run:
         check_no_duplicate(out)
 
-    append_log(out)
+    append_log(LOG_PATH, out)
 
     print("\n" + "=" * 78)
     print(out[["ticker", "model", "predicted_return", "predicted_close"]]

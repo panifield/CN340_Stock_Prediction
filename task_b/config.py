@@ -147,3 +147,14 @@ REQUIRED_LOCK_FIELDS = [
     "BASELINES:", "EXPECTED:", "LOCK_DATE:",
 ]
 
+
+
+# ---------------------------------------------------------------
+# 7) ป้ายกำกับชุดค่าโมเดลที่ใช้อยู่ -- บันทึกลง prediction_log ทุกแถว (§1.5)
+# ต้องเปลี่ยนค่านี้ทุกครั้งที่แก้ ANN_PARAMS / RF_PARAMS / XGB_PARAMS
+# หรือ RECENCY_HALF_LIFE เพื่อให้แยกได้ว่าแถวไหนมาจากโมเดลชุดไหน
+# ---------------------------------------------------------------
+CONFIG_TAG = "phase1b-untuned"
+
+if not CONFIG_TAG.strip():
+    raise ValueError("config.CONFIG_TAG ต้องไม่ว่าง")
