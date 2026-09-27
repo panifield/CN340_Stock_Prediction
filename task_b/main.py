@@ -256,19 +256,26 @@ def save_results(all_results):
 
 
 def parse_args():
+    # ต้องเลือกโหมดเองเสมอ: `python main.py` เปล่า ๆ = error (ไม่ใช่เปิด test)
+    # กันคนที่ลืมพิมพ์ --dev -- การเปิด historical test ต้องพิมพ์ --open-test ตั้งใจ + ผ่าน lock
     parser = argparse.ArgumentParser(
-        description="รันงาน B (ราคาปิด) — โหมดปกติจะเปิด test ซึ่งต้องผ่าน lock ก่อน"
+        description="รันงาน B (ราคาปิด) — ต้องระบุ --dev (พัฒนา) หรือ --open-test (เปิด historical test ต้องผ่าน lock)"
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
         "--dev", action="store_true",
         help="โหมดพัฒนา: เทรน+ประเมินบน train/val เท่านั้น ไม่แตะ test",
+    )
+    mode.add_argument(
+        "--open-test", action="store_true",
+        help="เปิด historical test (ครั้งเดียว) -- ต้องมี PRE_TEST_LOCK.md ครบทุกหัวข้อ",
     )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    use_test = not args.dev      # มีแค่ flag --dev ไม่มี --test (ดูข้อ 0.4)
+    use_test = args.open_test    # เปิด test ได้ทางเดียว: --open-test + PRE_TEST_LOCK.md
 
     if use_test:
         verify_lock()            # เฟส 1 ยังไม่มีไฟล์ lock -> หยุดที่บรรทัดนี้

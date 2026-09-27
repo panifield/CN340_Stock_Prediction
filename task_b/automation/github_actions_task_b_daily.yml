@@ -1,0 +1,63 @@
+# แม่แบบ GitHub Actions สำหรับงาน next_day ของ task_b
+# GitHub อ่าน workflow จาก .github/workflows/ ที่ root ของ repo เท่านั้น -> ไฟล์นี้ยังไม่ทำงานจนกว่า
+# เจ้าของ repo จะคัดลอกไปไว้ที่ .github/workflows/task_b_daily.yml (อยู่นอก task_b จึงไม่ได้ทำให้)
+# และตั้ง Settings -> Actions -> General -> Workflow permissions = "Read and write"
+#
+# ใช้กับ next_day เท่านั้น: รันจันทร์-ศุกร์ 18:30 (+07:00) = 11:30 UTC -- cron ของ GitHub ช้าได้ถึง ~1 ชม.
+# แต่ยังเสร็จก่อน 09:00 ของวันทำนาย · โมเดล 16:00 (เส้นตาย 16:30) ให้ใช้ automation/register_tasks.ps1
+name: task_b daily next_day
+
+on:
+  schedule:
+    - cron: "30 11 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry-run (ไม่ commit / ไม่เขียน production log)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: task_b_daily
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  next_day:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: task_b
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.5"      # ตรงกับที่ task_b/requirements.txt ทดสอบ
+
+      - name: Install
+        run: pip install -r requirements-live.txt
+
+      - name: Git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Tests ที่เร็ว (ไม่ใช้อินเทอร์เน็ต)
+        run: |
+          python tests/test_daily.py
+          python tests/test_fetch_yahoo_daily.py
+          python tests/test_append_investing.py
+
+      - name: Daily run (official)
+        if: github.event_name == 'schedule' || inputs.dry_run == false
+        run: python daily_next_day.py --commit --push
+
+      - name: Daily run (dry-run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+        run: python daily_next_day.py --dry-run

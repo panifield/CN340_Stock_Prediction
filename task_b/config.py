@@ -22,8 +22,10 @@ LOCK_PATH = BASE_DIR / "PRE_TEST_LOCK.md"
 # ---------------------------------------------------------------
 TICKERS = ["KBANK.BK", "ADVANC.BK"]
 
-# ข้อมูลมาจาก investing.com (raw_data/) เท่านั้น ไม่มีโหมด fallback
+# ข้อมูลอ่านจาก raw_data/ เท่านั้น ไม่มีโหมด fallback
 # ถ้าไฟล์หายต้อง error ทันที ไม่ใช่ได้ข้อมูลจากแหล่งอื่นมาแทนโดยไม่รู้ตัว
+# แถวใหม่เข้า raw_data/ ได้ทางเดียว: tools/append_investing.py (ไฟล์ Investing หรือ Yahoo จาก
+# tools/fetch_yahoo_daily.py ที่ตรวจ OHLC เป๊ะแล้ว) -- ชื่อ "investing" คือรูปแบบไฟล์
 DATA_SOURCE = "investing"
 RAW_DATA_SUFFIX = "_10Y_Cleaned.csv"
 

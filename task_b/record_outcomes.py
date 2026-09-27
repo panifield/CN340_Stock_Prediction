@@ -178,7 +178,7 @@ def main(argv=None):
     closes, source, sha = {}, {}, {}
     for t in TICKERS:
         closes[t] = load_stock(t, verbose=False)["Close"]
-        source[t] = f"raw_data/{raw_data_path(t).name} (investing.com)"
+        source[t] = f"raw_data/{raw_data_path(t).name} (investing.com + yahoo · ดู raw_data_sources/)"
         sha[t] = dataset_fingerprint(raw_data_path(t))
     now = datetime.now(BANGKOK).isoformat(timespec="seconds")
     out = compute_outcomes(log, closes, source, sha, now, args.include_dry_run,

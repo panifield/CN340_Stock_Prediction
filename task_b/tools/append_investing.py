@@ -17,7 +17,9 @@ tools/append_investing.py — append ไฟล์ Investing.com ใหม่ต�
   6. เก็บต้นฉบับ byte-for-byte ใน raw_data_sources/investing_<YYYYMMDD>/ + SOURCES.md
   7. รัน check_raw_update.check_ticker (+ cross-check กับ raw_data_intraday แบบเตือน) · พิมพ์ SHA
 
-ห้ามใช้ข้อมูล Yahoo / แหล่งอื่นเติม raw_data/ · หลัง append ต้องรัน `python main.py --dev`
+แหล่งที่รับ (--source): `investing` (ดาวน์โหลดเอง) หรือ `yahoo` (จาก tools/fetch_yahoo_daily.py ซึ่งตรวจแล้ว
+ว่า OHLC ตรง raw_data/ เป๊ะก่อนเขียนไฟล์) · แหล่งถูกบันทึกในชื่อโฟลเดอร์ raw_data_sources/<source>_<YYYYMMDD>/
+ห้ามใช้แหล่งอื่นเติม raw_data/ (รวมไฟล์ Yahoo รายชั่วโมง) · หลัง append ต้องรัน `python main.py --dev`
 แล้วเทียบ val CSV ว่าไม่เปลี่ยน (regression check)
 """
 
@@ -48,6 +50,8 @@ NAME_PATTERNS = {"KBANK": ["kasikorn", "kbank"], "ADVANC": ["advanced info", "ad
 CONTINUITY_MAX = 0.10
 CHANGE_TOL = 0.006
 SOURCES_ROOT = BASE_DIR / "raw_data_sources"
+SOURCE_TITLES = {"investing": "Investing.com daily update (ดาวน์โหลดเอง)",
+                 "yahoo": "Yahoo daily update (tools/fetch_yahoo_daily.py -- OHLC ตรวจเทียบ raw_data/ เป๊ะแล้ว)"}
 
 
 class AppendError(RuntimeError):
@@ -237,9 +241,11 @@ def plan_append(files, raw_dir=RAW_DATA_DIR, tickers=TICKERS):
     return plans
 
 
-def archive_sources(plans, date_tag, sources_root=SOURCES_ROOT):
+def archive_sources(plans, date_tag, sources_root=SOURCES_ROOT, source="investing"):
     """เก็บต้นฉบับ byte-for-byte + SOURCES.md (ห้ามเขียนทับไฟล์ต้นฉบับที่ต่างกัน)"""
-    d = Path(sources_root) / f"investing_{date_tag}"
+    if source not in SOURCE_TITLES:
+        raise AppendError(f"source ไม่รู้จัก: {source!r}")
+    d = Path(sources_root) / f"{source}_{date_tag}"
     d.mkdir(parents=True, exist_ok=True)
     for p in plans:
         dst = d / p["source"].name
@@ -250,7 +256,7 @@ def archive_sources(plans, date_tag, sources_root=SOURCES_ROOT):
             shutil.copyfile(p["source"], dst)
     md = d / "SOURCES.md"
     lines = [] if md.exists() else [
-        f"# Investing.com daily update — ไฟล์ต้นฉบับ ({date_tag})", "",
+        f"# {SOURCE_TITLES[source]} — ไฟล์ต้นฉบับ ({date_tag})", "",
         "สร้างโดย `tools/append_investing.py` · ไฟล์ต้นฉบับเก็บแบบ byte-for-byte ห้ามแก้ · "
         "pipeline อ่านจาก `raw_data/` เท่านั้น", "",
         "| ไฟล์เดิม | ticker | SHA-256 ต้นฉบับ | แถวในไฟล์ | append ใหม่ | ช่วงที่ append | "
@@ -287,8 +293,10 @@ def run_check_raw_update(plans, intraday_dir):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="append ไฟล์ Investing.com ต่อท้าย raw_data/ อย่างปลอดภัย")
-    ap.add_argument("files", nargs="+", type=Path, help="ไฟล์ที่ดาวน์โหลดจาก Investing.com (ทุกหุ้น)")
+    ap = argparse.ArgumentParser(description="append ไฟล์รูปแบบ Investing.com ต่อท้าย raw_data/ อย่างปลอดภัย")
+    ap.add_argument("files", nargs="+", type=Path, help="ไฟล์รูปแบบ Investing.com (ทุกหุ้น)")
+    ap.add_argument("--source", choices=sorted(SOURCE_TITLES), default="investing",
+                    help="แหล่งจริงของไฟล์ (บันทึกลงชื่อโฟลเดอร์ใน raw_data_sources/)")
     ap.add_argument("--check-only", action="store_true", help="ตรวจอย่างเดียว ไม่เขียนไฟล์ใด ๆ")
     ap.add_argument("--date-tag", default=datetime.now(BANGKOK).strftime("%Y%m%d"),
                     help="ชื่อโฟลเดอร์ใน raw_data_sources/ (default = วันนี้)")
@@ -321,7 +329,7 @@ def main(argv=None):
         print("\nไม่มีแถวใหม่ -- ไม่ได้เขียนไฟล์ใด ๆ")
         return 0
 
-    src_dir = archive_sources(plans, args.date_tag)
+    src_dir = archive_sources(plans, args.date_tag, source=args.source)
     for p in plans:
         if len(p["new_only"]):
             write_atomic(p["target"], p["candidate"])

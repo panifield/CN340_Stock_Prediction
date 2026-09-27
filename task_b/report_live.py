@@ -110,7 +110,7 @@ def md_table(df, cols):
 def render(summary, cov, label):
     L = [f"# Live test report — {label}", "",
          "> ผลของ **prospective prediction** เท่านั้น · ห้ามรวมกับผล validation / walk-forward เดิม",
-         "> แยกตาม prediction_type × หุ้น × โมเดล · ผลจริงจาก raw_data/ (investing.com) แหล่งเดียวกับที่เทรน",
+         "> แยกตาม prediction_type × หุ้น × โมเดล · ผลจริงจาก raw_data/ (investing.com + yahoo ที่ตรวจ OHLC เป๊ะแล้ว) ไฟล์เดียวกับที่เทรน",
          f"> **n < {MIN_N} วัน = ผลยังแกว่งมาก อย่าสรุปว่าชนะหรือแพ้**", "",
          "อ่านอย่างไร: relMAE < 1 = ดีกว่า Naive (ทายว่าราคาไม่เปลี่ยน) · R2_OOS > 0 = MSE ดีกว่า Naive · "
          "win_rate = สัดส่วนวันที่พลาดน้อยกว่า Naive (ไม่นับวันเสมอ) · "

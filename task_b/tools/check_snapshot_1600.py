@@ -12,7 +12,8 @@ tools/check_snapshot_1600.py — ตรวจ real-time availability ของ l
      คอลัมน์ bar15_changed_vs_later)
   - มีแท่ง 16:00 ไหม (ถ้ามีก่อน 16:30 = แท่งยังไม่จบ ห้ามใช้เป็นผลจริง)
   - แท่งที่ทับไฟล์ล็อกค่าไม่ตรงกี่แท่ง
-ผลต่อท้าย results/dryrun/availability_1600.csv -- ใช้เป็นหลักฐานก่อนเขียน PHASE1D_LIVE_APPROVAL.md
+ผลต่อท้าย results/dryrun/availability_1600.csv -- หลักฐาน real-time availability แบบตรวจหลังเกิด ทุกวัน
+(วันที่ bar15_changed_vs_later = True -> คำทำนาย official ของวันนั้นใช้แท่ง 15:00 ที่ยังไม่จบ ให้ตัดออกตอนวิเคราะห์)
 
 ไม่ fit โมเดล · ไม่ทำนาย
 """

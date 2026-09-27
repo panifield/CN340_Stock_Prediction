@@ -30,6 +30,7 @@ from features import build_features, build_live_feature
 from targets import build_targets
 from splits import prepare_xy          # ตัวเดียวกับ main.py (A4) ห้ามเขียนใหม่
 from models import fit_live_models
+from tools.check_env import require_pinned_env
 
 LOG_PATH = OUTPUT_DIR / "prediction_log.csv"
 
@@ -328,6 +329,7 @@ def main():
     print("=" * 78)
 
     if not args.dry_run:
+        require_pinned_env()             # เวอร์ชัน library ต้องตรง requirements.txt (INTEGRATION.md ข้อ 5)
         check_clean_tree()
         check_prediction_log_committed()
 
