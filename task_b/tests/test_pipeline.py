@@ -307,6 +307,34 @@ def test_recency_weight_takes_effect():
         assert abs(plain) < 0.3, f"{name}: ไม่ถ่วงน้ำหนักควรอยู่ราว 0 ({plain:.3f})"
 
 
+def test_signal_closes_position():
+    """
+    position = [1, 1] -> ซื้อ 1 + ขายปิดวันสุดท้าย 1 = turnover 2, n_trades 1 (§5.4)
+    ต้นทุนรวมต้องเท่า 1 round-trip พอดี (turnover 2 x cost_rt/2)
+    """
+    from trading_costs import signal_economics
+    cost_rt = 0.003
+    r = signal_economics(np.array([0.01, -0.02]), np.array([0.05, 0.05]), cost_rt)
+    assert r["n_days_long"] == 2
+    assert r["n_trades"] == 1
+    assert np.isclose(r["total_cost"], 2 * cost_rt / 2)        # turnover.sum() == 2
+    assert np.isclose(r["gross_return"], -0.01)
+    assert np.isclose(r["net_return"], -0.01 - cost_rt)
+    # ไม่เคยเกิน threshold -> ไม่มี trade และต้นทุน 0 (ผลลัพธ์ ไม่ใช่บั๊ก)
+    r0 = signal_economics(np.array([0.01, 0.02]), np.array([0.0, 0.001]), cost_rt)
+    assert r0["n_trades"] == 0 and r0["total_cost"] == 0.0
+
+
+def test_cost_and_tick():
+    """cost_round_trip ราว 0.0034 (±0.0002) และ tick ตาม band รวมขอบพอดี (§5.4)"""
+    from trading_costs import cost_round_trip, tick_size
+    assert abs(cost_round_trip() - 0.0034) <= 0.0002
+    assert tick_size(150) == 0.50
+    assert tick_size(250) == 1.00
+    assert tick_size(450) == 2.00
+    assert tick_size(400) == 2.00
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     failed = 0

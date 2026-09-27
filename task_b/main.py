@@ -41,6 +41,7 @@ from splits import chronological_split, prepare_xy
 from models import get_regressors
 from weighting import recency_weights
 from baselines import get_regression_baselines
+from trading_costs import cost_round_trip, breakeven_report, signal_economics
 from evaluate import (
     regression_metrics, results_table, print_table, compare_to_baseline,
     prediction_shape,
@@ -179,6 +180,23 @@ def run_task_b(X, targets, use_test, verbose=True):
     print("\n  อ่านตารางนี้อย่างไร:")
     print("  - StdRatio ใกล้ 0 = โมเดลยุบเป็นค่าคงที่ (ถึงจะได้ MAE ดีก็ไม่นับว่าทำนายได้)")
     print("  - ตารางนี้ไม่ถูกใช้เลือกโมเดล -- การเลือกใช้ MAE_return เท่านั้น")
+
+    # ตารางที่ 3 (§5) -- ต้นทุนการเทรด diagnostic แยก พิมพ์อย่างเดียว ไม่ลง CSV
+    # เฟสนี้รันบน validation เท่านั้น (โหมดปกติยังไม่เปิดเพราะไม่มีไฟล์ lock)
+    cost_df = results_table({
+        name: {**breakeven_report(y_eval, p, prev_close_eval),
+               **signal_economics(y_eval, p, cost_round_trip())}
+        for name, p in eval_preds.items()
+    })
+    print_table(cost_df.loc[df.index],
+                "งาน B : ต้นทุนการเทรด (diagnostic -- ไม่ใช้เลือกโมเดล)")
+    print(f"\n  ต้นทุนไป-กลับ = {cost_round_trip()*1e4:.1f} bps "
+          f"({cost_round_trip()*100:.3f}%)")
+    print("  อ่านตารางนี้อย่างไร:")
+    print("  - pct_actual_above_cost = % วันที่ราคาขึ้นเกินต้นทุนจริง (เพดานของ long/cash)")
+    print("  - ถ้า net_return < gross_return มาก แปลว่าค่าธรรมเนียมกินกำไรหมด")
+    print("  - ตารางนี้ไม่ถูกใช้เลือกโมเดล -- การเลือกใช้ MAE_return เท่านั้น")
+    print("  - ผลบน validation ที่โมเดลถูกพัฒนาบนนั้น -- ไม่ใช่หลักฐานว่ากลยุทธ์ทำกำไรได้")
 
     return {"table": df, "preds": eval_preds, "y_eval": y_eval,
             "prev_close_eval": prev_close_eval, "diag": diag,
