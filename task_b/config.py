@@ -4,35 +4,42 @@ config.py — งาน B (ราคาปิด / return)
 ไฟล์ตั้งค่าของงาน B เท่านั้น แก้ที่นี่ไม่กระทบ task_a / task_c
 """
 
+from pathlib import Path
+
 # ---------------------------------------------------------------
-# 1) ข้อมูลหุ้น
+# 0) Path — anchor จากโฟลเดอร์ของไฟล์นี้ (E2)
+# ---------------------------------------------------------------
+# ทำให้ `python task_b/main.py` กับ `cd task_b && python main.py`
+# อ่าน/เขียนไฟล์ที่เดียวกันเสมอ
+BASE_DIR = Path(__file__).resolve().parent
+RAW_DATA_DIR = BASE_DIR / "raw_data"
+OUTPUT_DIR = BASE_DIR / "results"
+LOCK_PATH = BASE_DIR / "PRE_TEST_LOCK.md"
+
+
+# ---------------------------------------------------------------
+# 1) ข้อมูลหุ้น (A1)
 # ---------------------------------------------------------------
 TICKERS = ["KBANK.BK", "ADVANC.BK"]
 
-START_DATE = "2016-08-26"
-END_DATE = "2026-08-28"
-
-# ถ้าโหลด yfinance ไม่ได้ (เน็ตมีปัญหา / รันออฟไลน์)
-# ตั้งเป็น True เพื่อใช้ข้อมูลจำลองทดสอบว่าโค้ดรันผ่านไหม
-# *** ห้ามใช้ข้อมูลจำลองในรายงานเด็ดขาด ***
-USE_SYNTHETIC_DATA = False
-
-# โฟลเดอร์เก็บไฟล์ csv ที่โหลดมาแล้ว (จะได้ไม่ต้องโหลดซ้ำ)
-CACHE_DIR = "data_cache"
+# ข้อมูลมาจาก investing.com (raw_data/) เท่านั้น ไม่มีโหมด fallback
+# ถ้าไฟล์หายต้อง error ทันที ไม่ใช่ได้ข้อมูลจากแหล่งอื่นมาแทนโดยไม่รู้ตัว
+DATA_SOURCE = "investing"
+RAW_DATA_SUFFIX = "_10Y_Cleaned.csv"
 
 
 # ---------------------------------------------------------------
-# 2) การแบ่งข้อมูล (ต้องแบ่งตามเวลา ห้าม shuffle)
+# 2) การแบ่งข้อมูล — freeze ด้วยวันที่ (0.1) ห้าม shuffle
 # ---------------------------------------------------------------
-TRAIN_RATIO = 0.70
-VAL_RATIO = 0.15
-# ที่เหลือเป็น test = 0.15
-
-# ถ้าอยากกำหนดวันเองแทนการใช้สัดส่วน ให้ใส่วันที่ตรงนี้
-# (ถ้าเป็น None จะใช้สัดส่วนด้านบน)
-SPLIT_BY_DATE = None
-# ตัวอย่าง:
-# SPLIT_BY_DATE = {"train_end": "2022-12-31", "val_end": "2023-12-31"}
+# วันที่ชุดนี้ทำให้ train/val/test มีขนาดเท่าเวอร์ชันก่อนหน้า (1,688 / 362 / 362)
+# จึงเทียบผลได้ว่าอะไรเปลี่ยนเพราะการแก้บั๊ก ไม่ใช่เพราะ split เลื่อน
+# (ถ้าจะเปลี่ยนวัน ต้องเขียนเหตุผลไว้ตรงนี้)
+SPLIT_BY_DATE = {
+    "train_end": "2023-09-01",   # train: 2016-09-26 -> 2023-09-01   1,688 วัน
+    "val_end":   "2025-02-25",   # val:   2023-09-04 -> 2025-02-25     362 วัน
+}                                # test:  2025-02-26 -> 2026-08-28     362 วัน
+TRAIN_RATIO = None               # ไม่ใช้แล้ว -- boundary มาจากวันที่เท่านั้น
+VAL_RATIO = None
 
 
 # ---------------------------------------------------------------
@@ -50,36 +57,61 @@ USE_DAY_OF_WEEK = True
 
 
 # ---------------------------------------------------------------
-# 4) โมเดล
+# 4) โมเดล (C2)
 # ---------------------------------------------------------------
 RANDOM_STATE = 42
 
+# ---------------------------------------------------------------
+# *** ทั้ง 3 โมเดลด้านล่าง "ไม่ได้จูนบน validation" เหมือนกันหมด ***
+# เป็นค่า conservative ที่เลือกจากหลักการ: ข้อมูล train 1,688 แถว สัญญาณอ่อนมาก
+# จึงเลือกโมเดลความจุต่ำ + regularization จริงจัง เพื่อไม่ให้จำ noise
+#
+# การจูนจริงอยู่ในเฟส 2 ซึ่งจะทำกับทั้ง 3 โมเดลภายใต้ walk-forward + protocol
+# เดียวกัน -- ไม่ใช่ทำเฉพาะบางตัวแล้วเทียบกัน
+# ---------------------------------------------------------------
+
+# ค่าเดิมของ v1 คือ (64,32) alpha=1e-3 ซึ่ง overfit หนัก
+# (วัดใน rebuild นี้ ก่อนเปลี่ยนค่า: val R2_return = -2.39 KBANK / -2.37 ADVANC)
+# จึงลดความจุและเพิ่ม L2:
+#   (16,8) บน 29 features = ราว 625 พารามิเตอร์ ต่อข้อมูล 1,688 แถว
+#   = ราว 2.7 แถวต่อพารามิเตอร์ ซึ่งยังตึง -> ต้องมี L2 ที่มีน้ำหนักจริง
+#
+#   alpha = 1.0 เป็นค่า L2 ที่กำหนดแบบ conservative ให้แรงกว่า default ของ sklearn
+#   (1e-4) อย่างชัดเจน เพื่อจำกัดความซับซ้อนของ ANN ในเฟส 1
+#   *** ไม่ได้เลือกจากผล validation -- ค่าที่เหมาะสมจริงจะค้นหาในเฟส 2 ***
 ANN_PARAMS = {
-    "hidden_layer_sizes": (64, 32),
+    "hidden_layer_sizes": (16, 8),
     "activation": "relu",
-    "alpha": 1e-3,              # L2 regularization
+    "alpha": 1.0,
+    "solver": "adam",
     "learning_rate_init": 1e-3,
     "max_iter": 500,
-    # ปิด early_stopping: เรามี validation set ที่แบ่งตามเวลาเองอยู่แล้ว
-    # (splits.py) ถ้าเปิดไว้ MLPRegressor จะสุ่ม shuffle
-    # แบ่ง validation ของตัวเองออกจาก train อีกชุด ซึ่งขัดกับหลัก
-    # "ห้าม shuffle" ของข้อมูล time series ที่ทั้งโปรเจกต์นี้ยึดถือ
+    # ปิด early_stopping: MLPRegressor จะ shuffle แบ่ง val ของตัวเองออกจาก train
+    # ซึ่งขัดกับหลัก "ห้าม shuffle" ของ time series
     "early_stopping": False,
-    "n_iter_no_change": 20,     # เช็ค convergence จาก training loss เอง
-    "random_state": RANDOM_STATE,
+    "n_iter_no_change": 20,
+    "random_state": RANDOM_STATE,   # ถูกแทนด้วยแต่ละค่าใน ANN_SEEDS ตอนเทรนจริง
 }
 
+# seed averaging ไม่ใช่การจูน -- เป็นส่วนหนึ่งของ "นิยามโมเดล"
+# ผลของ MLP ขึ้นกับการสุ่ม weight เริ่มต้น การรายงาน seed เดียว = เลือกผลที่ถูกใจได้
+ANN_SEEDS = list(range(10))
+
+# ต้นไม้ลึกจำ noise ได้ง่าย -> จำกัดความลึกและบังคับให้ leaf ใหญ่พอ
+# (ไม่ใช่ค่า default ของ sklearn ซึ่งเป็น max_depth=None, min_samples_leaf=1
+#  ซึ่งปล่อยให้ต้นไม้โตจนจำ training set ได้หมด)
 RF_PARAMS = {
     "n_estimators": 400,
     "max_depth": 8,
-    "min_samples_leaf": 20,     # กันไม่ให้ overfit noise
+    "min_samples_leaf": 20,
     "n_jobs": -1,
     "random_state": RANDOM_STATE,
 }
 
+# depth ตื้น + lr ต่ำ + subsample = ค่ามาตรฐานสาย conservative สำหรับ tabular ที่ noise สูง
 XGB_PARAMS = {
-    "n_estimators": 400,
-    "max_depth": 4,
+    "n_estimators": 300,
+    "max_depth": 3,
     "learning_rate": 0.05,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
@@ -98,7 +130,13 @@ LEAK_CORR_THRESHOLD = 0.50
 
 
 # ---------------------------------------------------------------
-# 6) Output
+# 6) Lock ก่อนเปิด test (0.5)
 # ---------------------------------------------------------------
-OUTPUT_DIR = "results"
-SAVE_PLOTS = True
+# PRE_TEST_LOCK.md ต้องมีทุกหัวข้อนี้และมีค่าหลัง ":" จริง
+# *** ห้ามสร้าง PRE_TEST_LOCK.md ตลอดเฟส 1 ***
+REQUIRED_LOCK_FIELDS = [
+    "DATASET:", "TRAIN_END:", "VAL_END:", "FEATURE_SET:",
+    "MODELS:", "HYPERPARAMS:", "PRIMARY_METRIC:",
+    "BASELINES:", "EXPECTED:", "LOCK_DATE:",
+]
+

@@ -1,112 +1,87 @@
 """
 data_loader.py
 ==============
-โหลดข้อมูลราคาหุ้น
+โหลดข้อมูลราคาหุ้นจากไฟล์ investing.com ใน raw_data/ (A1)
 
-- ใช้ yfinance ดึงจาก Yahoo Finance
-- โหลดครั้งแรกแล้วเก็บเป็น csv ไว้ (ครั้งต่อไปไม่ต้องโหลดใหม่ เร็วขึ้นเยอะ)
-- มีโหมดข้อมูลจำลองไว้เทสต์โค้ดตอนไม่มีเน็ต (ห้ามใช้ในรายงาน)
+- แหล่งข้อมูลมีแหล่งเดียว ไม่มี fallback -- ไฟล์หาย = error ทันที
+- พิมพ์ลายนิ้วมือ (sha256) ของไฟล์ทุกครั้งที่โหลด (E5)
+  เพื่อยืนยันว่า "รันโค้ดเดิม" ใช้ข้อมูลเดิมจริง
+
+รูปแบบไฟล์ investing.com:
+    Date,Price,Open,High,Low,Vol. ('000),Change %
+    08/26/2016,198.0,195.0,199.0,195.0,6790.0,1.54%
 """
 
-import os
-import numpy as np
+import hashlib
+from pathlib import Path
+
 import pandas as pd
 
-from config import (
-    START_DATE, END_DATE, CACHE_DIR, USE_SYNTHETIC_DATA, RANDOM_STATE
-)
+from config import DATA_SOURCE, RAW_DATA_DIR, RAW_DATA_SUFFIX
 
 REQUIRED_COLS = ["Open", "High", "Low", "Close", "Volume"]
 
-
-def _cache_path(ticker):
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    safe = ticker.replace("^", "").replace(".", "_")
-    return os.path.join(CACHE_DIR, f"{safe}_{START_DATE}_{END_DATE}.csv")
+INVESTING_DATE_FORMAT = "%m/%d/%Y"
+INVESTING_VOLUME_COL = "Vol. ('000)"          # หน่วยพันหุ้น -> x1000
 
 
-def download_from_yahoo(ticker, start=START_DATE, end=END_DATE):
-    """ดึงข้อมูลจริงจาก Yahoo Finance"""
-    import yfinance as yf
+def raw_data_path(ticker):
+    """KBANK.BK -> raw_data/KBANK_10Y_Cleaned.csv"""
+    return RAW_DATA_DIR / (ticker.replace(".BK", "") + RAW_DATA_SUFFIX)
 
-    # yfinance ตีความ end แบบ exclusive (ไม่รวมวันนั้น)
-    # บวก 1 วันเพื่อให้ END_DATE ที่ตั้งไว้ถูกรวมอยู่ในข้อมูลจริง
-    end_exclusive = (pd.Timestamp(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
-    df = yf.download(
-        ticker, start=start, end=end_exclusive,
-        auto_adjust=False, progress=False,
-    )
-    if df is None or len(df) == 0:
-        raise RuntimeError(f"โหลด {ticker} ไม่ได้ / ไม่มีข้อมูล")
+def dataset_fingerprint(path):
+    """พิมพ์ลายนิ้วมือของไฟล์ข้อมูล เพื่อยืนยันว่า 'รันโค้ดเดิม' ใช้ข้อมูลเดิมจริง"""
+    raw = Path(path).read_bytes()
+    h = hashlib.sha256(raw).hexdigest()[:16]
+    df = pd.read_csv(path)
+    print(f"[data] {Path(path).name}  rows={len(df)}  sha256={h}")
+    return h
 
-    # yfinance รุ่นใหม่คืน MultiIndex column ต้องแบนก่อน
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
 
-    df = df[REQUIRED_COLS].copy()
-    df.index = pd.to_datetime(df.index)
+def load_from_investing(ticker, verbose=True):
+    """อ่านไฟล์ csv จาก investing.com แล้วแปลงเป็น Open/High/Low/Close/Volume"""
+    path = raw_data_path(ticker)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"ไม่พบ {path}\n"
+            f"DATA_SOURCE = 'investing' จะไม่ดึงข้อมูลจาก Yahoo มาแทนให้"
+        )
+
+    if verbose:
+        print(f"[data] อ่านจาก raw_data: {path.name}")
+        dataset_fingerprint(path)
+
+    raw = pd.read_csv(path)
+    needed = ["Date", "Price", "Open", "High", "Low", INVESTING_VOLUME_COL]
+    missing = [c for c in needed if c not in raw.columns]
+    if missing:
+        raise ValueError(f"{path.name} ไม่มีคอลัมน์ {missing} "
+                         f"(มี {list(raw.columns)})")
+
+    # Price -> Close, Vol.('000) x 1000 -> Volume, ตัด Change % ทิ้ง
+    df = pd.DataFrame({
+        "Open": pd.to_numeric(raw["Open"]),
+        "High": pd.to_numeric(raw["High"]),
+        "Low": pd.to_numeric(raw["Low"]),
+        "Close": pd.to_numeric(raw["Price"]),
+        "Volume": pd.to_numeric(raw[INVESTING_VOLUME_COL]) * 1000,
+    })
+    df.index = pd.to_datetime(raw["Date"], format=INVESTING_DATE_FORMAT)
     df.index.name = "Date"
-    return df
+    return df[REQUIRED_COLS]
 
 
-def make_synthetic(ticker="FAKE", n=2500, start_price=35.0, tick=0.25,
-                   seed=RANDOM_STATE):
-    """
-    สร้างข้อมูลจำลอง (random walk + บังคับให้ราคาอยู่บน tick grid)
-    ใช้เทสต์ pipeline เท่านั้น *** ห้ามใช้ในรายงาน ***
-    """
-    rng = np.random.default_rng(seed)
-
-    rets = rng.normal(0.0003, 0.015, n)
-    close = start_price * np.exp(np.cumsum(rets))
-    close = np.round(close / tick) * tick          # บังคับลง tick grid
-
-    noise = lambda scale: rng.normal(0, scale, n)
-    open_ = np.round((close * (1 + noise(0.004))) / tick) * tick
-    high = np.maximum(open_, close) * (1 + np.abs(noise(0.005)))
-    low = np.minimum(open_, close) * (1 - np.abs(noise(0.005)))
-    high = np.round(high / tick) * tick
-    low = np.round(low / tick) * tick
-    volume = rng.integers(1_000_000, 50_000_000, n)
-
-    idx = pd.bdate_range(start="2015-01-02", periods=n, name="Date")
-    return pd.DataFrame(
-        {"Open": open_, "High": high, "Low": low,
-         "Close": close, "Volume": volume},
-        index=idx,
-    )
-
-
-def load_stock(ticker, use_cache=True, verbose=True):
+def load_stock(ticker, verbose=True):
     """
     ฟังก์ชันหลักที่ไฟล์อื่นเรียกใช้
     คืน DataFrame คอลัมน์ Open/High/Low/Close/Volume index เป็นวันที่
     """
-    if USE_SYNTHETIC_DATA:
-        if verbose:
-            print(f"[data] !! ใช้ข้อมูลจำลองสำหรับ {ticker} "
-                  f"(ห้ามใช้ในรายงาน) !!")
-        # สร้างหุ้นราคาสูง/ต่ำต่างกัน เพื่อทดสอบว่างาน A ให้ผลต่างกันจริง
-        if "HIGH" in ticker.upper():
-            return make_synthetic(ticker, start_price=140.0, tick=0.50,
-                                  seed=RANDOM_STATE + 1)
-        return make_synthetic(ticker, start_price=18.0, tick=0.10,
-                              seed=RANDOM_STATE)
+    if DATA_SOURCE != "investing":
+        raise ValueError(f"DATA_SOURCE = {DATA_SOURCE!r} ไม่รองรับ "
+                         f"(รองรับแค่ 'investing')")
 
-    path = _cache_path(ticker)
-    if use_cache and os.path.exists(path):
-        if verbose:
-            print(f"[data] อ่านจาก cache: {path}")
-        df = pd.read_csv(path, index_col=0, parse_dates=True)
-    else:
-        if verbose:
-            print(f"[data] กำลังโหลด {ticker} จาก Yahoo Finance ...")
-        df = download_from_yahoo(ticker)
-        df.to_csv(path)
-        if verbose:
-            print(f"[data] บันทึก cache ไว้ที่ {path}")
-
+    df = load_from_investing(ticker, verbose=verbose)
     df = clean(df, verbose=verbose)
     if verbose:
         print(f"[data] {ticker}: {len(df)} แถว "

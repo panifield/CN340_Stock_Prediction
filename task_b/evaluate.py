@@ -6,12 +6,22 @@ evaluate.py — งาน B (ราคาปิด / return)
 *** จุดสำคัญ ***
 ทุกตารางต้องมี baseline อยู่ในตารางเดียวกับโมเดล
 จะได้เห็นชัดๆ ว่าโมเดลชนะ baseline หรือไม่
+
+Metric มี 5 ค่า (B1):
+  primary   : MAE_return, RMSE_return, R2_return  (หน่วยที่โมเดลทำงานจริง)
+  secondary : MAE_baht, RMSE_baht                 (อธิบายขนาด error เป็นบาท)
 """
 
 import numpy as np
 import pandas as pd
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# ห้ามเพิ่ม R2 ที่คำนวณบนราคา (R2_price)
+# ค่านั้นได้ ~0.98 ทุกโมเดลรวมทั้ง naive -- วัดข้อมูล ไม่ได้วัดโมเดล
+#
+# DirAcc ใช้กับ regression ได้ แต่เป็นแค่ secondary directional diagnostic
+# และต้องกำหนดนโยบายวันราคานิ่งก่อน -> ย้ายไปเฟส 2
 
 
 def regression_metrics(y_true, y_pred, prev_close=None):
@@ -23,36 +33,35 @@ def regression_metrics(y_true, y_pred, prev_close=None):
     y_pred = np.asarray(y_pred, dtype=float)
 
     m = {
-        "MAE_return": mean_absolute_error(y_true, y_pred),
+        # หน่วย return -- โมเดลทำงานในหน่วยนี้ ใช้ตัดสินใจ (primary)
+        "MAE_return":  mean_absolute_error(y_true, y_pred),
         "RMSE_return": float(np.sqrt(mean_squared_error(y_true, y_pred))),
-        "R2_return": r2_score(y_true, y_pred),
-        # ทายทิศทางถูกกี่ % (สำคัญกว่า R² ในทางปฏิบัติ)
-        "DirAcc": float(np.mean(np.sign(y_true) == np.sign(y_pred))),
+        "R2_return":   r2_score(y_true, y_pred),
     }
 
     if prev_close is not None:
         prev = np.asarray(prev_close, dtype=float)
         price_true = prev * (1 + y_true)
         price_pred = prev * (1 + y_pred)
+        # หน่วยบาท -- secondary interpretability metric
         m["MAE_baht"] = mean_absolute_error(price_true, price_pred)
-        m["RMSE_baht"] = float(
-            np.sqrt(mean_squared_error(price_true, price_pred))
-        )
-        # R² ในหน่วยราคา -> ตัวนี้แหละที่จะดูสูงหลอกๆ
-        m["R2_price"] = r2_score(price_true, price_pred)
+        m["RMSE_baht"] = float(np.sqrt(mean_squared_error(price_true, price_pred)))
 
     return m
 
 
-def results_table(results_dict, sort_by=None, ascending=True):
+def results_table(results_dict, sort_by=None, ascending=True, decimals=6):
     """
     results_dict = {ชื่อโมเดล: dict ของ metric}
     คืน DataFrame เรียงตาม metric ที่เลือก
+
+    decimals=6: MAE_return อยู่ราว 0.008-0.01 และโมเดลต่างกันที่หลักที่ 5
+    ถ้าปัด 4 ตำแหน่ง (แบบ v1) จะแยกโมเดลไม่ออก
     """
     df = pd.DataFrame(results_dict).T
     if sort_by and sort_by in df.columns:
         df = df.sort_values(sort_by, ascending=ascending)
-    return df.round(4)
+    return df.round(decimals)
 
 
 def print_table(df, title=""):
@@ -63,49 +72,28 @@ def print_table(df, title=""):
     print(df.to_string())
 
 
-def compare_to_baseline(df, metric, baseline_prefix="Baseline",
-                        higher_is_better=True, model_name=None):
+def compare_to_baseline(df, metric, model_name,
+                        baseline_name="Baseline: Naive (RW)",
+                        higher_is_better=False):
     """
-    ตรวจว่าโมเดล ML ชนะ baseline ที่ดีที่สุดหรือไม่
+    เทียบโมเดลที่เลือกจาก val กับ Naive -- คู่แข่งหลักตัวเดียว (B2)
     คืนข้อความสรุปสำหรับเขียนลงรายงาน
 
-    model_name: ชื่อโมเดลที่จะเทียบ (ควรเป็นตัวที่เลือกมาจาก val แล้ว)
-    ถ้าไม่ใส่ จะ fallback ไปหาโมเดลที่ดีที่สุด "ในตาราง df นี้" เอง
-    (ระวัง: ถ้า df เป็นตาราง test การ fallback แบบนี้เท่ากับเอา test
-    มาเลือกโมเดลทางอ้อม ไม่ควรใช้ fallback กับตาราง test)
+    model_name ต้องเป็นตัวที่เลือกมาจาก val แล้วเสมอ
+    (ไม่มี fallback ไปหาโมเดลที่ดีที่สุดในตาราง เพราะถ้า df เป็นตาราง test
+    จะเท่ากับเอา test มาเลือกโมเดลทางอ้อม)
     """
-    is_base = df.index.str.startswith(baseline_prefix)
-    baselines = df[is_base]
-    models = df[~is_base]
-
-    if len(baselines) == 0 or len(models) == 0:
+    if model_name not in df.index or baseline_name not in df.index:
         return "ไม่มีข้อมูลพอสำหรับเปรียบเทียบ"
 
-    if higher_is_better:
-        best_base = baselines[metric].max()
-        best_base_name = baselines[metric].idxmax()
-        if model_name is not None:
-            best_model_name, best_model = model_name, models.loc[model_name, metric]
-        else:
-            best_model = models[metric].max()
-            best_model_name = models[metric].idxmax()
-        won = best_model > best_base
-    else:
-        best_base = baselines[metric].min()
-        best_base_name = baselines[metric].idxmin()
-        if model_name is not None:
-            best_model_name, best_model = model_name, models.loc[model_name, metric]
-        else:
-            best_model = models[metric].min()
-            best_model_name = models[metric].idxmin()
-        won = best_model < best_base
-
-    diff = abs(best_model - best_base)
+    model_val = df.loc[model_name, metric]
+    base_val = df.loc[baseline_name, metric]
+    won = model_val > base_val if higher_is_better else model_val < base_val
     verdict = "ชนะ" if won else "แพ้"
 
     return (
-        f"  Baseline ที่ดีที่สุด : {best_base_name} = {best_base:.4f}\n"
-        f"  โมเดลที่ดีที่สุด     : {best_model_name} = {best_model:.4f}\n"
-        f"  ผลสรุป ({metric}) : โมเดล ML {verdict} baseline "
-        f"(ต่างกัน {diff:.4f})"
+        f"  Baseline หลัก        : {baseline_name} = {base_val:.6f}\n"
+        f"  โมเดลที่เลือกจาก val : {model_name} = {model_val:.6f}\n"
+        f"  ผลสรุป ({metric}) : โมเดล ML {verdict} naive "
+        f"(ต่างกัน {abs(model_val - base_val):.6f})"
     )

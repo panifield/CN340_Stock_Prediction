@@ -1,71 +1,77 @@
-# งาน B: ทำนายราคาปิด (Regression)
+# งาน B: ทำนายราคาปิด (Regression) — เฟส 1
 
 ทำนายราคาปิดของวันถัดไป โดยทำนายผ่าน **return** (ผลตอบแทน) ก่อน
 แล้วค่อยแปลงกลับเป็นราคาบาท — โฟลเดอร์นี้แยกอิสระจาก `task_a/` และ
-`task_c/` โดยสมบูรณ์ ไม่ import ไฟล์จากที่อื่นเลย แก้อะไรในนี้ไม่กระทบ
-โฟลเดอร์อื่น
+`task_c/` โดยสมบูรณ์ ไม่ import ไฟล์จากที่อื่นเลย
 
-โมเดล: **ANN (MLP) + Random Forest + XGBoost**
+โมเดล: **ANN (MLP, เฉลี่ย 10 seeds) + Random Forest + XGBoost**
+ทั้ง 3 ตัวใช้ค่า conservative ที่กำหนดเอง **ยังไม่ได้ปรับจูน** (จูนในเฟส 2)
 
 ---
 
 ## วิธีรัน
 
 ```bash
-pip install -r ../requirements.txt
-python main.py
+pip install -r requirements.txt
+python main.py --dev          # พัฒนา: train/val เท่านั้น ไม่แตะ test
+python tests/test_pipeline.py # test 5 ข้อ
 ```
 
-ครั้งแรกจะโหลดข้อมูลจาก Yahoo Finance แล้วเก็บไว้ใน `data_cache/`
-(มีไฟล์ cache เตรียมไว้ให้แล้ว ไม่ต้องต่อเน็ตก็รันได้เลย)
-ผลลัพธ์จะถูกบันทึกเป็น csv ในโฟลเดอร์ `results/`
+รันจากโฟลเดอร์ไหนก็ได้ (`python task_b/main.py --dev` ได้ผลเหมือนกัน)
+ผลบันทึกที่ `results/<หุ้น>_taskB_val.csv`
 
-**โหมด dev** — ใช้ตอนกำลังปรับ feature/พารามิเตอร์ซ้ำๆ
-เทรน+ประเมินบน train/val เท่านั้น ยังไม่แตะ test เลย ไม่บันทึกผล:
+**`python main.py` (ไม่มี `--dev`) จะเปิด test set** ซึ่งถูกล็อกไว้:
+ต้องมี `PRE_TEST_LOCK.md` ที่กรอกครบ 10 หัวข้อก่อน ไม่งั้นจะ error ทันที
+— **ห้ามสร้างไฟล์นี้ตลอดเฟส 1**
 
-```bash
-python main.py --dev
-```
+ถ้าเจอ `UnicodeEncodeError` ตอนพิมพ์ภาษาไทย ให้รันด้วย `PYTHONUTF8=1`
 
-**ถ้ารันไม่ได้เพราะเน็ต** ให้เปิด `config.py` แล้วตั้ง
-`USE_SYNTHETIC_DATA = True` เพื่อทดสอบว่าโค้ดทำงานได้
-(แต่ห้ามเอาผลจากข้อมูลจำลองไปใส่รายงาน)
+---
+
+## ข้อมูล
+
+- อ่านจาก `raw_data/*_10Y_Cleaned.csv` (investing.com) **แหล่งเดียว**
+  ไฟล์หาย = error ทันที ไม่มีการไปดึง Yahoo มาแทน
+- ทุกครั้งที่โหลดจะพิมพ์ `sha256` ของไฟล์ ไว้ยืนยันว่าใช้ข้อมูลชุดเดิม
+- split ตายตัวด้วยวันที่ (`config.SPLIT_BY_DATE`):
+
+| ชุด | ช่วง | แถว |
+|---|---|---:|
+| train | 2016-09-26 → 2023-09-01 | 1,688 |
+| val | 2023-09-04 → 2025-02-25 | 362 |
+| test | 2025-02-26 → 2026-08-28 | 362 |
+
+ในโหมด `--dev` แถวของ test ถูกตัดทิ้งตั้งแต่ก่อนสร้าง feature
 
 ---
 
 ## โครงสร้างไฟล์
 
-| ไฟล์ | หน้าที่ | แก้เมื่อไหร่ |
-|---|---|---|
-| `config.py` | ค่าตั้งทั้งหมดของงาน B | อยากเปลี่ยนหุ้น / พารามิเตอร์โมเดล / สัดส่วน split / feature windows |
-| `data_loader.py` | โหลดข้อมูลราคาหุ้น + ทำความสะอาด | เปลี่ยนแหล่งข้อมูล / ใช้ไฟล์ csv เอง |
-| `features.py` | สร้าง feature + shift(1) กัน leak | อยากเพิ่ม/ลด indicator |
-| `targets.py` | สร้าง target `y_return` | เปลี่ยนนิยาม target |
-| `splits.py` | แบ่ง train/val/test ตามเวลา (ห้าม shuffle) | อยากใช้ walk-forward |
-| `baselines.py` | Baseline: Naive (RW) / Mean Return | เพิ่ม baseline ใหม่ |
-| `models.py` | นิยามโมเดล ANN / Random Forest / XGBoost (regression) | เปลี่ยนโมเดล / สลับไปใช้ Keras |
-| `evaluate.py` | คำนวณ metric (MAE, RMSE, R², DirAcc, MAE_baht ฯลฯ) + ตาราง | เพิ่ม metric |
-| `diagnostics.py` | วิเคราะห์ข้อมูลก่อนเทรน (ขนาด return, leak check) | — |
-| `main.py` | ตัวหลัก เรียกทุกอย่าง (รวม `TransformedTargetRegressor` scale target) | เปลี่ยนขั้นตอนการทดลอง |
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `config.py` | path, แหล่งข้อมูล, วันที่ split, hyperparameter, หัวข้อของ lock |
+| `data_loader.py` | อ่าน `raw_data/` + fingerprint |
+| `features.py` | market 24 ตัว (shift(1), ลงท้าย `_prev`) + calendar 5 ตัว (`dow_*`, ไม่ shift) |
+| `targets.py` | `y_return` = close(t) / close(t-1) − 1 |
+| `splits.py` | แบ่งตามวันที่ ไม่สร้าง test partition ในโหมด `--dev` |
+| `models.py` | ANN / RF / XGBoost + `SeedAveragedRegressor` |
+| `baselines.py` | Naive (return = 0) — คู่แข่งหลัก, Mean Return |
+| `evaluate.py` | 5 metric + ตาราง + เทียบกับ Naive |
+| `diagnostics.py` | วิเคราะห์ข้อมูลก่อนเทรน — **train เท่านั้น** |
+| `main.py` | ตัวหลัก + lock gate |
+| `tests/test_pipeline.py` | alignment, dow, NaN, lock gate, seed averaging |
+| `results_reference/` | ผลของเวอร์ชันก่อนหน้า — backup เท่านั้น ห้ามเป็น input |
 
 ---
 
-## ทำไมทำนาย return ไม่ทำนายราคาดิบ?
+## อ่านผลยังไง
 
-1. **Tree model extrapolate ไม่ได้** — Random Forest / XGBoost ทำนาย
-   ด้วยค่าเฉลี่ยของ leaf node ถ้าเทรนช่วงราคา 100-150 แล้ว test ช่วง
-   150-200 โมเดลจะทำนายตันอยู่ที่ 150
-2. **ราคาดิบเป็น non-stationary** (มี trend) ส่วน return เป็น
-   stationary → โมเดลเรียนรู้ได้ถูกต้องกว่า
-3. **ถ้าทำนายราคาดิบจะได้ R² ~0.99 ซึ่งหลอกมาก** เพราะโมเดลแค่
-   เรียนรู้ว่า "พรุ่งนี้ ≈ วันนี้"
+- ตัดสินด้วย **`MAE_return` เทียบกับ `Baseline: Naive (RW)`**
+  (target คือ return และ scale-normalized ทุกวันเทียบกันได้)
+- `MAE_baht` / `RMSE_baht` ใช้อธิบายขนาด error เป็นบาท
+- `R2_return` < 0 = แย่กว่าการทายค่าเฉลี่ยของชุดนั้น
+- ไม่มี `R2_price`: ได้ ~0.98 ทุกโมเดลรวมทั้ง naive — วัดข้อมูล ไม่ได้วัดโมเดล
+- ไม่มี `DirAcc` ในเฟส 1 (ต้องกำหนดนโยบายวันราคานิ่งก่อน — เฟส 2)
 
-พอทำนาย return เสร็จ ค่อยแปลงกลับเป็นราคาด้วย
-`Close_pred(t) = Close(t-1) * (1 + return_pred)`
-
-## สิ่งที่ต้องดูก่อนเขียนรายงาน
-
-- **ดู `MAE_baht` เทียบกับ `Baseline: Naive (RW)` เป็นหลัก** อย่าไปดู
-  `R2_price` เฉยๆ เพราะมันจะสูงหลอกๆ อยู่แล้วจากธรรมชาติของราคาหุ้น
-- **`DirAcc`** (ทายทิศทางถูกกี่ %) มีความหมายในทางปฏิบัติมากกว่า R²
-- ถ้าโมเดล ML แพ้ `Baseline: Naive (RW)` แปลว่าโมเดลไม่มีค่าเพิ่ม
+**จะเห็น `ConvergenceWarning` ของ MLP** — ตั้งใจไม่ซ่อนไว้
+(`max_iter=500` ยังไม่พอให้ converge) ดูรายละเอียดในสรุปงานเฟส 1

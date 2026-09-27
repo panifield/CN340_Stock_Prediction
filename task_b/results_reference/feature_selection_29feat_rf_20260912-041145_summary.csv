@@ -1,0 +1,3 @@
+﻿stock,mode,model,n_features,n_units,n_eval,mae_full,mae_best,improvement_pct,null_mean_pct,null_sd_pct,null_max_pct,n_perm,p_value,best_units
+KBANK.BK,group,Random Forest,29,7,28,0.008330213034803066,0.008330213034803066,0.0,1.8724681516982151,0.6595606918160019,3.2888494944653206,20,1.0,Return lag | รูปแท่งเทียน | อัตราส่วน MA | ความผันผวน | Momentum | ปริมาณซื้อขาย | วันในสัปดาห์
+ADVANC.BK,group,Random Forest,29,7,28,0.009484229533642722,0.009424331780876347,0.6315510664720211,0.9565248778529227,0.5353609948637107,2.4778504101746885,20,0.7142857142857143,Return lag | รูปแท่งเทียน | อัตราส่วน MA

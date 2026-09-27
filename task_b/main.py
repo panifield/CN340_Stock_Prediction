@@ -19,20 +19,20 @@ main.py — งาน B (ราคาปิด / return)
 """
 
 import argparse
-import os
-import warnings
 
 import numpy as np
 import pandas as pd
 
-warnings.filterwarnings("ignore")
+# ไม่ suppress warning (E1): อาจซ่อน ConvergenceWarning ของ MLP ที่ต้องรู้
 pd.set_option("display.width", 200)
 pd.set_option("display.max_columns", 50)
 
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.preprocessing import StandardScaler
 
-from config import TICKERS, OUTPUT_DIR
+from config import (
+    TICKERS, OUTPUT_DIR, SPLIT_BY_DATE, LOCK_PATH, REQUIRED_LOCK_FIELDS,
+)
 from data_loader import load_stock
 from features import build_features, verify_no_leak
 from targets import build_targets
@@ -42,14 +42,64 @@ from models import get_regressors
 from baselines import get_regression_baselines
 from evaluate import regression_metrics, results_table, print_table, compare_to_baseline
 
+PRIMARY_METRIC = "MAE_return"
+
+
+def verify_lock(path=LOCK_PATH):
+    """ตรวจว่า PRE_TEST_LOCK.md มีอยู่และมีหัวข้อครบ ก่อนอนุญาตให้เปิด test (0.5)"""
+    if not path.exists():
+        raise RuntimeError(
+            f"ปฏิเสธการเปิด test set: ไม่พบ {path}\n"
+            "ต้องเขียนไฟล์ล็อกให้เสร็จก่อนจึงจะเปิด test ได้\n"
+            ">>> ถ้าต้องการรันเพื่อพัฒนา ให้ใช้:  python main.py --dev"
+        )
+    text = path.read_text(encoding="utf-8")
+
+    missing, empty = [], []
+    for field in REQUIRED_LOCK_FIELDS:
+        if field not in text:
+            missing.append(field)
+            continue
+        # ตรวจว่ามีค่าอยู่หลัง ":" จริง ไม่ใช่หัวข้อเปล่า
+        value = text.split(field, 1)[1].splitlines()[0].strip()
+        if not value:
+            empty.append(field)
+
+    if missing or empty:
+        raise RuntimeError(
+            f"ปฏิเสธการเปิด test set: {path.name} ยังไม่สมบูรณ์\n"
+            f"  ขาดหัวข้อ : {missing}\n"
+            f"  หัวข้อว่าง: {empty}\n"
+            "ไฟล์ล็อกที่ไม่ครบ = ยังไม่ได้ประกาศสิ่งที่จะรายงานล่วงหน้าจริง"
+        )
+    print(f"[lock] ผ่านการตรวจ: {path.name} มีหัวข้อครบ {len(REQUIRED_LOCK_FIELDS)} ข้อ")
+
 
 def _prepare(X, y, extra=None):
-    """จัด X และ y ให้ index ตรงกัน แล้วตัดแถวที่มี NaN ออก"""
+    """
+    จัด X และ y ให้ index ตรงกัน แล้วตัดแถวที่มี NaN ออก (A2)
+
+    NaN ช่วงต้นชุดเกิดจาก rolling indicator ที่ยังมีข้อมูลย้อนหลังไม่ครบ
+    จึงเป็นค่าที่ "ยังนิยามไม่ได้" ไม่ใช่ missing value ทั่วไป
+    แม้ SimpleImputer จะ fit จาก train เท่านั้น การเติม median ก็ไม่ได้ทำให้
+    indicator นั้นมีความหมายขึ้นมา -> ตัดแถวทิ้งแทน
+    """
     idx = X.index.intersection(y.dropna().index)
     X = X.loc[idx]
     y = y.loc[idx]
 
-    ok = X.isna().mean(axis=1) < 0.5
+    ok = X.notna().all(axis=1)            # มี NaN แม้แต่ตัวเดียว = ตัดทิ้ง
+    n_drop = int((~ok).sum())
+    if n_drop:
+        pos = np.where(~ok.values)[0]
+        run = 0
+        while run < len(pos) and pos[run] == run:
+            run += 1
+        if run == n_drop:
+            print(f"[prepare] ตัด {n_drop} แถวอุ่นเครื่องต้นชุด (ต่อเนื่องกัน)")
+        else:
+            print(f"[prepare] !! เตือน: มี {n_drop - run} แถวที่ NaN อยู่กลางชุด "
+                  f"-- ตรวจ features.py ว่ามีตัวหารเป็นศูนย์ไหม")
     X, y = X[ok], y[ok]
 
     if extra is not None:
@@ -58,23 +108,28 @@ def _prepare(X, y, extra=None):
     return X, y
 
 
-def run_task_b(X, targets, verbose=True, dev=False):
+def run_task_b(X, targets, use_test, verbose=True):
+    dev = not use_test
     print("\n" + "=" * 78)
     print("  งาน B : ทำนายราคาปิด (ทำนายผ่าน return แล้วแปลงกลับ)")
     if dev:
-        print("  (โหมด dev — ยังไม่แตะ test)")
+        print("  (โหมด dev — ไม่มี test rows ใน pipeline)")
     print("=" * 78)
 
     y = targets["y_return"]
     extra = targets[["prev_close", "close"]]
     X_, y_, extra_ = _prepare(X, y, extra)
 
-    parts = chronological_split(X_, y_, verbose=verbose, name="งาน B")
+    parts = chronological_split(X_, y_, verbose=verbose, name="งาน B",
+                                include_test=use_test)
     X_train, y_train = parts["train"]
     X_val, y_val = parts["val"]
     prev_close_val = extra_.loc[X_val.index, "prev_close"]
 
-    if not dev:
+    # ต้องอยู่หลัง split เสมอ และใช้ index ของ train เท่านั้น (A3)
+    diag = run_all_diagnostics(targets.loc[X_train.index], X_train)
+
+    if use_test:
         X_test, y_test = parts["test"]
         prev_close_test = extra_.loc[X_test.index, "prev_close"]
 
@@ -101,16 +156,15 @@ def run_task_b(X, targets, verbose=True, dev=False):
             test_preds[name] = y_test_pred
 
         if verbose:
-            if dev:
-                print(f"เสร็จ (val MAE={val_results[name]['MAE_baht']:.4f} บาท)")
-            else:
-                print(f"เสร็จ (val MAE={val_results[name]['MAE_baht']:.4f} บาท, "
-                      f"test MAE={test_results[name]['MAE_baht']:.4f} บาท)")
+            print(f"เสร็จ (val {PRIMARY_METRIC}="
+                  f"{val_results[name][PRIMARY_METRIC]:.6f})")
 
-    best = min(val_results, key=lambda n: val_results[n]["MAE_baht"])
+    # เลือกด้วย MAE_return (A4): target ของโมเดลคือ return และ scale-normalized
+    # MAE_baht เก็บไว้เป็น secondary interpretability metric
+    best = min(val_results, key=lambda n: val_results[n][PRIMARY_METRIC])
     if verbose:
         print(f"\n    เลือกโมเดลที่ดีที่สุดจาก val set: {best} "
-              f"(val MAE_baht={val_results[best]['MAE_baht']:.4f} บาท)")
+              f"(val {PRIMARY_METRIC}={val_results[best][PRIMARY_METRIC]:.6f})")
 
     if dev:
         eval_split, y_eval, eval_results, eval_preds, prev_close_eval = (
@@ -125,102 +179,86 @@ def run_task_b(X, targets, verbose=True, dev=False):
         eval_results[name] = regression_metrics(y_eval, p, prev_close_eval)
         eval_preds[name] = p
 
-    df = results_table(eval_results, sort_by="MAE_baht", ascending=True)
+    df = results_table(eval_results, sort_by=PRIMARY_METRIC, ascending=True)
     label = "Val Set (โหมด dev)" if dev else "Test Set"
     print_table(df, f"งาน B : ผลลัพธ์บน {label}")
 
-    print("\n" + compare_to_baseline(df, "MAE_baht", higher_is_better=False,
-                                     model_name=best))
+    print("\n" + compare_to_baseline(df, PRIMARY_METRIC, model_name=best))
 
     print("\n  หมายเหตุการอ่านผล:")
-    print("  - R2_price ที่สูงมาก (>0.95) ไม่ได้แปลว่าโมเดลเก่ง")
-    print("    เพราะมันมาจากการที่ราคาพรุ่งนี้ใกล้เคียงราคาวันนี้อยู่แล้ว")
-    print("  - ให้ดู MAE_baht เทียบกับ Baseline: Naive (RW) เป็นหลัก")
-    print("  - DirAcc (ทายทิศทางถูกกี่ %) มีความหมายกว่า R2 มาก")
+    print("  - ตัดสินด้วย MAE_return เทียบกับ Baseline: Naive (RW) เป็นหลัก")
+    print("  - MAE_baht / RMSE_baht ใช้อธิบายขนาด error เป็นบาทเท่านั้น")
+    print("  - R2_return < 0 แปลว่าแย่กว่าการทายค่าเฉลี่ยของชุดนั้น")
 
-    best_rmse = float(eval_results[best]["RMSE_baht"])
-
-    return {"table": df, "preds": eval_preds, "y_test": y_eval,
-            "prev_close_test": prev_close_eval,
-            "best_rmse_baht": best_rmse,
-            "test_index": y_eval.index, "best_model": best, "stage": eval_split}
+    return {"table": df, "preds": eval_preds, "y_eval": y_eval,
+            "prev_close_eval": prev_close_eval, "diag": diag,
+            "eval_index": y_eval.index, "best_model": best, "stage": eval_split}
 
 
-def run_one_ticker(ticker, dev=False):
+def run_one_ticker(ticker, use_test):
     print("\n\n" + "#" * 78)
     print(f"#  หุ้น: {ticker}  (งาน B)")
-    if dev:
-        print("#  โหมด dev — ใช้แค่ train/val เพื่อพัฒนา ยังไม่แตะ test")
+    if not use_test:
+        print("#  โหมด dev — ใช้แค่ train/val เพื่อพัฒนา ไม่แตะ test")
     print("#" * 78)
 
     df = load_stock(ticker)
+
+    if not use_test:
+        # ตัดตั้งแต่ก่อนสร้าง feature -- test rows ไม่เคยเข้าสู่ pipeline (0.2)
+        # ปลอดภัยเพราะ feature ทุกตัวมองย้อนหลังอย่างเดียว (rolling / shift)
+        n_before = len(df)
+        df = df.loc[:SPLIT_BY_DATE["val_end"]].copy()
+        print(f"[main] โหมด dev: ตัด test rows ทิ้ง {n_before - len(df)} แถว "
+              f"เหลือ {len(df)} แถว (ถึง {df.index[-1].date()})")
+
     X = build_features(df)
     targets = build_targets(df)
 
     verify_no_leak(df, X, sample_idx=100)
 
-    if dev:
-        from config import TRAIN_RATIO, VAL_RATIO, SPLIT_BY_DATE
-        if SPLIT_BY_DATE is not None:
-            val_end = pd.Timestamp(SPLIT_BY_DATE["val_end"])
-            cutoff = int((df.index <= val_end).sum())
-        else:
-            cutoff = int(len(df) * (TRAIN_RATIO + VAL_RATIO))
-        print(f"\n[main] โหมด dev: diagnostics ใช้แค่ train+val "
-              f"({cutoff}/{len(df)} แถวแรก) ตัด test ออก")
-        diag = run_all_diagnostics(df.iloc[:cutoff], targets.iloc[:cutoff],
-                                   X.iloc[:cutoff])
-    else:
-        diag = run_all_diagnostics(df, targets, X)
-
-    res = run_task_b(X, targets, dev=dev)
-    return {"ticker": ticker, "diag": diag, "b": res}
+    res = run_task_b(X, targets, use_test=use_test)
+    return {"ticker": ticker, "b": res}
 
 
 def save_results(all_results):
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    """บันทึกตารางของ split ที่ประเมิน: --dev -> *_val.csv / โหมดปกติ -> *_test.csv"""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for r in all_results:
         t = r["ticker"].replace(".", "_").replace("^", "")
-        path = os.path.join(OUTPUT_DIR, f"{t}_taskB_price.csv")
+        path = OUTPUT_DIR / f"{t}_taskB_{r['b']['stage']}.csv"
         r["b"]["table"].to_csv(path, encoding="utf-8-sig")
-    print(f"\n[main] บันทึกตารางผลลัพธ์ไว้ที่โฟลเดอร์ '{OUTPUT_DIR}/'")
+        print(f"[main] บันทึก {path.relative_to(OUTPUT_DIR.parent)}")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="รันงาน B (ราคาปิด) — ปกติจะแตะ test ครั้งเดียวตอนจบ"
+        description="รันงาน B (ราคาปิด) — โหมดปกติจะเปิด test ซึ่งต้องผ่าน lock ก่อน"
     )
     parser.add_argument(
         "--dev", action="store_true",
-        help="โหมดพัฒนา: เทรน+ประเมินบน train/val เท่านั้น "
-             "ไม่แตะ test ไม่บันทึกผล",
+        help="โหมดพัฒนา: เทรน+ประเมินบน train/val เท่านั้น ไม่แตะ test",
     )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    use_test = not args.dev      # มีแค่ flag --dev ไม่มี --test (ดูข้อ 0.4)
+
+    if use_test:
+        verify_lock()            # เฟส 1 ยังไม่มีไฟล์ lock -> หยุดที่บรรทัดนี้
 
     print("=" * 78)
     print("  งาน B : ทำนายราคาปิด (Regression)")
-    if args.dev:
-        print("  *** โหมด dev: ไม่แตะ test, ไม่บันทึกผล ***")
+    if not use_test:
+        print("  *** โหมด dev: ไม่แตะ test ***")
     print("=" * 78)
 
-    all_results = []
-    for ticker in TICKERS:
-        try:
-            all_results.append(run_one_ticker(ticker, dev=args.dev))
-        except Exception as e:
-            print(f"\n!! {ticker} รันไม่ผ่าน: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+    # fail fast (E3): หุ้นไหนพัง -> หยุดทันที ไม่พิมพ์ "เสร็จสิ้น" หลอกๆ
+    all_results = [run_one_ticker(ticker, use_test=use_test) for ticker in TICKERS]
 
-    if all_results and not args.dev:
-        save_results(all_results)
-    elif args.dev:
-        print("\n[main] โหมด dev เสร็จแล้ว — ไม่บันทึก csv")
-
+    save_results(all_results)
     print("\nเสร็จสิ้น")
     return all_results
 

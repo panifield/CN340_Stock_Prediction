@@ -9,43 +9,41 @@ splits.py
 "เอาข้อมูลปี 2025 ไปเทรน แล้วกลับมาทำนายปี 2018"
 ซึ่งเป็นไปไม่ได้ในโลกจริง และทำให้ผลดูดีเกินจริงมาก
 
-ต้องแบ่งตามเวลาเท่านั้น:
+แบ่งตามวันที่ที่ freeze ไว้ใน config.SPLIT_BY_DATE เท่านั้น (0.1)
     [-------- Train --------][-- Val --][-- Test --]
-    2015                  2022      2023        2025
+    2016-09-26      2023-09-01   2025-02-25   2026-08-28
+
+โหมด --dev ไม่สร้าง test partition เลย (0.3)
 """
 
 import numpy as np
 import pandas as pd
 
-from config import TRAIN_RATIO, VAL_RATIO, SPLIT_BY_DATE
+from config import SPLIT_BY_DATE
 
 
-def chronological_split(X, y, verbose=True, name=""):
+def chronological_split(X, y, verbose=True, name="", include_test=True):
     """
     แบ่งตามเวลา คืน dict ของ (X, y) แต่ละชุด
+    include_test=False -> คืนแค่ train / val (ไม่มี key "test")
     """
     assert X.index.equals(y.index), "index ของ X และ y ไม่ตรงกัน"
     assert X.index.is_monotonic_increasing, "index ต้องเรียงตามเวลา"
 
-    n = len(X)
-
-    if SPLIT_BY_DATE is not None:
-        train_end = pd.Timestamp(SPLIT_BY_DATE["train_end"])
-        val_end = pd.Timestamp(SPLIT_BY_DATE["val_end"])
-        i_train = int((X.index <= train_end).sum())
-        i_val = int((X.index <= val_end).sum())
-    else:
-        i_train = int(n * TRAIN_RATIO)
-        i_val = int(n * (TRAIN_RATIO + VAL_RATIO))
+    train_end = pd.Timestamp(SPLIT_BY_DATE["train_end"])
+    val_end = pd.Timestamp(SPLIT_BY_DATE["val_end"])
+    i_train = int((X.index <= train_end).sum())
+    i_val = int((X.index <= val_end).sum())
 
     parts = {
         "train": (X.iloc[:i_train], y.iloc[:i_train]),
         "val":   (X.iloc[i_train:i_val], y.iloc[i_train:i_val]),
-        "test":  (X.iloc[i_val:], y.iloc[i_val:]),
     }
+    if include_test:
+        parts["test"] = (X.iloc[i_val:], y.iloc[i_val:])
 
-    for k, (Xp, yp) in parts.items():
-        assert len(Xp) > 0, f"ชุด {k} ว่างเปล่า ลองปรับสัดส่วนใน config"
+    for k, (Xp, _) in parts.items():
+        assert len(Xp) > 0, f"ชุด {k} ว่างเปล่า"
 
     if verbose:
         print(f"[split] {name}")
@@ -55,15 +53,17 @@ def chronological_split(X, y, verbose=True, name=""):
 
     # ตรวจว่าไม่มีวันซ้อนทับกัน
     assert parts["train"][0].index[-1] < parts["val"][0].index[0]
-    assert parts["val"][0].index[-1] < parts["test"][0].index[0]
+    if include_test:
+        assert parts["val"][0].index[-1] < parts["test"][0].index[0]
 
     return parts
 
 
 def walk_forward_splits(X, n_splits=5, min_train=250):
     """
-    (ทางเลือก) Walk-forward validation
+    (เฟส 2) Walk-forward validation
     ใช้ตอนอยากได้ผลที่น่าเชื่อถือกว่า split เดียว
+    ต้องส่ง X ที่เป็น train+val เท่านั้นเข้ามา ห้ามรวม test
 
     fold 1: train[0:200]   test[200:250]
     fold 2: train[0:250]   test[250:300]
