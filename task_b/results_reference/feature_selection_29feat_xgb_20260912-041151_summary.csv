@@ -1,0 +1,3 @@
+﻿stock,mode,model,n_features,n_units,n_eval,mae_full,mae_best,improvement_pct,null_mean_pct,null_sd_pct,null_max_pct,n_perm,p_value,best_units
+KBANK.BK,group,XGBoost,29,7,28,0.008705227841333318,0.00847816346695365,2.608367965988709,7.1758458151163875,4.319337730543817,17.309512385238644,20,0.9523809523809523,Return lag | รูปแท่งเทียน | ความผันผวน | Momentum
+ADVANC.BK,group,XGBoost,29,7,28,0.01013260884025275,0.009814103006681438,3.1433744121851244,3.9719841044803963,2.3616084522766396,9.9526530799348,20,0.5238095238095238,Return lag | รูปแท่งเทียน | อัตราส่วน MA

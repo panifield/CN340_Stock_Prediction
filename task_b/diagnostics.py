@@ -3,6 +3,10 @@ diagnostics.py — งาน B (ราคาปิด / return)
 ==========================================
 วิเคราะห์ข้อมูลก่อนเทรน  <-- ส่วนที่จะทำให้รายงานดูแข็งแรง
 
+*** รันบน train เท่านั้น (A3) ***
+การวิเคราะห์ข้อมูลก่อนเทรนต้องใช้ข้อมูลที่โมเดลมีสิทธิ์เห็นเท่านั้น
+main.py เรียกหลัง split และส่งแถวของ train มาเท่านั้น
+
 มี 2 การวิเคราะห์:
   1. return_analysis - ขนาดของ return และราคา
   2. leak_check      - ตรวจหา feature ที่น่าสงสัยว่า leak
@@ -43,10 +47,8 @@ def leak_check(X, y_return, verbose=True):
     ตรวจหา feature ที่น่าสงสัยว่า leak
 
     วิธี: ดู correlation ระหว่าง feature กับ target return
-    - Feature ที่เป็นราคาระดับ (close_prev) จะ correlate กับ "ราคา" สูงมาก
-      แต่นั่นปกติ ไม่ใช่ leak
-    - ถ้า correlate กับ "return" สูงเกินไป -> น่าสงสัย
-      เพราะ return เป็นสิ่งที่ทำนายยากมาก
+    ถ้า correlate กับ "return" สูงเกินไป -> น่าสงสัย
+    เพราะ return เป็นสิ่งที่ทำนายยากมาก
     """
     suspicious = []
 
@@ -80,13 +82,18 @@ def leak_check(X, y_return, verbose=True):
     return suspicious
 
 
-def run_all_diagnostics(df, targets, X, verbose=True):
-    """รันการวิเคราะห์ทั้งหมดรวดเดียว"""
+def run_all_diagnostics(targets, X, verbose=True):
+    """
+    รันการวิเคราะห์ทั้งหมดรวดเดียว
+    targets / X ต้องเป็นแถวของ train เท่านั้น
+    """
     print("\n" + "#" * 78)
-    print("#  การวิเคราะห์ข้อมูลก่อนเทรน (เอาผลส่วนนี้ใส่รายงานด้วย)")
+    print("#  การวิเคราะห์ข้อมูลก่อนเทรน (train เท่านั้น -- เอาผลส่วนนี้ใส่รายงานด้วย)")
     print("#" * 78)
+    print(f"[diagnostics] ใช้ {len(X)} แถว "
+          f"({X.index[0].date()} -> {X.index[-1].date()})")
 
-    out = {}
+    out = {"n_rows": len(X)}
     out["return"] = return_analysis(targets, verbose)
     out["leak"] = leak_check(X, targets["y_return"], verbose)
     return out

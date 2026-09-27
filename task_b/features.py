@@ -4,16 +4,23 @@ features.py — งาน B (ราคาปิด / return)
 สร้าง Feature สำหรับงาน B เท่านั้น (ไม่มี feature กลุ่ม parity ของงาน A)
 
 *** กฎเหล็กของไฟล์นี้ ***
-Feature ของแถววันที่ t ต้องคำนวณจากข้อมูล "ถึงวันที่ t-1 เท่านั้น"
-ห้ามมีข้อมูลของวันที่ t หลุดเข้ามาแม้แต่นิดเดียว
+Feature ที่มาจากตลาด (ราคา/ปริมาณ) ของแถววันที่ t ต้องคำนวณจากข้อมูล
+"ถึงวันที่ t-1 เท่านั้น" ห้ามมีข้อมูลตลาดของวันที่ t หลุดเข้ามา
 
-วิธีที่ใช้:
-  1. คำนวณ indicator ทั้งหมดตามปกติ (ใช้ข้อมูลถึงวัน t)
-  2. shift(1) ทั้งตาราง ทีเดียวตอนท้าย
-  => แถว t จะได้ค่า indicator ของวัน t-1
+แบ่ง feature เป็น 2 กลุ่ม (A5):
+  1. market   : ข้อมูลตลาดของวัน t ยังไม่รู้ก่อนทำนาย -> shift(1) ทั้งตาราง
+                ทีเดียวตอนท้าย (ลืมไม่ได้) ชื่อคอลัมน์ลงท้าย _prev
+  2. calendar : ปฏิทินของวัน t รู้ล่วงหน้าอยู่แล้ว -> ไม่ shift
+                ชื่อคอลัมน์ไม่มี _prev
 
-การ shift ทีเดียวตอนท้ายปลอดภัยกว่าการไล่ shift ทีละคอลัมน์
-เพราะลืมไม่ได้
+ทำไมต้องแยก: ถ้า shift dow ไปด้วย ทุกแถวจะได้ dow ของ "วันซื้อขายก่อนหน้า"
+ในวันทำการปกติเป็นแค่การ relabel (จ.->อ. ...) แต่แถวที่มีวันหยุดคั่น
+mapping จะแตกและให้ค่าที่ผิดจริง
+
+ไม่มี feature ราคาดิบ (close/open/high/low/volume) (C1):
+ราคาไม่ stationary ขณะที่ feature อื่นเป็นอัตราส่วนหรือ return ทั้งหมด
+ต้นไม้ทำนายนอกช่วงที่เห็นตอน train ไม่ได้ และ StandardScaler แก้ไม่ได้
+เพราะเป็นการแปลงเชิงเส้น -- เหตุผลเดียวกับที่ทำนาย return แทนราคาดิบ
 """
 
 import numpy as np
@@ -67,9 +74,9 @@ def bollinger_position(close, window=20, n_std=2):
 # ตัวสร้าง feature หลัก
 # ---------------------------------------------------------------
 
-def build_raw_features(df):
+def build_market_features(df):
     """
-    สร้าง feature ทั้งหมดโดย "ยังไม่ shift"
+    feature ที่มาจากราคา/ปริมาณ -- ต้อง shift(1)
     (ฟังก์ชันนี้ยังมีข้อมูลวัน t อยู่ อย่าเอาไปเทรนตรงๆ)
     """
     close = df["Close"]
@@ -80,16 +87,12 @@ def build_raw_features(df):
 
     f = pd.DataFrame(index=df.index)
 
-    # --- ราคาดิบ ---
-    f["close"] = close
-    f["open"] = open_
-    f["high"] = high
-    f["low"] = low
-    f["volume"] = volume
-
     # --- ผลตอบแทน (return) : ตัวสำคัญที่สุด เพราะเป็น stationary ---
+    # fill_method=None ทุกที่: ไม่ต้องการให้ pandas forward-fill ค่า NaN
+    # ถ้ามีรูโหว่กลางชุดต้องได้ NaN ออกมาให้ prepare_xy เตือน ไม่ใช่ถูกเติมเงียบๆ
+    # (สำคัญกับ build_live_feature ที่ต่อแถวเปล่าท้าย df)
     for lag in LAG_DAYS:
-        f[f"ret_{lag}d"] = close.pct_change(lag)
+        f[f"ret_{lag}d"] = close.pct_change(lag, fill_method=None)
 
     # --- รูปทรงแท่งเทียน (normalize ด้วยราคา -> ไม่มีปัญหา scale) ---
     f["hl_range"] = (high - low) / close
@@ -109,7 +112,7 @@ def build_raw_features(df):
                                     / close.rolling(b).mean())
 
     # --- ความผันผวน ---
-    ret1 = close.pct_change()
+    ret1 = close.pct_change(fill_method=None)
     for w in VOL_WINDOWS:
         f[f"volatility_{w}d"] = ret1.rolling(w).std()
 
@@ -121,61 +124,137 @@ def build_raw_features(df):
     f["macd_hist"] = m_hist / close
     f["bb_position"] = bollinger_position(close)
 
-    # --- ปริมาณซื้อขาย ---
-    f["volume_change"] = volume.pct_change()
+    # --- ปริมาณซื้อขาย (อัตราส่วน ไม่ใช่ค่าดิบ) ---
+    f["volume_change"] = volume.pct_change(fill_method=None)
     f["volume_over_ma20"] = volume / volume.rolling(20).mean()
 
-    # --- วันในสัปดาห์ ---
-    if USE_DAY_OF_WEEK:
-        dow = df.index.dayofweek
-        for d in range(5):
-            f[f"dow_{d}"] = (dow == d).astype(int)
-
     return f
+
+
+def build_calendar_features(df):
+    """feature ปฏิทิน -- รู้ล่วงหน้า ไม่ต้อง shift"""
+    c = pd.DataFrame(index=df.index)
+    dow = df.index.dayofweek
+    for d in range(5):
+        c[f"dow_{d}"] = (dow == d).astype(int)
+    return c
 
 
 def build_features(df, verbose=True):
     """
     ฟังก์ชันที่ควรเรียกใช้จริง
-    = build_raw_features แล้ว shift(1) ทั้งตาราง
+    = market features shift(1) + calendar features (ไม่ shift)
 
     คืน DataFrame ที่ปลอดภัย ใช้เทรนได้เลย
     """
-    raw = build_raw_features(df)
-    shifted = raw.shift(1)
-    shifted.columns = [f"{c}_prev" for c in shifted.columns]
+    market = build_market_features(df).shift(1)
+    market.columns = [f"{c}_prev" for c in market.columns]
+
+    if USE_DAY_OF_WEEK:
+        calendar = build_calendar_features(df)       # ไม่ shift ไม่มี _prev
+        out = pd.concat([market, calendar], axis=1)
+    else:
+        out = market
 
     if verbose:
-        print(f"[features] สร้าง {shifted.shape[1]} features "
-              f"(shift(1) แล้ว = ใช้ข้อมูลถึงวัน t-1 เท่านั้น)")
-    return shifted
+        print(f"[features] สร้าง {out.shape[1]} features "
+              f"(market {market.shape[1]} ตัว shift(1) แล้ว + "
+              f"calendar {out.shape[1] - market.shape[1]} ตัวไม่ shift)")
+    return out
+
+
+def build_live_feature(df, target_date, verbose=True):
+    """
+    สร้าง feature 1 แถวสำหรับวันที่ target_date ซึ่งยังไม่มีข้อมูลราคา (B1)
+
+        market features  = indicator ของวันซื้อขายล่าสุดใน df
+        calendar feature = DOW ของ target_date เอง
+
+    วิธี: เติมแถวเปล่าของ target_date ต่อท้าย df แล้วเรียก build_features()
+    ตัวเดิม -- ห้ามเขียน logic สร้าง feature ขึ้นมาใหม่ ไม่งั้นวันหนึ่ง
+    สองเส้นทางจะไม่ตรงกันแล้วจับไม่ได้
+
+    ปลอดภัยเพราะ indicator ทุกตัวมองย้อนหลัง (rolling / pct_change)
+    แถว NaN ที่ต่อท้ายจึงไม่กระทบค่าของแถวก่อนหน้า และ shift(1) ทำให้
+    แถว target_date ได้ indicator ของวันซื้อขายล่าสุด ส่วน calendar feature
+    ได้ DOW ของ target_date เอง -- ตรงตามที่ต้องการพอดี
+
+    คืน (X_live, prev_close, data_cutoff)
+      X_live      DataFrame 1 แถว คอลัมน์ตรงกับ build_features() ทุกประการ
+      prev_close  ราคาปิดของวันซื้อขายล่าสุด (ใช้แปลง return -> ราคา)
+      data_cutoff วันสุดท้ายที่มีข้อมูลจริง
+    """
+    target = pd.Timestamp(target_date)
+
+    if target.dayofweek >= 5:
+        raise ValueError(f"{target.date()} เป็นวันเสาร์/อาทิตย์ ตลาดไม่เปิด")
+    # หมายเหตุ: ไม่ตรวจวันหยุด SET เพราะปฏิทินไทยเดาไม่ได้
+    # ผู้ใช้ต้องเป็นคนระบุ --target-date ที่ถูกต้องเอง
+
+    if target in df.index:
+        raise ValueError(
+            f"{target.date()} มีข้อมูลอยู่แล้วใน raw_data -- "
+            f"นี่ไม่ใช่การทำนายอนาคต ตรวจ --target-date อีกครั้ง"
+        )
+    if target <= df.index[-1]:
+        raise ValueError(
+            f"target_date {target.date()} ต้องอยู่หลังวันสุดท้ายของข้อมูล "
+            f"({df.index[-1].date()})"
+        )
+
+    data_cutoff = df.index[-1]
+    prev_close = float(df["Close"].iloc[-1])
+
+    # เติมแถวเปล่า -> indicator ของแถวก่อนหน้าไม่เปลี่ยน เพราะ rolling มองย้อนหลัง
+    blank = pd.DataFrame({c: [np.nan] for c in df.columns}, index=[target])
+    df_ext = pd.concat([df, blank])
+
+    X_all = build_features(df_ext, verbose=False)
+    X_live = X_all.loc[[target]]
+
+    # market feature ต้องครบ ถ้ามี NaN แปลว่าข้อมูลท้าย df ไม่สมบูรณ์
+    bad = X_live.columns[X_live.isna().any()].tolist()
+    if bad:
+        raise ValueError(
+            f"feature ของ {target.date()} มี NaN: {bad}\n"
+            f"ตรวจว่าข้อมูลถึง {data_cutoff.date()} ครบและไม่มีรูโหว่"
+        )
+
+    if verbose:
+        print(f"[live] สร้าง feature {X_live.shape[1]} ตัว สำหรับ {target.date()}")
+        print(f"[live] ใช้ข้อมูลถึง {data_cutoff.date()}  prev_close = {prev_close}")
+    return X_live, prev_close, data_cutoff
 
 
 def verify_no_leak(df, features, sample_idx=100):
     """
-    ตรวจสอบเชิงโครงสร้างว่า shift ทำงานจริง
-    เทียบว่า features แถว t == raw indicator แถว t-1 จริงไหม
+    ตรวจสอบเชิงโครงสร้าง 2 แบบ
+      market  : features แถว t == raw indicator แถว t-1
+      calendar: dow แถว t == วันในสัปดาห์ของวัน t เอง
     """
-    raw = build_raw_features(df)
-    row_t = features.iloc[sample_idx]
-    row_prev = raw.iloc[sample_idx - 1]
+    raw = build_market_features(df)
+    row_t, row_prev = features.iloc[sample_idx], raw.iloc[sample_idx - 1]
 
-    for col in raw.columns:
-        a = row_t[f"{col}_prev"]
-        b = row_prev[col]
+    checked = 0
+    for col in raw.columns:                      # market: แถว t = raw แถว t-1
+        name = f"{col}_prev"
+        if name not in features.columns:
+            continue
+        a, b = row_t[name], row_prev[col]
         if pd.isna(a) and pd.isna(b):
             continue
-        assert np.isclose(a, b, equal_nan=True), (
+        assert np.isclose(a, b), (
             f"LEAK! คอลัมน์ {col}: features แถว {sample_idx} = {a} "
-            f"แต่ raw แถว {sample_idx-1} = {b}"
+            f"แต่ raw แถว {sample_idx - 1} = {b}"
         )
+        checked += 1
+    assert checked > 0, "ไม่ได้ตรวจ market feature เลยสักตัว"
 
-    # ตรวจซ้ำ: ราคาปิดของวัน t ต้องไม่เท่ากับ feature ตัวไหนเลย
-    close_t = df["Close"].iloc[sample_idx]
-    close_prev = df["Close"].iloc[sample_idx - 1]
-    assert np.isclose(features["close_prev"].iloc[sample_idx], close_prev)
-    if not np.isclose(close_t, close_prev):
-        assert not np.isclose(features["close_prev"].iloc[sample_idx], close_t)
+    for d in range(5):                           # calendar: แถว t = วันของ t
+        name = f"dow_{d}"
+        if name in features.columns:
+            expected = int(features.index[sample_idx].dayofweek == d)
+            assert row_t[name] == expected, f"dow ไม่ตรงวัน: {name}"
 
-    print("[features] verify_no_leak ผ่าน: feature แถว t = ข้อมูลวัน t-1 จริง")
+    print(f"[features] verify_no_leak ผ่าน ({checked} market cols + calendar)")
     return True
