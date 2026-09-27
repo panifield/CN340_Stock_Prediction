@@ -140,6 +140,20 @@ dry-run: เขียนลง `results/dryrun/prediction_log_dryrun.csv` เท
 — production log ไม่ถูกแตะ (18 แถว dry-run เก่าใน production log เป็น legacy ยังไม่ได้ย้าย)
 `dataset_sha256` = SHA-256 เต็ม 64 hex (แถวเก่าที่มี 16 ตัว = legacy)
 
+### บันทึกผลจริงและรายงาน live test
+
+หลังอัปเดต `raw_data/` ของวัน t แล้ว (ผลจริงมาจาก Investing แหล่งเดียวกับที่เทรน):
+
+```bash
+python record_outcomes.py      # จับคู่ log กับราคาปิดจริง -> results/outcomes.csv (append-only)
+python report_live.py          # -> results/live_report/live_report.md + live_summary.csv + live_cumulative.png
+```
+
+- นับเฉพาะคำทำนาย official (dry-run ต้องสั่ง `--include-dry-run` และเขียนลงไฟล์/โฟลเดอร์อื่นเท่านั้น)
+- metric หลัก: relMAE vs Naive, R2_OOS, win rate vs Naive · รอง: Bias, StdRatio, Rho,
+  dir hit rate (เฉพาะวันที่ราคาขยับ), long signal (diagnostic) · ความครบ: วันที่ขาด, คำทำนายที่ออกหลัง 09:00
+- n < 20 วัน = ผลยังแกว่งมาก อย่าสรุป · ห้ามรวมกับผล validation เดิม
+
 ### ทำไมนี่ไม่ใช่การเปิด test set
 
 | | `main.py --dev` | `predict_live.py` |
