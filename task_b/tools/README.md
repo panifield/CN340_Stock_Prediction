@@ -55,3 +55,19 @@ SHA-256, ช่วงเวลา, แท่งต่อวันแยกตา
 Phase 1D ใช้ `intraday_1600.py` / `tune_1600.py` / `report_1600.py` / `predict_1600.py` ที่ root ของ `task_b/`
 `intraday_probe.py` เป็นแค่ probe ข้อมูล ไม่ใช่โมเดล · สถานะ: ไม่มี historical test · prospective ยังไม่เปิด ·
 `close_bar16` ≠ official SET close · real-time availability ยังไม่ได้พิสูจน์ · ไม่มี executable backtest
+
+## append_investing.py — append ไฟล์ Investing.com ใหม่ต่อท้าย raw_data/
+
+```bash
+python tools/append_investing.py "<ไฟล์ Kasikornbank>.csv" "<ไฟล์ Advanced Info>.csv" --check-only   # ตรวจก่อน
+python tools/append_investing.py "<ไฟล์ Kasikornbank>.csv" "<ไฟล์ Advanced Info>.csv"                # เขียนจริง
+python main.py --dev && git diff --stat results/                                                      # val ต้องไม่เปลี่ยน
+```
+
+- ต้องใส่ไฟล์ของ **ทุกหุ้น** พร้อมกัน · จับคู่ ticker จากชื่อไฟล์ + ราคาต่อเนื่อง (< 10%)
+- แปลงเป็น canonical (float repr, Vol. หน่วยพันหุ้น, CRLF, ไม่มี BOM/quote) · แถวเก่าไม่เปลี่ยนแม้แต่ byte เดียว
+- **หยุดโดยไม่เขียนอะไร** เมื่อ: header ผิด · วันซ้ำ/เสาร์-อาทิตย์ · แถวที่ทับของเดิมค่าไม่ตรง ·
+  Volume ว่าง/'-' · OHLC ไม่สอดคล้อง · ticker ไม่สอดคล้อง · ขาดไฟล์บางหุ้น
+- **เตือน** (ตรวจด้วยตา): วันทำการที่ขาด (วันหยุด SET?) · Volume = 0 · Change % ไม่ตรงราคาที่คำนวณ
+- เก็บต้นฉบับ byte-for-byte + SHA ใน `raw_data_sources/investing_<YYYYMMDD>/SOURCES.md`
+  แล้วรัน `check_raw_update.check_ticker` (+ cross-check intraday แบบเตือน) ให้อัตโนมัติ

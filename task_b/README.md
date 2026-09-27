@@ -202,7 +202,7 @@ git push
 (แถวเก่าต้องเหมือนเดิมทุก byte) · รูปแบบ canonical: `Date,Price,Open,High,Low,Vol. ('000),Change %`
 (วันที่ `MM/DD/YYYY` เรียงเก่า→ใหม่, `Price` = ราคาปิด, ตัวเลขแบบ `247.0`, `Vol.` หน่วยพันหุ้น
 เช่น `8.65M` → `8650.0`, CRLF, ไม่มี BOM, ไม่มี quote) · เก็บไฟล์ต้นฉบับไว้ใน `raw_data_sources/`
-ตรวจด้วย `python tools/check_raw_update.py <เก่า> <ใหม่> --cross-check raw_data_intraday`
+ใช้ `python tools/append_investing.py <ไฟล์ทุกหุ้น>` (ตรวจ + แปลง + append + เก็บต้นฉบับ + check_raw_update ในคำสั่งเดียว ดู `tools/README.md`)
 
 **ต้อง regression check ทุกครั้ง** เพราะ split ใช้วันที่ตายตัว
 การเพิ่มข้อมูลท้ายไฟล์ต้องไม่กระทบ train/val เลย:
