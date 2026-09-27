@@ -29,6 +29,21 @@ python main.py
 python main.py --dev
 ```
 
+## Task 2: ทำนายก่อนตลาดปิดจากข้อมูล Intraday
+
+Task 2 แยกจาก Task 1: ใช้แท่งราคา 1 ชั่วโมงของวันเดียวกันถึง 13:00
+(หรือแท่งล่าสุดก่อนหน้านั้น หากไม่มีแท่ง 13:00) เพื่อทำนายว่า Close 16:00
+จะขึ้นหรือลง/นิ่งจากราคาที่ cutoff. ข้อมูลที่ใช้คือ
+`data_cache/KBANK_BK_1h_730d.csv` และ `ADVANC_BK_1h_730d.csv`
+
+```bash
+python intraday_task2.py --dev  # เลือกโมเดลจาก validation โดยไม่แตะ test
+python intraday_task2.py        # ประเมิน test หลังล็อกการตั้งค่าแล้ว
+```
+
+ผล metrics และ prediction จะถูกบันทึกใน `results/` พร้อม timestamp และไม่ปะปน
+กับผลของ Task 1
+
 **ถ้ารันไม่ได้เพราะเน็ต** ให้เปิด `config.py` แล้วตั้ง
 `USE_SYNTHETIC_DATA = True` เพื่อทดสอบว่าโค้ดทำงานได้
 (แต่ห้ามเอาผลจากข้อมูลจำลองไปใส่รายงาน)
