@@ -86,10 +86,31 @@ RF / XGBoost ใช้ `n_jobs=-1` → ผล numerically reproducible within fl
 | `tune.py` / `TUNING_PLAN.md` | การจูน Phase 1C (ห้ามรันซ้ำ / ห้ามแก้แผน) |
 | `predict_live.py` | next-day prediction · dry-run เขียน `results/dryrun/` เท่านั้น |
 | `tools/` | `check_raw_update.py` (ตรวจ raw_data ใหม่) · `intraday_probe.py` |
-| `intraday_1600.py` / `metrics_1600.py` / `tune_1600.py` / `PHASE1D_PLAN.md` | Phase 1D Mode A (16:00) — pre-registration · ยังไม่ได้รันบนข้อมูลจริง |
+| `intraday_1600.py` / `metrics_1600.py` / `tune_1600.py` / `PHASE1D_PLAN.md` | Phase 1D Mode A (16:00) — pre-registered ที่ `0b09905` · search รันครั้งเดียวแล้ว |
+| `report_1600.py` | สร้างรายงาน `results/phase1d/summary_1600.md` จากผลค้นหา (อ่าน CSV อย่างเดียว) |
+| `predict_1600.py` | Phase 1D live pipeline — **dry-run เท่านั้น** เขียน `results/dryrun/` |
 | `tests/test_pipeline.py` | 18 tests: alignment, dow, NaN, lock gate, seed averaging, shape, weighting, costs, fingerprint, dry-run log, historical test cut |
 | `tests/test_phase1d.py` | 21 tests ของ Phase 1D (ข้อมูลสังเคราะห์) |
 | `results_reference/` | ผลของเวอร์ชันก่อนหน้า — backup เท่านั้น ห้ามเป็น input |
+
+---
+
+## Phase 1D — 16:00 (Mode A) · development / walk-forward, not a test
+
+ณ 16:00 ทำนาย `close_bar16` ของวันเดียวกัน จาก Yahoo รายชั่วโมง (`raw_data_intraday/` เท่านั้น)
+แผน: `PHASE1D_PLAN.md` · ผล: `results/phase1d/summary_1600.md` · หลักฐาน/SHA: `results/phase1d/MANIFEST.md`
+
+- **ไม่มี historical test** — ข้อมูล intraday ทั้งหมดเคยถูก probe แล้ว ตัวเลขทั้งหมดเป็น walk-forward บน development data
+- ทุก config แพ้ Naive ด้วย MAE (mean relMAE ผู้ชนะ 1.051–1.057) · R2_OOS ผู้ชนะ ≈ +0.03–0.04
+- **prospective evaluation ยังไม่เปิด** · **real-time availability ยังไม่ได้พิสูจน์** ·
+  `close_bar16` ≠ official SET close · ไม่มี executable backtest
+- official `same_day_1600` ยังไม่เปิด (`predict_live.py` มีแค่ `next_day`) · `predict_1600.py` รองรับ `--dry-run` เท่านั้น
+- ห้ามวางตัวเลข Phase 1D ในตารางเดียวกับ daily model
+
+```bash
+python predict_1600.py --target-date 2026-09-25 --dry-run   # วันในอดีตเท่านั้น
+python report_1600.py                                       # สร้างรายงานจากผลที่มีอยู่
+```
 
 ---
 

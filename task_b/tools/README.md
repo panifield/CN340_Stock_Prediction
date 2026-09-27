@@ -49,3 +49,9 @@ SHA-256, ช่วงเวลา, แท่งต่อวันแยกตา
 `trading_costs.py`), แท่งที่ Volume = 0 → เขียนลง `results/intraday_probe.csv`
 
 ไม่มีโมเดลใดถูกเทรนหรือประเมินในสคริปต์นี้ (โมเดล 16:00 = Phase 1D)
+
+## Phase 1D (16:00) — ไม่ได้อยู่ใน tools/
+
+Phase 1D ใช้ `intraday_1600.py` / `tune_1600.py` / `report_1600.py` / `predict_1600.py` ที่ root ของ `task_b/`
+`intraday_probe.py` เป็นแค่ probe ข้อมูล ไม่ใช่โมเดล · สถานะ: ไม่มี historical test · prospective ยังไม่เปิด ·
+`close_bar16` ≠ official SET close · real-time availability ยังไม่ได้พิสูจน์ · ไม่มี executable backtest

@@ -10,6 +10,28 @@
 > → Phase 1D ใช้แนว A · แผนที่ล็อกไว้อยู่ใน `PHASE1D_PLAN.md`
 > (ไม่มีหลักฐานใน repo ว่าอาจารย์อนุมัติ — คำถามในข้อ 5 ยังเป็นคำถามที่ควรยืนยันกับอาจารย์)
 
+## สถานะ Phase 1D (Session 2, 2026-09-27) — development / walk-forward, not a test
+
+- แผนล็อกที่ prereg_commit `0b09905` (`PHASE1D_PLAN.md`) · `tune_1600.py --run` รันครั้งเดียว ·
+  ผลเต็ม + SHA ใน `results/phase1d/` (`summary_1600.md`, `MANIFEST.md`)
+- ผู้ชนะ: ANN alpha 20 (8,4) · RF depth 3 leaf 15 max_features 0.5 · XGB depth 2 lr 0.01 subsample 1.0
+- **ทุก 24 config มี mean relMAE > 1 = MAE แย่กว่า Naive (close_bar16 = close_bar15)** — ผู้ชนะ 1.051–1.057
+  ขณะที่ R2_OOS ของผู้ชนะ ≈ +0.03 ถึง +0.04 (MSE ดีกว่า Naive เล็กน้อย) · ~41–50% ของวันใน eval window
+  ราคาไม่ขยับเลย ⇒ MAE เอื้อการทาย 0 · ไม่มีตัวเลขใดเป็นหลักฐานของ skill
+- economic diagnostic: ผู้ชนะแทบไม่เคยทำนายขนาดการขยับเกินต้นทุน (ANN/RF 0 วัน · XGB 2 วัน จาก 678 วันประเมิน)
+- live: `predict_1600.py` dry-run เท่านั้น (historical dry-run 2026-09-23/24/25 ตรงกับ historical builder)
+
+Time semantics (3 สถานะแยกกัน):
+
+| | สถานะ |
+|---|---|
+| bar semantics (timestamp = เวลาเริ่มแท่ง) | working assumption / **unconfirmed** |
+| price alignment กับ Yahoo 1d | **ยังไม่ได้ตรวจ** (ไม่มีไฟล์ Yahoo 1d) |
+| real-time availability (แท่ง 15:00 พร้อม ณ 16:00) | **ยังไม่ได้พิสูจน์** |
+
+ไม่มี historical test · prospective evaluation ยังไม่เปิด · close_bar16 ≠ official SET close ·
+ไม่มี executable backtest
+
 ---
 
 ## 1. ข้อมูลนี้เป็นอะไร
