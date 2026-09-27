@@ -21,6 +21,7 @@ main.py — งาน C (ขึ้น/ลง)
 import argparse
 import os
 import warnings
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -29,14 +30,18 @@ warnings.filterwarnings("ignore")
 pd.set_option("display.width", 200)
 pd.set_option("display.max_columns", 50)
 
-from config import TICKERS, OUTPUT_DIR, SUSPICIOUS_ACCURACY
+from config import (
+    TICKERS, OUTPUT_DIR, SUSPICIOUS_ACCURACY, FEATURE_SELECTION_METHOD,
+)
 from data_loader import load_stock
 from features import build_features, verify_no_leak
 from targets import build_targets
 from diagnostics import run_all_diagnostics
 from splits import chronological_split
 from models import get_classifiers
+from feature_selection import VALID_METHODS, select_feature_names
 from baselines import get_classification_baselines
+from loss_function import binary_cross_entropy, l2_penalty
 from evaluate import (
     classification_metrics, results_table, print_table,
     print_confusion, compare_to_baseline,
@@ -58,7 +63,44 @@ def _prepare(X, y, extra=None):
     return X, y
 
 
-def run_task_c(X, targets, drop_flat=False, verbose=True, dev=False):
+def _ann_loss_report(pipeline, X_train, y_train, y_val, y_val_proba):
+    """คืนค่า loss ของ ANN หลัง fit เพื่อรายงานผลการเทรนจริง.
+
+    train objective = train BCE + L2 penalty
+    validation รายงานเฉพาะ BCE เพราะ validation ไม่ควรบวก penalty ของ model.
+    """
+    ann = pipeline.named_steps["model"]
+    train_proba = pipeline.predict_proba(X_train)[:, 1]
+    train_bce = binary_cross_entropy(y_train, train_proba)
+    val_bce = binary_cross_entropy(y_val, y_val_proba)
+    l2_term = ann.alpha * l2_penalty(ann.coefs_) / (2 * len(y_train))
+    return {
+        "train_bce": train_bce,
+        "l2_penalty": l2_term,
+        "train_objective": train_bce + l2_term,
+        "val_bce": val_bce,
+        # ค่า loss ของ iteration สุดท้ายที่ sklearn เก็บไว้
+        "sklearn_last_loss": float(ann.loss_),
+        "n_iter": int(ann.n_iter_),
+    }
+
+
+def _validation_prediction_table(index, y_true, y_pred, y_proba):
+    """สร้างตารางผลทำนาย validation ที่อ่านง่ายสำหรับโหมด dev."""
+    table = pd.DataFrame({
+        "Actual": y_true.astype(int).to_numpy(),
+        "Probability_Up": y_proba,
+        "Predicted": np.asarray(y_pred, dtype=int),
+    }, index=index)
+    table.index.name = "Date"
+    table["Correct"] = (table["Actual"] == table["Predicted"])
+    table["Actual_Label"] = table["Actual"].map({0: "ลง/นิ่ง", 1: "ขึ้น"})
+    table["Predicted_Label"] = table["Predicted"].map({0: "ลง/นิ่ง", 1: "ขึ้น"})
+    return table[["Actual_Label", "Probability_Up", "Predicted_Label", "Correct"]]
+
+
+def run_task_c(X, targets, drop_flat=False, verbose=True, dev=False,
+               feature_selection_method=FEATURE_SELECTION_METHOD):
     print("\n" + "=" * 78)
     print("  งาน C : ทำนายว่าราคาปิดขึ้นหรือลงจากเมื่อวาน")
     if dev:
@@ -84,9 +126,29 @@ def run_task_c(X, targets, drop_flat=False, verbose=True, dev=False):
     if not dev:
         X_test, y_test = parts["test"]
 
+    # Feature selection fit บน train เท่านั้น; X_ ดั้งเดิมไม่ถูกแก้ไข
+    selected_features, feature_ranking = select_feature_names(
+        X_train, y_train, feature_selection_method
+    )
+    if feature_selection_method != "none":
+        parts = {
+            split_name: (X_part.loc[:, selected_features], y_part)
+            for split_name, (X_part, y_part) in parts.items()
+        }
+        X_train, y_train = parts["train"]
+        X_val, y_val = parts["val"]
+        if not dev:
+            X_test, y_test = parts["test"]
+        if verbose:
+            print(f"[feature selection] {feature_selection_method}: "
+                  f"เลือก {len(selected_features)}/{X_.shape[1]} features "
+                  "จาก train set เท่านั้น")
+            print("    " + ", ".join(selected_features))
+
     models = get_classifiers()
-    val_results, val_preds = {}, {}
+    val_results, val_preds, val_probas = {}, {}, {}
     test_results, test_preds = {}, {}
+    ann_losses = {}
 
     for name, model in models.items():
         if verbose:
@@ -100,6 +162,12 @@ def run_task_c(X, targets, drop_flat=False, verbose=True, dev=False):
             y_val_proba = None
         val_results[name] = classification_metrics(y_val, y_val_pred, y_val_proba)
         val_preds[name] = y_val_pred
+        val_probas[name] = y_val_proba
+
+        if name == "ANN (MLP)":
+            ann_losses["val"] = _ann_loss_report(
+                model, X_train, y_train, y_val, y_val_proba
+            )
 
         if not dev:
             y_test_pred = model.predict(X_test)
@@ -117,6 +185,16 @@ def run_task_c(X, targets, drop_flat=False, verbose=True, dev=False):
                 print(f"เสร็จ (val acc={val_results[name]['Accuracy']:.4f}, "
                       f"test acc={test_results[name]['Accuracy']:.4f})")
 
+            if name == "ANN (MLP)":
+                loss = ann_losses["val"]
+                print("      ANN loss: "
+                      f"train BCE={loss['train_bce']:.4f} + "
+                      f"L2={loss['l2_penalty']:.4f} "
+                      f"= objective {loss['train_objective']:.4f}; "
+                      f"val BCE={loss['val_bce']:.4f} "
+                      f"(iteration {loss['n_iter']}, "
+                      f"sklearn loss ล่าสุด={loss['sklearn_last_loss']:.4f})")
+
     best = max(val_results, key=lambda n: val_results[n]["Accuracy"])
     if verbose:
         print(f"\n    เลือกโมเดลที่ดีที่สุดจาก val set: {best} "
@@ -126,6 +204,17 @@ def run_task_c(X, targets, drop_flat=False, verbose=True, dev=False):
     X_eval, y_eval = parts[eval_split]
     eval_results = val_results if dev else test_results
     eval_preds = val_preds if dev else test_preds
+
+    validation_predictions = None
+    if dev:
+        # เก็บ prediction ครบทุกแถวของโมเดล ML ทั้ง 3 ตัวเพื่อ export เป็น CSV
+        # ไม่พิมพ์ใน terminal เพราะหุ้นละ 365 แถวต่อโมเดล
+        validation_predictions = {}
+        for name in models:
+            table = _validation_prediction_table(
+                X_val.index, y_val, val_preds[name], val_probas[name]
+            )
+            validation_predictions[name] = table
 
     base_preds = get_classification_baselines(
         y_train, y_eval,
@@ -152,10 +241,15 @@ def run_task_c(X, targets, drop_flat=False, verbose=True, dev=False):
         print("     ให้กลับไปตรวจว่ามี data leakage หรือไม่")
 
     return {"table": df, "preds": eval_preds, "y_test": y_eval,
-            "test_index": X_eval.index, "best_model": best, "stage": eval_split}
+            "test_index": X_eval.index, "best_model": best, "stage": eval_split,
+            "ann_losses": ann_losses, "selected_features": selected_features,
+            "feature_ranking": feature_ranking,
+            "feature_selection_method": feature_selection_method,
+            "validation_predictions": validation_predictions}
 
 
-def run_one_ticker(ticker, dev=False):
+def run_one_ticker(ticker, dev=False,
+                   feature_selection_method=FEATURE_SELECTION_METHOD):
     print("\n\n" + "#" * 78)
     print(f"#  หุ้น: {ticker}  (งาน C)")
     if dev:
@@ -182,7 +276,8 @@ def run_one_ticker(ticker, dev=False):
     else:
         diag = run_all_diagnostics(df, targets, X)
 
-    res = run_task_c(X, targets, dev=dev)
+    res = run_task_c(X, targets, dev=dev,
+                     feature_selection_method=feature_selection_method)
     return {"ticker": ticker, "diag": diag, "c": res}
 
 
@@ -190,9 +285,47 @@ def save_results(all_results):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     for r in all_results:
         t = r["ticker"].replace(".", "_").replace("^", "")
-        path = os.path.join(OUTPUT_DIR, f"{t}_taskC_updown.csv")
+        method = r["c"]["feature_selection_method"]
+        suffix = "" if method == "none" else f"_{method}"
+        path = os.path.join(OUTPUT_DIR, f"{t}_taskC_updown{suffix}.csv")
         r["c"]["table"].to_csv(path, encoding="utf-8-sig")
     print(f"\n[main] บันทึกตารางผลลัพธ์ไว้ที่โฟลเดอร์ '{OUTPUT_DIR}/'")
+
+
+def save_validation_predictions(all_results):
+    """บันทึก prediction จาก dev เป็น 3 CSV แยกตามโมเดล รวมทุกหุ้น.
+
+    ใช้เฉพาะ validation prediction ที่สร้างใน run_one_ticker จึงไม่อ่านหรือ
+    บันทึกข้อมูลจาก test set. Timestamp เดียวกันทำให้รู้ว่า 3 ไฟล์มาจาก run เดียวกัน.
+    """
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    run_at = datetime.now().strftime("%Y%m%d_%H%M%S")
+    by_model = {}
+
+    for result in all_results:
+        predictions = result["c"].get("validation_predictions") or {}
+        for model_name, table in predictions.items():
+            frame = table.reset_index()
+            frame.insert(0, "Ticker", result["ticker"])
+            frame.insert(1, "Model", model_name)
+            by_model.setdefault(model_name, []).append(frame)
+
+    paths = []
+    for model_name, frames in by_model.items():
+        safe_name = (model_name.lower().replace(" ", "_")
+                     .replace("(", "").replace(")", ""))
+        path = os.path.join(
+            OUTPUT_DIR, f"{safe_name}_validation_predictions_{run_at}.csv"
+        )
+        pd.concat(frames, ignore_index=True).to_csv(path, index=False,
+                                                     encoding="utf-8-sig")
+        paths.append(path)
+
+    if paths:
+        print("\n[main] บันทึก prediction ของ validation set แล้ว:")
+        for path in paths:
+            print(f"       {path}")
+    return paths
 
 
 def parse_args():
@@ -202,7 +335,13 @@ def parse_args():
     parser.add_argument(
         "--dev", action="store_true",
         help="โหมดพัฒนา: เทรน+ประเมินบน train/val เท่านั้น "
-             "ไม่แตะ test ไม่บันทึกผล",
+             "ไม่แตะ test; บันทึก prediction validation แยกตามโมเดล",
+    )
+    parser.add_argument(
+        "--feature-selection", choices=sorted(VALID_METHODS),
+        default=FEATURE_SELECTION_METHOD,
+        help="เลือก feature จาก train set: none=ใช้ครบ 33 (ค่าเดิม), "
+             "l1=L1 Logistic Regression, top_k=mutual information Top-K",
     )
     return parser.parse_args()
 
@@ -213,13 +352,16 @@ def main():
     print("=" * 78)
     print("  งาน C : ทำนายขึ้น/ลง (Classification)")
     if args.dev:
-        print("  *** โหมด dev: ไม่แตะ test, ไม่บันทึกผล ***")
+        print("  *** โหมด dev: ไม่แตะ test; บันทึก prediction validation ***")
     print("=" * 78)
 
     all_results = []
     for ticker in TICKERS:
         try:
-            all_results.append(run_one_ticker(ticker, dev=args.dev))
+            all_results.append(run_one_ticker(
+                ticker, dev=args.dev,
+                feature_selection_method=args.feature_selection,
+            ))
         except Exception as e:
             print(f"\n!! {ticker} รันไม่ผ่าน: {type(e).__name__}: {e}")
             import traceback
@@ -227,8 +369,8 @@ def main():
 
     if all_results and not args.dev:
         save_results(all_results)
-    elif args.dev:
-        print("\n[main] โหมด dev เสร็จแล้ว — ไม่บันทึก csv")
+    elif all_results and args.dev:
+        save_validation_predictions(all_results)
 
     print("\nเสร็จสิ้น")
     return all_results

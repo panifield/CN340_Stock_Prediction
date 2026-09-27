@@ -39,14 +39,32 @@ SPLIT_BY_DATE = None
 # 3) Feature engineering — เฉพาะงาน C
 # ---------------------------------------------------------------
 LAG_DAYS = [1, 2, 3, 5, 10]        # ย้อนหลังกี่วัน
-MA_WINDOWS = [5, 10, 20]           # เส้นค่าเฉลี่ย
+# เก็บเฉพาะเส้นสั้นและกลาง เพื่อลด feature ที่สัมพันธ์กันสูงเกินไป
+MA_WINDOWS = [5, 20]
 VOL_WINDOWS = [5, 20]              # ความผันผวน
 RSI_PERIOD = 14
+ATR_PERIOD = 14
+
+# Winsorize เฉพาะ signal ที่เป็น return/การเปลี่ยนแปลง โดยใช้ quantile
+# แบบ expanding (คำนวณจากอดีตถึงวันนั้นเท่านั้น) เพื่อไม่มองข้อมูลอนาคต
+WINSOR_LOWER_QUANTILE = 0.01
+WINSOR_UPPER_QUANTILE = 0.99
+WINSOR_MIN_PERIODS = 60
 
 # ใส่ feature วันในสัปดาห์ไหม
 USE_DAY_OF_WEEK = True
 
 # งาน C ไม่ใช้ feature parity ย้อนหลัง (เฉพาะงาน A เท่านั้น)
+
+# ---------------------------------------------------------------
+# 3.1) Feature selection experiment
+# ---------------------------------------------------------------
+# "none" คือชุดสำรอง/ค่าเดิม: ใช้ครบ 33 features โดยไม่ตัดอะไรออก
+# วิธีอื่นถูก fit จาก train set เท่านั้น แล้วจึงนำชื่อ feature ไปใช้กับ val/test
+FEATURE_SELECTION_METHOD = "none"     # "none", "l1", หรือ "top_k"
+TOP_K_FEATURES = 20                   # ใช้เมื่อ method = "top_k"
+L1_SELECTOR_C = 0.05                  # C ต่ำ -> L1 บีบ coefficient เป็น 0 มากขึ้น
+L1_SELECTOR_MAX_ITER = 5000
 
 
 # ---------------------------------------------------------------
@@ -55,11 +73,12 @@ USE_DAY_OF_WEEK = True
 RANDOM_STATE = 42
 
 ANN_PARAMS = {
-    "hidden_layer_sizes": (64, 32),
+    # ลดขนาดเครือข่ายเพื่อลดการจำ noise ของชุด train
+    "hidden_layer_sizes": (16, 8),
     "activation": "relu",
-    "alpha": 1e-3,              # L2 regularization
-    "learning_rate_init": 1e-3,
-    "max_iter": 500,
+    "alpha": 1e-2,              # เพิ่ม L2 regularization เพื่อลด overfitting
+    "learning_rate_init": 5e-4,
+    "max_iter": 150,
     # ปิด early_stopping: เรามี validation set ที่แบ่งตามเวลาเองอยู่แล้ว
     # (splits.py) ถ้าเปิดไว้ MLPClassifier จะสุ่ม shuffle
     # แบ่ง validation ของตัวเองออกจาก train อีกชุด ซึ่งขัดกับหลัก
@@ -81,6 +100,8 @@ XGB_PARAMS = {
 }
 
 LOGREG_PARAMS = {
+    "penalty": "l2",
+    "solver": "lbfgs",
     "C": 1.0,
     "max_iter": 2000,
     "random_state": RANDOM_STATE,
@@ -103,3 +124,13 @@ SUSPICIOUS_ACCURACY = 0.65
 # ---------------------------------------------------------------
 OUTPUT_DIR = "results"
 SAVE_PLOTS = True
+
+
+# ---------------------------------------------------------------
+# 7) Task 2 — Intraday: ทำนายทิศทางปิดตลาดจากข้อมูลระหว่างวัน
+# ---------------------------------------------------------------
+# ใช้แท่ง 1 ชั่วโมงล่าสุดที่มี timestamp ไม่เกินเวลานี้ แล้วทำนาย Close 16:00
+# หากวันใดไม่มีแท่ง 13:00 (เช่นโครงสร้าง session ต่างกัน) จะ fallback เป็น
+# แท่งก่อนหน้า เพื่อไม่ใช้ข้อมูลอนาคต
+INTRADAY_CUTOFF_HOUR = 13
+INTRADAY_CLOSE_HOUR = 16

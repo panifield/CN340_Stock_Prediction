@@ -22,11 +22,27 @@ python main.py
 ผลลัพธ์จะถูกบันทึกเป็น csv ในโฟลเดอร์ `results/`
 
 **โหมด dev** — ใช้ตอนกำลังปรับ feature/พารามิเตอร์ซ้ำๆ
-เทรน+ประเมินบน train/val เท่านั้น ยังไม่แตะ test เลย ไม่บันทึกผล:
+เทรน+ประเมินบน train/val เท่านั้น ยังไม่แตะ test เลย และบันทึก prediction
+ของ validation เป็น CSV แยกตามโมเดล (รวมทุกหุ้น) ใน `results/`:
 
 ```bash
 python main.py --dev
 ```
+
+## Task 2: ทำนายก่อนตลาดปิดจากข้อมูล Intraday
+
+Task 2 แยกจาก Task 1: ใช้แท่งราคา 1 ชั่วโมงของวันเดียวกันถึง 13:00
+(หรือแท่งล่าสุดก่อนหน้านั้น หากไม่มีแท่ง 13:00) เพื่อทำนายว่า Close 16:00
+จะขึ้นหรือลง/นิ่งจากราคาที่ cutoff. ข้อมูลที่ใช้คือ
+`data_cache/KBANK_BK_1h_730d.csv` และ `ADVANC_BK_1h_730d.csv`
+
+```bash
+python intraday_task2.py --dev  # เลือกโมเดลจาก validation โดยไม่แตะ test
+python intraday_task2.py        # ประเมิน test หลังล็อกการตั้งค่าแล้ว
+```
+
+ผล metrics และ prediction จะถูกบันทึกใน `results/` พร้อม timestamp และไม่ปะปน
+กับผลของ Task 1
 
 **ถ้ารันไม่ได้เพราะเน็ต** ให้เปิด `config.py` แล้วตั้ง
 `USE_SYNTHETIC_DATA = True` เพื่อทดสอบว่าโค้ดทำงานได้
