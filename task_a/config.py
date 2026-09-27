@@ -30,7 +30,7 @@ CACHE_DIR = "data_cache"
 #
 # ถ้าอาจารย์หมายถึง ">= 0.5" ให้ปัดขึ้น ให้เปลี่ยน ROUND_MODE เป็น "gte"
 ROUND_THRESHOLD = 0.5
-ROUND_MODE = "gt"      # "gt" = มากกว่าเท่านั้น, "gte" = มากกว่าหรือเท่ากับ
+ROUND_MODE = "gte"      # "gt" = มากกว่าเท่านั้น, "gte" = มากกว่าหรือเท่ากับ
 
 
 # ---------------------------------------------------------------
@@ -46,23 +46,28 @@ SPLIT_BY_DATE = None
 # ตัวอย่าง:
 # SPLIT_BY_DATE = {"train_end": "2022-12-31", "val_end": "2023-12-31"}
 
+# ใช้เฉพาะข้อมูลตั้งแต่วันนี้เป็นต้นไป (ค่าเริ่มต้น None = ใช้ทั้งหมด 10 ปี
+# ตามเดิม ไม่กระทบ pipeline หลักเลย) สำหรับรัน subperiod เป็นการวิเคราะห์
+# เสริมเท่านั้น — *** เตือน: ถ้าวันที่นี้ตกอยู่ในช่วง test เดิม
+# (2025-02-21 -> 2026-08-28) แปลว่า subperiod ทับกับ test ที่เห็นผลไปแล้ว
+# ห้ามใช้ผลจาก subperiod แบบนี้อ้างเป็นการทดสอบใหม่ที่ยังไม่เห็นผล ***
+SUBPERIOD_START = None
+# ตัวอย่าง: SUBPERIOD_START = "2025-09-07"
+
 
 # ---------------------------------------------------------------
-# 4) Feature engineering — เฉพาะงาน A
+# 4) Feature engineering — เฉพาะงาน A (ทำงานในหน่วย "tick" ทั้งหมด)
 # ---------------------------------------------------------------
-LAG_DAYS = [1, 2, 3, 5, 10]        # ย้อนหลังกี่วัน
-MA_WINDOWS = [5, 10, 20]           # เส้นค่าเฉลี่ย
-VOL_WINDOWS = [5, 20]              # ความผันผวน
-RSI_PERIOD = 14
-
-# ใส่ feature วันในสัปดาห์ไหม
-USE_DAY_OF_WEEK = True
-
-# ใส่ feature "เลขหลักบาท / parity ย้อนหลัง" ไหม
-# (สำคัญมาก เพราะ parity มันเหนียว โมเดลจะเรียนรู้จากตรงนี้ได้)
-# *** เฉพาะงาน A เท่านั้นที่ต้องการ feature กลุ่มนี้ ***
-USE_PARITY_LAGS = True
-PARITY_LAG_DAYS = [1, 2, 3, 5]
+# ตัดทิ้ง: RSI, MACD, Bollinger, MA cross, ราคาดิบ, return %
+# เพราะไม่มีข้อมูลเกี่ยวกับ parity มีแต่ noise (parity ขึ้นกับ "ขยับกี่ tick"
+# ไม่ใช่ "ขยับกี่ %") ใช้ feature ที่วัดเป็นหน่วย tick แทนทั้งหมด
+DTICK_LAGS = [1, 2, 3]             # Δticks ดิบย้อนหลังกี่วัน
+DTICK_PARITY_LAGS = [1, 2]         # Δticks mod 2 ย้อนหลังกี่วัน
+ZERO_RATE_WINDOW = 20              # หน้าต่างคำนวณสัดส่วนวันที่ Δticks = 0
+ATR_PERIOD = 14
+STD_WINDOW = 20
+VOLUME_MA_WINDOW = 20
+BOUNDARY_LEVELS = [100, 200, 400]  # ขอบเขต tick regime ของ SET (บาท)
 
 
 # ---------------------------------------------------------------
@@ -71,9 +76,12 @@ PARITY_LAG_DAYS = [1, 2, 3, 5]
 RANDOM_STATE = 42
 
 ANN_PARAMS = {
-    "hidden_layer_sizes": (64, 32),
+    # เดิม (64,32) + alpha=1e-3 overfit หนักมาก (train~0.97 vs val~0.49)
+    # เพราะ network ใหญ่เกินไปเทียบกับ signal ที่มีแทบไม่มีเลยในงานนี้
+    # -> ลดขนาด network ลงมาก + เพิ่ม L2 แรงขึ้นเยอะ
+    "hidden_layer_sizes": (16,),
     "activation": "relu",
-    "alpha": 1e-3,              # L2 regularization
+    "alpha": 0.5,               # L2 regularization (เดิม 1e-3)
     "learning_rate_init": 1e-3,
     "max_iter": 500,
     # ปิด early_stopping: เรามี validation set ที่แบ่งตามเวลาเองอยู่แล้ว
@@ -85,23 +93,27 @@ ANN_PARAMS = {
     "random_state": RANDOM_STATE,
 }
 
-RF_PARAMS = {
+LGBM_PARAMS = {
+    # ตั้งค่าแบบระวัง overfit หนักๆ เพราะ target (y_flip) มี signal อ่อนมาก
+    "num_leaves": 7,
+    "max_depth": 3,
+    "learning_rate": 0.02,
     "n_estimators": 400,
-    "max_depth": 8,
-    "min_samples_leaf": 20,     # กันไม่ให้ overfit noise
-    "n_jobs": -1,
-    "random_state": RANDOM_STATE,
-}
-
-XGB_PARAMS = {
-    "n_estimators": 400,
-    "max_depth": 4,
-    "learning_rate": 0.05,
+    "min_child_samples": 100,
+    "reg_lambda": 10,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
-    "reg_lambda": 1.0,
     "random_state": RANDOM_STATE,
     "n_jobs": -1,
+    "verbose": -1,
+}
+
+LOGREG_PARAMS = {
+    # ไม่ได้มุ่งเอาชนะ accuracy แต่ไว้ดู coefficient ว่า feature ไหนมีผลจริง
+    "penalty": "l2",
+    "C": 1.0,
+    "max_iter": 1000,
+    "random_state": RANDOM_STATE,
 }
 
 

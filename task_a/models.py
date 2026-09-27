@@ -1,16 +1,27 @@
 """
 models.py — งาน A (คู่/คี่)
 ==========================
-นิยามโมเดลของงาน A: ANN + Random Forest + XGBoost
+นิยามโมเดลของงาน A: ANN + LightGBM + Logistic Regression
 
 *** เรื่อง ANN ***
 ที่นี่ใช้ MLPClassifier ของ sklearn ซึ่งเป็น Multi-Layer Perceptron = ANN
 ตามนิยามจริง ข้อดี: ไม่ต้องลง TensorFlow ให้ยุ่งยาก
 ถ้าอาจารย์อยากได้ Keras ดูตัวอย่างการสลับที่ท้ายไฟล์
 
+*** ทำไมเปลี่ยนจาก RF/XGBoost เป็น LightGBM + Logistic Regression ***
+- LightGBM (ตัวหลัก) ตั้งค่าแบบระวัง overfit หนักๆ (leaf น้อย, depth ตื้น,
+  learning rate ต่ำ, reg_lambda สูง) เพราะ signal ของ y_flip อ่อนมาก
+  จับ interaction สำคัญ (เช่น vol × n_mod2) ได้ ซึ่ง linear model
+  จับไม่ได้ถ้าไม่ใส่ interaction term เอง
+- Logistic Regression + L2 ไม่ได้ใส่มาเพื่อชนะ accuracy แต่เพื่อดู
+  coefficient ว่า feature ไหนมีผลจริง เอาไปเขียนรายงานได้
+- รวมกับ ANN แล้วโมเดลทั้ง 3 ตัวครอบคลุม 3 ประเภท: เชิงเส้น (LogReg) /
+  tree-based (LightGBM) / neural network (ANN) ไม่ใช่โมเดลคล้ายกัน 3 ตัว
+
 *** เรื่อง Scaling ***
-ANN ต้อง standardize ไม่งั้นไม่ converge
-RF ไม่ต้องก็ได้ แต่ทำไปด้วยไม่เสียหาย
+ANN และ Logistic Regression ต้อง standardize ไม่งั้นไม่ converge / ตี
+ความหมาย coefficient ผิด
+LightGBM ไม่ต้องก็ได้ แต่ยัง impute เหมือนกัน
 
 ใช้ Pipeline ของ sklearn ครอบไว้ ทำให้ scaler ถูก fit
 เฉพาะบน train set โดยอัตโนมัติ -> ไม่มีทาง leak
@@ -20,11 +31,11 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.neural_network import MLPClassifier
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 
-from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
 
-from config import ANN_PARAMS, RF_PARAMS, XGB_PARAMS, RANDOM_STATE
+from config import ANN_PARAMS, LGBM_PARAMS, LOGREG_PARAMS, RANDOM_STATE
 
 
 def _scaled(estimator):
@@ -45,15 +56,15 @@ def _unscaled(estimator):
 
 
 def get_classifiers():
-    """ANN + Random Forest + XGBoost สำหรับงาน A (คู่/คี่)"""
+    """ANN + LightGBM + Logistic Regression สำหรับงาน A (คู่/คี่)"""
     ann = _scaled(MLPClassifier(**ANN_PARAMS))
-    rf = _unscaled(RandomForestClassifier(
-        class_weight="balanced", **RF_PARAMS
-    ))
-    xgb = _unscaled(XGBClassifier(
-        eval_metric="logloss", **XGB_PARAMS
-    ))
-    return {"ANN (MLP)": ann, "Random Forest": rf, "XGBoost": xgb}
+    lgbm = _unscaled(LGBMClassifier(**LGBM_PARAMS))
+    logreg = _scaled(LogisticRegression(**LOGREG_PARAMS))
+    return {
+        "ANN (MLP)": ann,
+        "LightGBM": lgbm,
+        "Logistic Regression": logreg,
+    }
 
 
 # ---------------------------------------------------------------

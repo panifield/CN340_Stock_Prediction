@@ -74,6 +74,31 @@ def to_int_baht(prices, threshold=ROUND_THRESHOLD, mode=ROUND_MODE):
     return pd.Series(result.values, index=s.index, name="int_baht")
 
 
+def tick_size(prices):
+    """
+    ขนาด tick ของ SET ตามช่วงราคา (ต้องเช็คกับประกาศตลาดหลักทรัพย์อีกรอบ
+    เพราะมีการปรับเป็นระยะ) ใช้เป็น feature เท่านั้น ไม่ใช่ตัวสร้าง label
+    คู่/คี่ (label ยังคงมาจาก to_int_baht ตรงๆ เหมือนเดิม)
+
+        < 2      -> 0.01
+        2 - 5    -> 0.02
+        5 - 10   -> 0.05
+        10 - 25  -> 0.10
+        25 - 100 -> 0.25
+        100- 200 -> 0.50
+        200- 400 -> 1.00
+        >= 400   -> 2.00
+    """
+    s = pd.Series(prices).astype(float)
+    bounds = [2, 5, 10, 25, 100, 200, 400]
+    values = [0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 1.00, 2.00]
+    conditions = [s < b for b in bounds]
+    out = np.select(conditions, values[:-1], default=values[-1])
+    out = pd.Series(out, index=s.index, name="tick_size")
+    out[s.isna()] = np.nan
+    return out
+
+
 def parity(int_prices):
     """
     0 = เลขคู่ (even)

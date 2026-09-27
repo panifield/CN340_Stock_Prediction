@@ -5,7 +5,16 @@
 `task_c/` โดยสมบูรณ์ ไม่ import ไฟล์จากที่อื่นเลย แก้อะไรในนี้ไม่กระทบ
 โฟลเดอร์อื่น
 
-โมเดล: **ANN (MLP) + Random Forest + XGBoost**
+โมเดล: **ANN (MLP) + LightGBM + Logistic Regression**
+(เดิมใช้ Random Forest + XGBoost แต่ทั้งคู่เป็น tree-based เหมือนกัน
+สลับมาใช้ LightGBM เป็นตัวหลัก + Logistic Regression ไว้ดู coefficient
+เพื่อให้ครบ 3 ประเภท: เชิงเส้น / tree-based / neural network)
+
+**target ที่เทรนจริงคือ `y_flip`** (parity วันนี้พลิกจากเมื่อวานไหม)
+ไม่ใช่ parity ตรงๆ แล้วค่อย reconstruct กลับเป็น parity เต็มบาทตอนท้าย
+ด้วยสูตร deterministic `parity_hat = (prev_parity + flip_hat) mod 2`
+เหตุผล: ทำให้ feature ที่วัดเป็นหน่วย tick (Δticks, n mod 2 ฯลฯ) ใช้งาน
+ได้ตรงกับสิ่งที่โมเดลต้องทาย — ดู `targets.py` / `features.py`
 
 ---
 
@@ -40,11 +49,11 @@ python main.py --dev
 | `config.py` | ค่าตั้งทั้งหมดของงาน A | อยากเปลี่ยนหุ้น / พารามิเตอร์โมเดล / สัดส่วน split / feature windows |
 | `rounding.py` | ปัดเศษตามกฎอาจารย์ + คำนวณคู่/คี่ | อาจารย์เปลี่ยนกฎการปัด |
 | `data_loader.py` | โหลดข้อมูลราคาหุ้น + ทำความสะอาด | เปลี่ยนแหล่งข้อมูล / ใช้ไฟล์ csv เอง |
-| `features.py` | สร้าง feature + shift(1) กัน leak (รวม feature กลุ่ม parity ที่มีเฉพาะงานนี้) | อยากเพิ่ม/ลด indicator |
-| `targets.py` | สร้าง target `y_parity` | เปลี่ยนนิยาม target |
+| `features.py` | สร้าง feature หน่วย tick (16 ตัว) + shift(1) กัน leak | อยากเพิ่ม/ลด indicator |
+| `targets.py` | สร้าง `y_parity` (ground truth) + `y_flip` (target ที่เทรนจริง) | เปลี่ยนนิยาม target |
 | `splits.py` | แบ่ง train/val/test ตามเวลา (ห้าม shuffle) | อยากใช้ walk-forward |
-| `baselines.py` | Baseline: Majority / Persistence / Random | เพิ่ม baseline ใหม่ |
-| `models.py` | นิยามโมเดล ANN / Random Forest / XGBoost | เปลี่ยนโมเดล / สลับไปใช้ Keras (ดูตัวอย่างท้ายไฟล์) |
+| `baselines.py` | Baseline: Majority / Persistence / Markov(1) | เพิ่ม baseline ใหม่ |
+| `models.py` | นิยามโมเดล ANN / LightGBM / Logistic Regression | เปลี่ยนโมเดล / สลับไปใช้ Keras (ดูตัวอย่างท้ายไฟล์) |
 | `evaluate.py` | คำนวณ metric (Accuracy, F1, ROC-AUC ฯลฯ) + ตาราง | เพิ่ม metric |
 | `diagnostics.py` | วิเคราะห์ข้อมูลก่อนเทรน (tick size, flip rate, leak check) | — |
 | `main.py` | ตัวหลัก เรียกทุกอย่าง | เปลี่ยนขั้นตอนการทดลอง |

@@ -1,0 +1,7 @@
+﻿ticker,model,oof_accuracy,E_abs_return,roundtrip_cost_pct,breakeven_accuracy,beats_breakeven
+KBANK.BK,ANN (MLP),0.4964,0.01145,0.338,0.6475,no
+KBANK.BK,LightGBM,0.4887,0.01145,0.338,0.6475,no
+KBANK.BK,Logistic Regression,0.5019,0.01145,0.338,0.6475,no
+ADVANC.BK,ANN (MLP),0.5229,0.00932,0.338,0.6813,no
+ADVANC.BK,LightGBM,0.5185,0.00932,0.338,0.6813,no
+ADVANC.BK,Logistic Regression,0.5223,0.00932,0.338,0.6813,no

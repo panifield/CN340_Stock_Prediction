@@ -1,0 +1,5 @@
+﻿ticker,model,parity_accuracy,flip_accuracy,LogLoss,log2_reference,excess_over_log2,worse_than_nothing,Brier,brier_reference,ECE,mean_confidence
+KBANK,lr,0.505,0.505,0.7159,0.6931,0.0228,YES,0.2568,0.25,0.05,0.5541
+KBANK,lgbm,0.4778,0.4778,0.7095,0.6931,0.0164,YES,0.258,0.25,0.0812,0.5586
+ADVANC,lr,0.5322,0.5322,0.9697,0.6931,0.2766,YES,0.2681,0.25,0.0704,0.6023
+ADVANC,lgbm,0.5117,0.5117,0.7087,0.6931,0.0155,YES,0.2573,0.25,0.0656,0.5773

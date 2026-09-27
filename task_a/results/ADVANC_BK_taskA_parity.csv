@@ -1,0 +1,5 @@
+﻿,Accuracy,Precision,Recall,F1,ROC-AUC,Pred_1_Rate
+ANN (MLP),0.5726,0.5625,0.3214,0.4091,0.573,0.263
+Baseline: Majority,0.5397,0.0,0.0,0.0,,0.0
+Baseline: Markov(1),0.5397,0.0,0.0,0.0,,0.0
+Baseline: Persistence,0.5041,0.4615,0.4643,0.4629,,0.463
