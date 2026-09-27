@@ -3,3 +3,4 @@
 raw_data_intraday/*.csv -text
 raw_data/*.csv -text
 raw_data_sources/** -text
+results/phase1d/** -text
