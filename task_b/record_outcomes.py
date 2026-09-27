@@ -7,16 +7,21 @@ record_outcomes.py — จับคู่คำทำนายใน prediction 
                               --out results/dryrun/outcomes_dryrun.csv --include-dry-run
 
 ทำอะไร:
-  อ่าน prediction log -> หาแถวที่ target_date มีราคาปิดจริงใน raw_data/ แล้ว
+  อ่าน prediction log -> หาแถวที่ผลจริงออกแล้ว
   -> เขียนผลจริงต่อท้าย results/outcomes.csv (append-only · ไม่แก้ prediction log)
 
 กติกา:
-  - รองรับเฉพาะ prediction_type = next_day (same_day_1600 ยังไม่เปิด official)
-  - ผลจริงมาจากแหล่งเดียวกับที่โมเดลเทรน: raw_data/ (Investing.com) -- ห้ามใช้ Yahoo
+  - ผลจริงมาจากแหล่งเดียวกับที่โมเดลนั้นเทรน:
+      next_day      : ราคาปิดใน raw_data/ (Investing.com)
+      same_day_1600 : close_bar16 จาก Yahoo (live snapshot ที่ดาวน์โหลดหลัง 17:00 ของวันนั้น
+                      ใน raw_data_intraday_live/ หรือไฟล์ล็อก raw_data_intraday/)
+                      · actual_return = close_bar16 / close_bar15 − 1 (prev_close = close_bar15)
   - ค่าเริ่มต้นนับเฉพาะแถว official (is_dry_run = False) · dry-run ต้องสั่ง --include-dry-run
   - key เดิมที่บันทึกแล้วจะไม่ถูกเขียนซ้ำหรือเขียนทับ
-  - prev_close ใน log ต้องตรงกับราคาปิดของ data_cutoff ใน raw_data ปัจจุบัน
-    ถ้าไม่ตรง (ข้อมูลถูก revise) ยังบันทึก แต่ติดธง prev_close_match = False
+  - prev_close ใน log ต้องตรงกับค่าในแหล่งผลจริง (next_day: ราคาปิดวัน data_cutoff ·
+    same_day_1600: close_bar15 ของวันนั้น) ถ้าไม่ตรง (ข้อมูลถูก revise) ยังบันทึก
+    แต่ติดธง prev_close_match = False
+  - log dry-run ของ predict_1600 (schema ต่างกัน) ถูกแปลงคอลัมน์ให้ตรงก่อนอัตโนมัติ
 """
 
 import argparse
@@ -32,7 +37,7 @@ BANGKOK = timezone(timedelta(hours=7))
 LOG_PATH = OUTPUT_DIR / "prediction_log.csv"
 OUTCOMES_PATH = OUTPUT_DIR / "outcomes.csv"
 KEY = ["prediction_type", "ticker", "target_date", "model"]
-SUPPORTED_TYPES = ["next_day"]
+SUPPORTED_TYPES = ["next_day", "same_day_1600"]
 
 OUTCOME_COLUMNS = [
     "recorded_at", "prediction_type", "ticker", "target_date", "data_cutoff", "model",
@@ -48,10 +53,27 @@ def _is_true(s):
     return s.astype(str).str.lower().isin(["true", "1"])
 
 
-def compute_outcomes(log, closes, source, sha, recorded_at, include_dry_run=False):
+def normalize_log(log):
+    """แปลง log dry-run ของ predict_1600 (close_bar15 ฯลฯ) ให้มีคอลัมน์แบบ prediction log"""
+    if "prev_close" in log.columns:
+        return log
+    if "close_bar15" not in log.columns:
+        raise ValueError("ไม่รู้จัก schema ของ log")
+    log = log.copy()
+    log["prev_close"] = log["close_bar15"]
+    log["predicted_close"] = log["predicted_close_bar16"]
+    log["data_cutoff"] = log["feature_window_end"]
+    log["config_tag"] = "phase1d-modeA"
+    return log
+
+
+def compute_outcomes(log, closes, source, sha, recorded_at, include_dry_run=False,
+                     intraday=None):
     """
-    log    : DataFrame ของ prediction log
-    closes : {ticker: Series ราคาปิดจริง index = วันที่}
+    log      : DataFrame ของ prediction log
+    closes   : {ticker: Series ราคาปิดจริง index = วันที่}   (next_day)
+    intraday : callable(ticker, target) -> (C16, C15, source, sha) หรือ None   (same_day_1600)
+               ถ้าไม่ให้มา แถว same_day_1600 จะถูกข้าม
     คืน DataFrame ผลจริงของแถวที่ target_date มีราคาปิดแล้ว (คอลัมน์ OUTCOME_COLUMNS)
 
     error_return    = predicted_return − actual_return
@@ -64,14 +86,24 @@ def compute_outcomes(log, closes, source, sha, recorded_at, include_dry_run=Fals
     log = log[log["prediction_type"].isin(SUPPORTED_TYPES)]
     rows = []
     for _, r in log.iterrows():
-        c = closes.get(r["ticker"])
-        if c is None:
-            continue
-        t, cut = pd.Timestamp(r["target_date"]), pd.Timestamp(r["data_cutoff"])
-        if t not in c.index:
-            continue                          # ผลจริงยังไม่ออก / ยังไม่อัปเดต raw_data
-        actual_close = float(c.loc[t])
+        t = pd.Timestamp(r["target_date"])
         prev = float(r["prev_close"])
+        if r["prediction_type"] == "same_day_1600":
+            got = intraday(r["ticker"], t) if intraday is not None else None
+            if got is None:
+                continue                      # ยังไม่มี snapshot หลังตลาดปิด
+            actual_close, c15, src, dsha = got
+            prev_match = bool(np.isclose(c15, prev, rtol=0, atol=1e-9))
+        else:
+            c = closes.get(r["ticker"])
+            if c is None:
+                continue
+            cut = pd.Timestamp(r["data_cutoff"])
+            if t not in c.index:
+                continue                      # ผลจริงยังไม่ออก / ยังไม่อัปเดต raw_data
+            actual_close = float(c.loc[t])
+            prev_match = bool(cut in c.index and np.isclose(c.loc[cut], prev, rtol=0, atol=1e-9))
+            src, dsha = source.get(r["ticker"], ""), sha.get(r["ticker"], "")
         actual_ret = actual_close / prev - 1
         pred_ret = float(r["predicted_return"])
         err = pred_ret - actual_ret
@@ -88,11 +120,24 @@ def compute_outcomes(log, closes, source, sha, recorded_at, include_dry_run=Fals
             "actual_close": actual_close, "actual_return": actual_ret,
             "error_return": err, "abs_error": abs(err), "abs_error_baht": abs(err) * prev,
             "naive_abs_error": naive, "beat_naive": beat,
-            "prev_close_match": bool(cut in c.index and np.isclose(c.loc[cut], prev,
-                                                                   rtol=0, atol=1e-9)),
-            "outcome_source": source.get(r["ticker"], ""), "outcome_sha256": sha.get(r["ticker"], ""),
+            "prev_close_match": prev_match,
+            "outcome_source": src, "outcome_sha256": dsha,
         })
     return pd.DataFrame(rows, columns=OUTCOME_COLUMNS)
+
+
+def intraday_outcome_lookup():
+    """close_bar16 จริงจาก Yahoo: snapshot หลัง 17:00 ของวันนั้น หรือไฟล์ล็อก (โหลดครั้งเดียว)"""
+    from intraday_1600 import load_ticker_bars
+    from live_1600 import find_snapshots, outcome_close_bar16
+    cache = {}
+
+    def lookup(ticker, target):
+        if ticker not in cache:
+            cache[ticker] = (find_snapshots(ticker), load_ticker_bars(ticker))
+        snaps, locked = cache[ticker]
+        return outcome_close_bar16(ticker, target, snaps, locked)
+    return lookup
 
 
 def append_new(outcomes, path):
@@ -125,7 +170,7 @@ def main(argv=None):
     if args.include_dry_run and out_path.resolve() == OUTCOMES_PATH.resolve():
         raise ValueError("ห้ามเขียนผลของ dry-run ลง results/outcomes.csv -- ใช้ --out ไฟล์อื่น")
 
-    log = pd.read_csv(log_path)
+    log = normalize_log(pd.read_csv(log_path))
     skipped = log[~log["prediction_type"].isin(SUPPORTED_TYPES)]
     if len(skipped):
         print(f"[outcomes] ข้าม {len(skipped)} แถวที่ prediction_type ยังไม่รองรับ "
@@ -136,7 +181,8 @@ def main(argv=None):
         source[t] = f"raw_data/{raw_data_path(t).name} (investing.com)"
         sha[t] = dataset_fingerprint(raw_data_path(t))
     now = datetime.now(BANGKOK).isoformat(timespec="seconds")
-    out = compute_outcomes(log, closes, source, sha, now, args.include_dry_run)
+    out = compute_outcomes(log, closes, source, sha, now, args.include_dry_run,
+                           intraday=intraday_outcome_lookup())
     n = append_new(out, out_path)
     pending = log[(log["prediction_type"].isin(SUPPORTED_TYPES))
                   & (args.include_dry_run | ~_is_true(log["is_dry_run"]))]

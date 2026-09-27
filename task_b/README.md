@@ -104,13 +104,56 @@ RF / XGBoost ใช้ `n_jobs=-1` → ผล numerically reproducible within fl
 - ทุก config แพ้ Naive ด้วย MAE (mean relMAE ผู้ชนะ 1.051–1.057) · R2_OOS ผู้ชนะ ≈ +0.03–0.04
 - **prospective evaluation ยังไม่เปิด** · **real-time availability ยังไม่ได้พิสูจน์** ·
   `close_bar16` ≠ official SET close · ไม่มี executable backtest
-- official `same_day_1600` ยังไม่เปิด (`predict_live.py` มีแค่ `next_day`) · `predict_1600.py` รองรับ `--dry-run` เท่านั้น
+- official `same_day_1600`: **โค้ดพร้อม แต่ยังปิดอยู่** จนกว่าจะมี `PHASE1D_LIVE_APPROVAL.md` (คนเขียน + commit)
+  · `predict_live.py` ยังมีแค่ `next_day` (16:00 ใช้ `predict_1600.py`)
 - ห้ามวางตัวเลข Phase 1D ในตารางเดียวกับ daily model
 
 ```bash
-python predict_1600.py --target-date 2026-09-25 --dry-run   # วันในอดีตเท่านั้น
-python report_1600.py                                       # สร้างรายงานจากผลที่มีอยู่
+python predict_1600.py --target-date 2026-09-25 --dry-run   # dry-run ย้อนหลังจากไฟล์ล็อก
+python report_1600.py                                       # สร้างรายงานจากผลค้นหาที่มีอยู่
 ```
+
+### ขั้นตอนเปิดใช้ 16:00 จริง
+
+**ขั้น 1 — พิสูจน์ real-time availability (live dry-run หลายวัน เช่น 5 วันทำการ)** ทุกวัน:
+
+```bash
+# 16:00–16:05 ดาวน์โหลดข้อมูลรายชั่วโมง (Yahoo) ของทั้งสองหุ้น แล้วเก็บเป็น snapshot
+python tools/save_intraday_snapshot.py KBANK.BK  <ไฟล์> --source yahoo
+python tools/save_intraday_snapshot.py ADVANC.BK <ไฟล์> --source yahoo
+python predict_1600.py --target-date <วันนี้> --dry-run --latest-snapshot      # ต้องเสร็จก่อน 16:30
+# หลัง 17:00 ดาวน์โหลดอีกรอบ (เป็นผลจริง + ตรวจว่าแท่ง 15:00 ตอน 16:00 จบแล้วจริง)
+python tools/save_intraday_snapshot.py KBANK.BK  <ไฟล์> --source yahoo
+python tools/save_intraday_snapshot.py ADVANC.BK <ไฟล์> --source yahoo
+python tools/check_snapshot_1600.py --date <วันนี้>    # -> results/dryrun/availability_1600.csv
+```
+
+ผ่านเมื่อทุกวัน: snapshot 16:00 มีแท่ง 10–15 ครบ (`required_bars_complete`) · แท่ง 15:00 ไม่เปลี่ยน
+เมื่อเทียบกับ snapshot หลัง 17:00 (`bar15_changed_vs_later = False`) · ทำนายเสร็จก่อน 16:30
+
+**ขั้น 2 — คนเขียน `PHASE1D_LIVE_APPROVAL.md` แล้ว commit** (โค้ดไม่สร้างไฟล์นี้เอง):
+
+```
+APPROVED_BY: <ชื่อ>
+AVAILABILITY_EVIDENCE: results/dryrun/availability_1600.csv (วันที่ ... ถึง ...)
+FIRST_OFFICIAL_DATE: YYYY-MM-DD
+FREEZE_COMMIT: <commit hash ที่ freeze โค้ด>
+```
+
+**ขั้น 3 — official ทุกวันทำการ (16:00–16:30):**
+
+```bash
+python tools/save_intraday_snapshot.py ... (ทั้งสองหุ้น)
+python predict_1600.py --target-date <วันนี้> --official --latest-snapshot
+git add results/prediction_log.csv results/prediction_log_1600_meta.csv raw_data_intraday_live/
+git commit -m "prediction log 1600: <วันนี้>" && git push                          # ก่อน 16:30
+# หลัง 17:00: เก็บ snapshot ผลจริง แล้ว
+python record_outcomes.py && python report_live.py
+```
+
+guard ของ `--official`: ไฟล์อนุมัติครบ · โค้ด/แผน/ผลค้นหา commit แล้ว · log รอบก่อน commit แล้ว ·
+รันในวันเดียวกับ target ช่วง 16:00–16:30 · snapshot แหล่ง Yahoo ดาวน์โหลด ณ/หลัง 16:00 ครบทุกหุ้น ·
+ห้ามทำนายซ้ำ key เดิม · ข้อมูลที่ schema เดิมไม่มีช่อง (เวลา/แหล่ง snapshot) อยู่ใน `results/prediction_log_1600_meta.csv`
 
 ---
 

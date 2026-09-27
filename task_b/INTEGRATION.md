@@ -57,15 +57,30 @@ python task_b/tools/append_investing.py <ไฟล์ KBANK> <ไฟล์ ADVAN
 
 ข้อมูลปัจจุบันใน `raw_data/` สิ้นสุด **2026-09-25**
 
-## 3. ข้อมูลรายชั่วโมง (แบบที่ 2) — ยังไม่เปิดใช้จริง
+## 3. ข้อมูลรายชั่วโมง (แบบที่ 2) — ส่งผ่าน `tools/save_intraday_snapshot.py`
+
+รูปแบบ CSV ที่ตัวเชื่อมต้องเขียน:
 
 - คอลัมน์: `Datetime,Adj Close,Close,High,Low,Open,Volume`
 - `Datetime` ต้องมี timezone `+07:00` และเป็น **เวลาเริ่มของแท่ง** (แท่ง 15:00 = 15:00→16:00)
 - ต้องมีแท่ง 10:00, 11:00, 12:00, 14:00, 15:00 ของวันที่ทำนาย (แท่ง 13:00 ไม่ถูกใช้)
-- snapshot ใหม่เก็บใน `task_b/raw_data_intraday_live/` พร้อม SHA-256 และเวลาดาวน์โหลด
-  · **ห้ามแก้ `task_b/raw_data_intraday/`** (ล็อก SHA ไว้)
-- สถานะ: `predict_1600.py` รองรับ `--dry-run` เท่านั้น · ก่อนใช้จริงต้องเพิ่มโหมด official และพิสูจน์ว่า
-  แท่ง 15:00 มาถึงครบก่อน 16:00 (ยังไม่ได้พิสูจน์) — ดู `task_b/PHASE1D_PLAN.md` ข้อ 16–18
+- ควรมีประวัติย้อนหลังหลายวัน (อย่างน้อยตั้งแต่ 2026-09-25) เพื่อให้วันหลังไฟล์ล็อกครบ
+
+เก็บเป็น snapshot (ห้ามวางไฟล์เอง — สคริปต์เขียน SHA + เวลาดาวน์โหลดให้):
+
+```bash
+python task_b/tools/save_intraday_snapshot.py KBANK.BK  <ไฟล์.csv> --source yahoo
+python task_b/tools/save_intraday_snapshot.py ADVANC.BK <ไฟล์.csv> --source yahoo
+```
+
+- เก็บที่ `task_b/raw_data_intraday_live/<YYYYMMDD>/` · **ห้ามแก้ `task_b/raw_data_intraday/`** (ล็อก SHA)
+- `--source` ต้องบอกแหล่งจริง · `predict_1600.py` รับเฉพาะ `yahoo` (แหล่งที่ใช้เทรน)
+  → ถ้าจะใช้ข้อมูลรายชั่วโมงจาก SETTRADE ต้องเทียบกับ Yahoo และทำแผน Phase 1D รอบสองก่อน
+- snapshot ที่ใช้ทำนายต้องดาวน์โหลด **ณ/หลัง 16:00** · snapshot ที่ใช้เป็นผลจริงต้องดาวน์โหลด **หลัง 17:00**
+
+สถานะ: โค้ด official พร้อมแล้ว แต่ **ยังเปิดไม่ได้** จนกว่าจะพิสูจน์ real-time availability
+(live dry-run หลายวัน + `tools/check_snapshot_1600.py`) แล้วคนเขียน `task_b/PHASE1D_LIVE_APPROVAL.md` + commit
+— ดูขั้นตอนใน `task_b/README.md` หัวข้อ Phase 1D
 
 ## 4. API key
 
@@ -91,6 +106,7 @@ python task_b/tools/append_investing.py <ไฟล์ KBANK> <ไฟล์ ADVAN
 python task_b/tests/test_pipeline.py            # 18/18
 python task_b/tests/test_live_eval.py           # 5/5
 python task_b/tests/test_append_investing.py    # 10/10
+python task_b/tests/test_live_1600.py           # 12/12
 python task_b/tests/test_phase1d.py             # 21/21 (~3 นาที)
 python task_b/main.py --dev
 git diff --stat task_b/results/                 # *_val.csv ต้องไม่เปลี่ยน

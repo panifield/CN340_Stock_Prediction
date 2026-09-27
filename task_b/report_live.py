@@ -26,7 +26,11 @@ from trading_costs import cost_round_trip
 
 BANGKOK = timezone(timedelta(hours=7))
 MIN_N = 20
-DEADLINE_HOUR = {"next_day": 9}          # ต้องออกคำทำนายก่อน 09:00 ของ target_date
+# ช่วงเวลาที่คำทำนายต้องออก (นับจากเที่ยงคืนของ target_date · เวลาไทย)
+#   next_day      : ก่อน 09:00 ของวัน t (ไม่มีขอบล่าง -- ทำได้ตั้งแต่หลังตลาดปิดวัน t−1)
+#   same_day_1600 : ระหว่าง 16:00 ถึงก่อน 16:30 ของวัน t (ก่อน 16:00 แท่ง 15:00 ยังไม่จบ)
+WINDOW = {"next_day": (None, pd.Timedelta(hours=9)),
+          "same_day_1600": (pd.Timedelta(hours=16), pd.Timedelta(hours=16, minutes=30))}
 GROUP = ["prediction_type", "ticker", "model"]
 
 
@@ -76,15 +80,18 @@ def coverage(log, closes):
         if c is not None:
             span = c.index[(c.index >= dates.min()) & (c.index <= dates.max())]
             missing = [str(d.date()) for d in span if d not in set(dates)]
-        hour = DEADLINE_HOUR.get(ptype)
-        late = 0
-        if hour is not None:
-            gen = pd.to_datetime(g["generated_at"])
-            dl = dates.dt.tz_localize(BANGKOK) + pd.Timedelta(hours=hour)
-            late = int((gen.to_numpy() >= dl.to_numpy()).sum())
+        early = late = 0
+        if ptype in WINDOW:
+            lo, hi = WINDOW[ptype]
+            gen = pd.to_datetime(g["generated_at"]).to_numpy()
+            day0 = dates.dt.tz_localize(BANGKOK)
+            late = int((gen >= (day0 + hi).to_numpy()).sum())
+            if lo is not None:
+                early = int((gen < (day0 + lo).to_numpy()).sum())
         rows.append({"prediction_type": ptype, "ticker": ticker, "model": model,
                      "predictions": len(g), "missing_trading_days": len(missing),
-                     "missing_dates": " ".join(missing), "late_predictions": late})
+                     "missing_dates": " ".join(missing), "early_predictions": early,
+                     "late_predictions": late})
     return pd.DataFrame(rows)
 
 
@@ -122,7 +129,7 @@ def render(summary, cov, label):
         if len(c):
             L += ["", "### ความครบและตรงเวลา", ""]
             L += md_table(c, ["ticker", "model", "predictions", "missing_trading_days",
-                              "missing_dates", "late_predictions"])
+                              "missing_dates", "early_predictions", "late_predictions"])
         L.append("")
     if summary.empty:
         L += ["ยังไม่มีคำทำนายที่มีผลจริง", ""]

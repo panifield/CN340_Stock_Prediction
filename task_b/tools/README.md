@@ -71,3 +71,15 @@ python main.py --dev && git diff --stat results/                                
 - **เตือน** (ตรวจด้วยตา): วันทำการที่ขาด (วันหยุด SET?) · Volume = 0 · Change % ไม่ตรงราคาที่คำนวณ
 - เก็บต้นฉบับ byte-for-byte + SHA ใน `raw_data_sources/investing_<YYYYMMDD>/SOURCES.md`
   แล้วรัน `check_raw_update.check_ticker` (+ cross-check intraday แบบเตือน) ให้อัตโนมัติ
+
+## save_intraday_snapshot.py / check_snapshot_1600.py — live snapshot ของโมเดล 16:00
+
+```bash
+python tools/save_intraday_snapshot.py KBANK.BK <ไฟล์.csv> --source yahoo     # เก็บ snapshot + meta (SHA, เวลา)
+python tools/check_snapshot_1600.py --date 2026-09-29                         # ตรวจ real-time availability
+```
+
+- snapshot เก็บที่ `raw_data_intraday_live/<YYYYMMDD>/` แบบ byte-for-byte พร้อม `.meta.json` · ห้ามแก้หลังบันทึก
+- `check_snapshot_1600.py` ต่อท้าย `results/dryrun/availability_1600.csv`: เวลาดาวน์โหลด, แท่งที่มี,
+  แท่ง 15:00 เปลี่ยนไหมเมื่อเทียบกับ snapshot ที่ดาวน์โหลดทีหลัง, แท่งที่ไม่ตรงไฟล์ล็อก
+- ขั้นตอนเปิดใช้ 16:00 จริงอยู่ใน `README.md` หัวข้อ Phase 1D
