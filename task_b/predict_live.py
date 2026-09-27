@@ -51,10 +51,33 @@ BANGKOK = timezone(timedelta(hours=7))
 # ---------------------------------------------------------------
 
 def _git(*args):
-    """เรียก git ในโฟลเดอร์ task_b คืน stdout ที่ strip แล้ว"""
-    return subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=BASE_DIR,
-    ).stdout.strip()
+    """
+    เรียก git แล้ว raise ถ้าล้มเหลว -- ห้ามมี path ที่คืนค่าว่างแบบเงียบ ๆ (§1.4)
+
+    ถ้าคืน string ว่างตอน git พัง (ไม่ใช่ repo / git ไม่อยู่ใน PATH / repo เสีย)
+    guard จะตีความว่า "tree สะอาด" และ code_commit จะผิด -- ซึ่ง code_commit
+    คือเหตุผลเดียวที่ prediction log มีน้ำหนักเป็นหลักฐาน
+    """
+    result = subprocess.run(
+        ["git", *args],
+        capture_output=True, text=True, cwd=BASE_DIR,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"คำสั่ง git ล้มเหลว: git {' '.join(args)}\n"
+            f"  returncode = {result.returncode}\n"
+            f"  stderr     = {result.stderr.strip()}\n"
+            "  ถ้าอ่านสถานะ git ไม่ได้ ห้ามบันทึก official prediction"
+        )
+    return result.stdout.strip()
+
+
+def get_code_commit(dry_run):
+    """commit hash เต็มของโค้ดที่รันอยู่ -- ห้ามมีค่า 'unknown' เข้า log"""
+    commit = _git("rev-parse", "HEAD")
+    if len(commit) < 7:
+        raise RuntimeError(f"อ่าน commit hash ไม่ได้ (ได้ {commit!r})")
+    return commit
 
 
 def check_clean_tree():
@@ -264,7 +287,7 @@ def main():
         check_clean_tree()
         check_prediction_log_committed()
 
-    commit = _git("rev-parse", "--short", "HEAD") or "unknown"
+    commit = get_code_commit(args.dry_run)
     generated_at = datetime.now(BANGKOK).isoformat(timespec="seconds")
 
     rows = []
