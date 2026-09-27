@@ -1,0 +1,306 @@
+"""
+predict_live.py — ทำนายคู่/คี่ของราคาปิด "วันนี้" จาก snapshot ณ 16:00 จริง
+==============================================================================
+
+    python predict_live.py --target-date 2026-09-28
+    python predict_live.py --target-date 2026-09-28 --dry-run
+
+*** ต้องรันหลัง 16:00 น. (เวลาไทย) ของวันซื้อขายเท่านั้น ***
+ก่อนหน้านั้นแท่ง "15:00" (= ราคา ณ 16:00 ตามที่ features_a2.py นิยาม)
+ของวันนี้ยังไม่มีข้อมูลครบ สคริปต์จะปฏิเสธการทำนายอย่างเป็นทางการถ้า
+เรียกก่อนเวลา (ใช้ --dry-run เพื่อทดสอบนอกเวลาได้)
+
+*** ไม่ใช่การเปิด test set ***
+main_a2.py = historical evaluation (walk-forward CV + test ที่ยิงไปแล้ว)
+ไฟล์นี้ = prospective prediction ของวันที่ยังไม่ปิดตลาด
+
+*** ทำไมต้องดึงข้อมูลสดเอง ไม่ใช้ data/*_1h_730d.csv เดิม ***
+ไฟล์ 1h เดิมค้างที่วันสุดท้ายตอนดึงครั้งก่อน (ไม่ auto-update) และ
+features_a2.build_daily_context_features() เดิมก็เรียก task_a/load_stock()
+ซึ่งอ่านจาก data_cache/ ที่แช่แข็งไว้ที่ END_DATE ของ config.py เหมือนกัน
+ไฟล์นี้จึงดึงทั้งสองแหล่งสดใหม่ทุกครั้ง แยกจาก path ที่ backtest ใช้
+
+*** ห้ามให้สคริปต์เดาวันที่เอง ***
+บังคับระบุ --target-date เสมอ (ต้องตรงกับวันที่ของราคาปิดที่กำลังทำนาย)
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import warnings
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+
+warnings.filterwarnings("ignore")
+
+HERE = Path(__file__).resolve().parent
+TASK_A = HERE / ".." / "task_a"
+sys.path.insert(0, str(TASK_A))
+
+from config import RANDOM_STATE  # noqa: E402
+from rounding import to_int_baht, parity as parity_fn  # noqa: E402
+from data_loader import clean as clean_daily  # noqa: E402
+from main import _prepare, _reconstruct_parity  # noqa: E402
+
+import features_a2  # noqa: E402
+from main_a2 import (  # noqa: E402
+    get_classifiers, walk_forward_eval, baseline_persistence_1600,
+)
+
+OUTPUT_DIR = HERE / "results"
+LOG_PATH = OUTPUT_DIR / "prediction_log.csv"
+DRYRUN_LOG_PATH = OUTPUT_DIR / "dryrun" / "prediction_log_dryrun.csv"
+BANGKOK = timezone(timedelta(hours=7))
+
+TICKERS = {"KBANK.BK": "KBANK", "ADVANC.BK": "ADVANC"}
+START_DATE = "2016-08-26"
+
+KEY = ["ticker", "target_date"]
+LOG_COLUMNS = [
+    "generated_at", "ticker", "target_date", "bar_1600_time", "train_rows",
+    "model", "price_1600", "parity_1600", "predicted_flip_proba",
+    "predicted_parity", "predicted_label", "is_dry_run",
+]
+
+
+# ---------------------------------------------------------------
+# ดึงข้อมูลสด — แยกจาก data/*_1h_730d.csv และ task_a/data_cache/ เดิม
+# ---------------------------------------------------------------
+
+def fetch_live_1h(yf_ticker):
+    df = yf.download(yf_ticker, interval="1h", period="730d",
+                     auto_adjust=False, progress=False)
+    if df is None or len(df) == 0:
+        raise RuntimeError(f"ดึง 1h ของ {yf_ticker} ไม่ได้")
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    idx = df.index
+    if idx.tz is None:
+        idx = idx.tz_localize("UTC")
+    df.index = idx.tz_convert("Asia/Bangkok")
+    return df
+
+
+def fetch_live_daily(yf_ticker):
+    end_exclusive = (pd.Timestamp.now(tz=BANGKOK).normalize()
+                     + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    df = yf.download(yf_ticker, start=START_DATE, end=end_exclusive,
+                     auto_adjust=False, progress=False)
+    if df is None or len(df) == 0:
+        raise RuntimeError(f"ดึงราคาปิดรายวันของ {yf_ticker} ไม่ได้")
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+    df.index = pd.to_datetime(df.index)
+    df.index.name = "Date"
+    return clean_daily(df, verbose=False)
+
+
+def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
+                      verbose=True):
+    print("\n" + "#" * 78)
+    print(f"#  หุ้น: {yf_ticker}  ->  ทำนาย {pd.Timestamp(target_date).date()}")
+    print("#" * 78)
+
+    df_1h = fetch_live_1h(yf_ticker)
+    df_daily = fetch_live_daily(yf_ticker)
+
+    today = pd.Timestamp(target_date).date()
+    today_bars = df_1h[df_1h.index.date == today]
+    has_1500_bar = (pd.Timestamp("15:00").time() in
+                    [t.time() for t in today_bars.index])
+
+    now_bkk = pd.Timestamp.now(tz=BANGKOK)
+    if not has_1500_bar:
+        msg = (f"ยังไม่มีแท่ง 15:00 ของ {today} (= ราคา ณ 16:00) — "
+              f"ตอนนี้เวลา {now_bkk.strftime('%H:%M')} น. "
+              f"ต้องรันหลัง ~16:00 น. ของวันซื้อขาย")
+        if allow_incomplete:
+            print(f"    !! {msg} (ข้ามไปเพราะ --dry-run)")
+        else:
+            raise RuntimeError(msg)
+
+    intraday = features_a2.build_intraday_features(
+        yf_ticker, short_name, df_1h=df_1h)
+    daily_ctx = features_a2.build_daily_context_features(
+        yf_ticker, df=df_daily)
+
+    close_daily = df_daily["Close"].copy()
+    close_daily.index = pd.to_datetime(close_daily.index)
+
+    common = intraday.index.intersection(daily_ctx.index)
+    common_hist = common[common.date < np.datetime64(today)] \
+        if hasattr(common, "date") else common
+    # ประวัติสำหรับเทรน: ทุกวันก่อนวันนี้ที่มีทั้ง feature และราคาปิดจริงแล้ว
+    hist_dates = [d for d in common if d.date() < today and d in close_daily.index]
+    if len(hist_dates) < 100:
+        raise RuntimeError(f"ประวัติมีแค่ {len(hist_dates)} วัน น้อยเกินจะเทรน")
+
+    X_hist = pd.concat([intraday.loc[hist_dates].drop(columns=["price_1600"]),
+                       daily_ctx.loc[hist_dates]], axis=1)
+    X_hist = X_hist.replace([np.inf, -np.inf], np.nan)
+
+    close_hist = close_daily.loc[hist_dates]
+    y_parity_hist = parity_fn(to_int_baht(close_hist))
+    parity_1600_hist = parity_fn(to_int_baht(intraday.loc[hist_dates, "price_1600"]))
+    yflip_hist = pd.Series((y_parity_hist.values + parity_1600_hist.values) % 2,
+                          index=hist_dates)
+    parity1600_hist_s = pd.Series(parity_1600_hist.values, index=hist_dates)
+    yparity_hist_s = pd.Series(y_parity_hist.values, index=hist_dates)
+    dist_hist = X_hist["dist_to_boundary_1600"]
+
+    print(f"[live] ประวัติสำหรับเทรน: {len(hist_dates)} วัน "
+          f"({min(hist_dates).date()} -> {max(hist_dates).date()})")
+
+    y_oof, preds_oof, probas_oof = walk_forward_eval(
+        X_hist, yflip_hist, parity1600_hist_s, yparity_hist_s, dist_hist,
+        verbose=verbose)
+    model_names = ["ANN (MLP)", "LightGBM", "Logistic Regression"]
+    accs = {}
+    for name in model_names:
+        pred = preds_oof[name]
+        yt = y_oof.loc[pred.index]
+        accs[name] = float(np.mean(pred.values == yt.values))
+    best = max(accs, key=accs.get)
+    print(f"    เลือกจาก walk-forward OOF (n={len(y_oof)}): "
+          + ", ".join(f"{k}={v:.4f}" for k, v in accs.items())
+          + f"  -> ใช้ {best}")
+
+    final_model = get_classifiers()[best]
+    final_model.fit(X_hist, yflip_hist)
+
+    if today not in intraday.index.date:
+        raise RuntimeError(f"ไม่มี feature ของวันนี้ ({today}) เลย")
+    today_ts = [d for d in intraday.index if d.date() == today][0]
+    X_live = pd.concat([
+        intraday.loc[[today_ts]].drop(columns=["price_1600"]),
+        daily_ctx.reindex([today_ts]),
+    ], axis=1)
+    X_live = X_live.reindex(columns=X_hist.columns)
+    X_live = X_live.replace([np.inf, -np.inf], np.nan)
+
+    price_1600 = float(intraday.loc[today_ts, "price_1600"])
+    parity_1600 = float(parity_fn(to_int_baht(pd.Series([price_1600]))).iloc[0])
+
+    flip_pred = final_model.predict(X_live)
+    try:
+        flip_proba = final_model.predict_proba(X_live)[:, 1]
+    except Exception:
+        flip_proba = np.array([np.nan])
+    parity_pred, _ = _reconstruct_parity(
+        np.array([parity_1600]), flip_pred, flip_proba)
+
+    label = "คี่" if parity_pred[0] == 1 else "คู่"
+    bar_time = [t.strftime("%H:%M") for t in today_bars.index
+               if t.time() == pd.Timestamp("15:00").time()]
+    bar_time = bar_time[0] if bar_time else None
+
+    print(f"    โมเดล: {best}")
+    print(f"    ราคา ณ 16:00 = {price_1600:.2f}  "
+          f"(parity = {'คี่' if parity_1600 == 1 else 'คู่'})")
+    print(f"    P(พลิก parity ตอนปิด) = {flip_proba[0]:.4f}")
+    print(f"    ทำนายราคาปิดวันนี้ ({today}): parity = {label}")
+
+    return {
+        "ticker": yf_ticker,
+        "target_date": today.isoformat(),
+        "bar_1600_time": bar_time,
+        "train_rows": len(hist_dates),
+        "model": best,
+        "price_1600": price_1600,
+        "parity_1600": parity_1600,
+        "predicted_flip_proba": round(float(flip_proba[0]), 6),
+        "predicted_parity": float(parity_pred[0]),
+        "predicted_label": label,
+    }
+
+
+def check_no_duplicate(new_rows, log_path=LOG_PATH):
+    if not log_path.exists():
+        return
+    old = pd.read_csv(log_path)
+    if old.empty:
+        return
+    for k in KEY:
+        old[k] = old[k].astype(str)
+    probe = new_rows[KEY].astype(str)
+    merged = probe.merge(old[KEY].drop_duplicates(), on=KEY, how="inner")
+    if len(merged):
+        raise RuntimeError(
+            "มีคำทำนายสำหรับ (ticker, target_date) นี้อยู่แล้วใน log:\n"
+            f"{merged.drop_duplicates().to_string(index=False)}\n"
+            "ปฏิเสธการเขียนซ้ำ"
+        )
+
+
+def append_log(rows, log_path, columns=LOG_COLUMNS):
+    rows = rows[columns]
+    if log_path.exists():
+        header = pd.read_csv(log_path, nrows=0).columns.tolist()
+        if header != columns:
+            raise RuntimeError(
+                f"schema ของ {log_path.name} ไม่ตรงกับที่โค้ดกำหนดตอนนี้\n"
+                f"  ในไฟล์: {header}\n  ในโค้ด : {columns}"
+            )
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    rows.to_csv(log_path, mode="a", header=not log_path.exists(), index=False)
+    print(f"\n[log] เขียนต่อท้าย {len(rows)} แถว -> {log_path}")
+
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="ทำนายคู่/คี่ของราคาปิดวันนี้ จาก snapshot ณ 16:00"
+    )
+    p.add_argument("--target-date", required=True,
+                  help="วันที่กำลังทำนาย YYYY-MM-DD (ต้องเป็นวันนี้ตามปฏิทินตลาด)")
+    p.add_argument("--dry-run", action="store_true",
+                  help="ทดสอบ: อนุญาตรันก่อน 16:00 (feature ไม่ครบ), "
+                       "ข้าม duplicate guard, เขียนลง dryrun log แทน")
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    print("=" * 78)
+    print("  Task A2 : Live Prediction (คู่/คี่ ณ 16:00 -> ราคาปิด)")
+    print(f"  target_date = {args.target_date}")
+    if args.dry_run:
+        print("  *** DRY RUN — ไม่ใช่คำทำนายอย่างเป็นทางการ ***")
+    print("=" * 78)
+
+    generated_at = datetime.now(BANGKOK).isoformat(timespec="seconds")
+
+    rows = [predict_one_ticker(t, short, args.target_date, args.dry_run)
+           for t, short in TICKERS.items()]
+    out = pd.DataFrame(rows)
+    out["generated_at"] = generated_at
+    out["is_dry_run"] = args.dry_run
+    out = out[LOG_COLUMNS]
+
+    log_path = DRYRUN_LOG_PATH if args.dry_run else LOG_PATH
+    if not args.dry_run:
+        check_no_duplicate(out)
+    append_log(out, log_path)
+
+    print("\n" + "=" * 78)
+    print(out[["ticker", "target_date", "model", "predicted_label",
+              "predicted_flip_proba"]].to_string(index=False))
+    print("=" * 78)
+    if args.dry_run:
+        print("\n*** DRY RUN — ไม่แตะ production log ***")
+    else:
+        print("\nอย่าลืม commit + push log:")
+        print("  git add task_a2/results/prediction_log.csv")
+        print(f"  git commit -m 'A2 prediction log: {args.target_date}' && git push")
+    return out
+
+
+if __name__ == "__main__":
+    main()

@@ -49,12 +49,16 @@ def _dist_to_round_boundary_ticks(price, tick):
     return dist_baht / tick
 
 
-def build_intraday_features(ticker, ticker_safe):
+def build_intraday_features(ticker, ticker_safe, df_1h=None):
     """
     คืน DataFrame index=date ของ feature ทั้งหมดที่มาจากข้อมูล intraday
     วันเดียวกัน (ไม่เกิน 16:00) — ไม่ใช่ daily feature จาก Task A
+
+    df_1h: ถ้าใส่มา (เช่น จาก live fetch ของ predict_live.py) จะใช้ตัวนี้
+    แทนการอ่านไฟล์ data/{ticker_safe}_1h_730d.csv ที่แช่แข็งไว้
     """
-    df_1h = load_1h(ticker_safe)
+    if df_1h is None:
+        df_1h = load_1h(ticker_safe)
     df_1h = df_1h.sort_index()
 
     rows = {}
@@ -123,10 +127,16 @@ def build_intraday_features(ticker, ticker_safe):
     return out
 
 
-def build_daily_context_features(ticker):
+def build_daily_context_features(ticker, df=None):
     """feature รายวันเดิมจาก Task A (ข้อมูลถึงวัน t-1 เท่านั้น อยู่แล้ว
-    โดยธรรมชาติของ features.py — ไม่มี leak เพิ่มเข้ามาจากตรงนี้)"""
-    df = load_stock(ticker, verbose=False)
+    โดยธรรมชาติของ features.py — ไม่มี leak เพิ่มเข้ามาจากตรงนี้)
+
+    df: ถ้าใส่มา (เช่น จาก live fetch) จะใช้ตัวนี้แทน load_stock(ticker)
+    ที่อ่านจาก task_a/data_cache/ ที่แช่แข็งไว้ (ดูปัญหาที่เจอใน
+    predict_live.py — cache นั้นไม่อัปเดตเอง)
+    """
+    if df is None:
+        df = load_stock(ticker, verbose=False)
     X = task_a_features.build_features(df, verbose=False)
     return X
 

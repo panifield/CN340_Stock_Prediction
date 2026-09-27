@@ -52,6 +52,12 @@ def _prepare(X, y, extra=None):
     X = X.loc[idx]
     y = y.loc[idx]
 
+    # vol_ratio_prev = log(volume/MA) ถ้า volume=0 บางวันจะได้ -inf ซึ่ง
+    # SimpleImputer จัดการไม่ได้ (ต่างจาก NaN) — เดิมไม่เคยเจอเพราะ
+    # data_cache/ แช่แข็งช่วงที่ไม่โดนวันแบบนี้พอดี แต่ live data (ช่วง
+    # เวลาเปลี่ยนไปเรื่อยๆ) เจอแน่นอนสักวัน แปลงเป็น NaN ไว้กันล่วงหน้า
+    X = X.replace([np.inf, -np.inf], np.nan)
+
     # ตัดแถวที่ feature เป็น NaN เกินครึ่ง (ช่วงต้นที่ rolling ยังไม่ครบ)
     ok = X.isna().mean(axis=1) < 0.5
     X, y = X[ok], y[ok]
