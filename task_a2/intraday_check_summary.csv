@@ -1,0 +1,5 @@
+﻿ticker,interval,period,n_bars,n_days,date_start,date_end,n_distinct_bar_times,first_bar_time_typical,last_bar_time_typical,ends_at_1600,exceeds_1600,n_irregular_days,n_total_days,typical_bars_per_day,match_daily_close_pct,n_days_compared,covers_since_20250907,note
+KBANK.BK,1h,730d,4926,722,2023-10-02,2026-09-25,7,10:00:00,16:00:00,True,False,122,722,7,45.7,702,True,
+KBANK.BK,5m,60d,3472,57,2026-07-06,2026-09-25,61,10:00:00,16:25:00,True,True,5,57,61,43.2,37,True,
+ADVANC.BK,1h,730d,4924,722,2023-10-02,2026-09-25,7,10:00:00,16:00:00,True,False,123,722,7,40.6,702,True,
+ADVANC.BK,5m,60d,3476,57,2026-07-06,2026-09-25,61,10:00:00,16:25:00,True,True,1,57,61,43.2,37,True,

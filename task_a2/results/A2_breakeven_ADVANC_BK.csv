@@ -1,0 +1,4 @@
+﻿ticker,model,oof_accuracy,breakeven_accuracy,beats_breakeven
+ADVANC.BK,ANN (MLP),0.5049,0.6888,no
+ADVANC.BK,LightGBM,0.5293,0.6888,no
+ADVANC.BK,Logistic Regression,0.478,0.6888,no
