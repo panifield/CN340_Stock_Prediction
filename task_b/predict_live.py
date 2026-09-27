@@ -224,7 +224,7 @@ def predict_one_ticker(ticker, target_date, as_of=None, expected_cutoff=None,
                 "  ถ้าข้อมูลใหม่กว่าที่คาด -> แก้ --expected-cutoff ให้ตรงความจริง"
             )
 
-    fitted = fit_live_models(X_prep, y_prep)
+    fitted, half_lives = fit_live_models(X_prep, y_prep)
 
     rows = []
     for name, model in fitted.items():
@@ -234,6 +234,7 @@ def predict_one_ticker(ticker, target_date, as_of=None, expected_cutoff=None,
             "ticker": ticker,
             "data_cutoff": data_cutoff.date().isoformat(),
             "train_rows": len(X_prep),
+            "half_life": half_lives[name],   # ค่าที่ใช้จริงของโมเดลในแถวนี้ (§3.5)
             "model": name,
             "predicted_return": ret,
             "prev_close": prev_close,
@@ -316,7 +317,8 @@ def main():
     out["prediction_type"] = args.prediction_type
     out["target_date"] = pd.Timestamp(args.target_date).date().isoformat()
     out["code_commit"] = commit
-    out["half_life"] = None                  # ยังไม่มี recency weighting (§3)
+    # None -> ค่าว่างใน CSV · Int64 เพื่อไม่ให้ 1000 กลายเป็น "1000.0"
+    out["half_life"] = out["half_life"].astype("Int64")
     out["config_tag"] = CONFIG_TAG
     out["is_dry_run"] = args.dry_run
     out = out[LOG_COLUMNS]

@@ -158,3 +158,20 @@ CONFIG_TAG = "phase1b-untuned"
 
 if not CONFIG_TAG.strip():
     raise ValueError("config.CONFIG_TAG ต้องไม่ว่าง")
+
+
+# ---------------------------------------------------------------
+# 8) Recency weighting (feedback ข้อ 7) -- §3
+# ---------------------------------------------------------------
+# หน่วย = จำนวนแถว (วันทำการ) ที่น้ำหนักลดลงครึ่งหนึ่ง
+# None = ไม่ถ่วงน้ำหนัก (พฤติกรรมเดิมทุกอย่าง)
+#
+# เป็น dict "ต่อโมเดล" เพราะ §4 stage 1 เลือก half-life แยกแต่ละโมเดล
+# (ใช้ค่าเดียวกันทั้ง KBANK และ ADVANC -- เหมือน ANN_PARAMS/RF_PARAMS/XGB_PARAMS)
+# key ต้องตรงกับชื่อใน models.get_regressors() ทุกตัวอักษร
+# ค่าทั้งหมดถูกเลือกด้วย §4 stage 1 -- ตอนนี้ยังเป็น None ทั้งหมด
+RECENCY_HALF_LIFE = {
+    "ANN (MLP)":     None,
+    "Random Forest": None,
+    "XGBoost":       None,
+}

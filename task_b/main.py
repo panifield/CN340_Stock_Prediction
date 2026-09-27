@@ -31,6 +31,7 @@ from sklearn.preprocessing import StandardScaler
 
 from config import (
     TICKERS, OUTPUT_DIR, SPLIT_BY_DATE, LOCK_PATH, REQUIRED_LOCK_FIELDS,
+    RECENCY_HALF_LIFE,
 )
 from data_loader import load_stock
 from features import build_features, verify_no_leak
@@ -38,6 +39,7 @@ from targets import build_targets
 from diagnostics import run_all_diagnostics
 from splits import chronological_split, prepare_xy
 from models import get_regressors
+from weighting import recency_weights
 from baselines import get_regression_baselines
 from evaluate import (
     regression_metrics, results_table, print_table, compare_to_baseline,
@@ -110,10 +112,18 @@ def run_task_b(X, targets, use_test, verbose=True):
     for name, model in get_regressors().items():
         if verbose:
             print(f"    เทรน {name} ...", end=" ", flush=True)
+        # recency weighting (§3.3) -- คำนวณในลูปเพราะแต่ละโมเดลมี half-life ของตัวเอง
+        # คำนวณหลัง prepare_xy + chronological_split แล้ว -> ยาวเท่า X_train เป๊ะ
+        half_life = RECENCY_HALF_LIFE[name]      # KeyError = ชื่อไม่ตรง -> ต้องพัง ไม่ใช่เงียบ
+        w_train = recency_weights(len(X_train), half_life)
+        # key "model__sample_weight" = step "model" ใน Pipeline
+        # StandardScaler / SimpleImputer ใน pipeline ถูก fit แบบไม่ถ่วงน้ำหนัก -- จงใจ
+        # เพราะ scaler ควรสะท้อนการกระจายของ training set ที่มีอยู่จริง
+        fit_params = {} if w_train is None else {"model__sample_weight": w_train}
         wrapped = TransformedTargetRegressor(
             regressor=model, transformer=StandardScaler()
         )
-        wrapped.fit(X_train, y_train)
+        wrapped.fit(X_train, y_train, **fit_params)
 
         y_val_pred = wrapped.predict(X_val)
         val_results[name] = regression_metrics(y_val, y_val_pred, prev_close_val)

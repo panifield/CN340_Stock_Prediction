@@ -31,7 +31,10 @@ from sklearn.ensemble import RandomForestRegressor
 
 from xgboost import XGBRegressor
 
-from config import ANN_PARAMS, ANN_SEEDS, RF_PARAMS, XGB_PARAMS
+from config import (
+    ANN_PARAMS, ANN_SEEDS, RF_PARAMS, XGB_PARAMS, RECENCY_HALF_LIFE,
+)
+from weighting import recency_weights
 
 
 class SeedAveragedRegressor(RegressorMixin, BaseEstimator):
@@ -41,11 +44,24 @@ class SeedAveragedRegressor(RegressorMixin, BaseEstimator):
         self.estimator = estimator
         self.seeds = seeds
 
-    def fit(self, X, y):
-        self.estimators_ = [
-            clone(self.estimator).set_params(random_state=s).fit(X, y)
-            for s in self.seeds
-        ]
+    def fit(self, X, y, sample_weight=None):
+        """
+        sample_weight ถูกส่งต่อให้ทุก seed ตรง ๆ (MLPRegressor รองรับตั้งแต่ sklearn 1.7)
+        sample_weight = None -> เรียก fit(X, y) แบบเดิมทุกประการ
+        (ต้องให้ผลเหมือนก่อนเพิ่มฟีเจอร์นี้เป๊ะ)
+        """
+        if sample_weight is not None and len(sample_weight) != len(X):
+            raise ValueError(
+                f"sample_weight ยาว {len(sample_weight)} แต่ X มี {len(X)} แถว"
+            )
+        self.estimators_ = []
+        for s in self.seeds:
+            est = clone(self.estimator).set_params(random_state=s)
+            if sample_weight is None:
+                est.fit(X, y)
+            else:
+                est.fit(X, y, sample_weight=sample_weight)
+            self.estimators_.append(est)
         return self
 
     def predict(self, X):
@@ -96,16 +112,28 @@ def fit_live_models(X, y, verbose=True):
 
     *** ห้ามเอาโมเดลจากฟังก์ชันนี้ไปรายงานเป็นผล test set เด็ดขาด ***
     มันเห็นช่วง test ไปแล้ว -- คนละวัตถุประสงค์ คนละไฟล์ คนละ log
+
+    recency weighting (§3.5): half-life อ่านจาก config.RECENCY_HALF_LIFE
+    ตัวเดียวกับ main.py และคำนวณน้ำหนักด้วย recency_weights() ตัวเดียวกัน
+    -> แถวใหม่สุดของข้อมูล live ได้น้ำหนักมากสุด · ห้าม hardcode / ห้ามมี default แยก
+
+    คืน (fitted, half_lives) -- half_lives[name] คือค่าที่ใช้จริง ไว้บันทึกลง log
     """
-    fitted = {}
+    fitted, half_lives = {}, {}
     for name, model in get_regressors().items():
+        half_life = RECENCY_HALF_LIFE[name]      # KeyError = ชื่อไม่ตรง -> ต้องพัง
+        w = recency_weights(len(X), half_life)
+        fit_params = {} if w is None else {"model__sample_weight": w}
         if verbose:
+            print(f"[live] {name}: recency half-life = {half_life} "
+                  f"({'ถ่วงน้ำหนัก' if half_life else 'ไม่ถ่วงน้ำหนัก'})")
             print(f"    เทรน {name} บน {len(y)} แถว ...", end=" ", flush=True)
         wrapped = TransformedTargetRegressor(
             regressor=model, transformer=StandardScaler()
         )
-        wrapped.fit(X, y)
+        wrapped.fit(X, y, **fit_params)
         fitted[name] = wrapped
+        half_lives[name] = half_life
         if verbose:
             print("เสร็จ")
-    return fitted
+    return fitted, half_lives

@@ -220,6 +220,93 @@ def test_shape_real_baselines():
         assert np.isnan(s["Rho"]), (name, s)
 
 
+def _wrap(model):
+    """เส้นทางเดียวกับ main.py: TransformedTargetRegressor -> Pipeline -> model"""
+    from sklearn.compose import TransformedTargetRegressor
+    from sklearn.preprocessing import StandardScaler
+    return TransformedTargetRegressor(regressor=model, transformer=StandardScaler())
+
+
+def test_no_weight_is_identical():
+    """
+    RECENCY_HALF_LIFE = None -> ทั้ง 3 โมเดลต้องทำนายเหมือนไม่มี §3 เป๊ะ (§3.6)
+    เทียบ fit(X, y, **fit_params) ที่สร้างจาก recency_weights(n, None)
+    กับ fit(X, y) ตรง ๆ บนข้อมูลจริง (ใช้ 400 แถวแรกของ train เพื่อความเร็ว)
+    """
+    from models import get_regressors
+    from weighting import recency_weights
+    from targets import build_targets
+    from splits import prepare_xy
+    df = _dev_df()
+    X, y = prepare_xy(build_features(df, verbose=False),
+                      build_targets(df, verbose=False)["y_return"], verbose=False)
+    X, y = X.iloc[:400], y.iloc[:400]
+    X_eval = build_features(df, verbose=False).loc[X.index[-50:]]
+    def fresh(name):
+        # n_jobs=1 เฉพาะใน test: RF n_jobs=-1 รวมผลต้นไม้แบบขนานลำดับไม่แน่นอน
+        # -> fit(X, y) สองครั้งเหมือนกันทุกอย่างยังต่างกันระดับ 1e-18
+        # ถ้าไม่ปิด การเทียบ "เป๊ะ" จะไม่มีความหมาย (ค่า production ไม่ถูกแตะ)
+        m = get_regressors()[name]
+        if "n_jobs" in m.named_steps["model"].get_params():
+            m.set_params(model__n_jobs=1)
+        return _wrap(m)
+    for name in get_regressors():
+        w = recency_weights(len(X), None)
+        assert w is None
+        fit_params = {} if w is None else {"model__sample_weight": w}
+        a = fresh(name).fit(X, y, **fit_params).predict(X_eval)
+        b = fresh(name).fit(X, y).predict(X_eval)
+        np.testing.assert_array_equal(a, b, err_msg=name)
+
+
+def test_recency_weights_shape():
+    """นิยามน้ำหนัก: normalize, ใหม่กว่าหนักกว่า, ห่าง half_life = ครึ่งหนึ่ง (§3.6)"""
+    from weighting import recency_weights
+    w = recency_weights(1000, half_life=100)
+    assert len(w) == 1000
+    assert np.isclose(w.mean(), 1.0)
+    assert w[-1] == w.max() and np.all(np.diff(w) > 0)
+    assert np.isclose(w[-1 - 100] / w[-1], 0.5)
+    assert recency_weights(1000, None) is None
+    for bad in (0, -5):
+        try:
+            recency_weights(1000, bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"half_life={bad} ต้อง raise")
+
+
+def test_half_life_keys_match_models():
+    """key ของ RECENCY_HALF_LIFE ต้องตรงชื่อโมเดลทุกตัวอักษร (§3.6)"""
+    from config import RECENCY_HALF_LIFE
+    from models import get_regressors
+    assert set(RECENCY_HALF_LIFE) == set(get_regressors())
+
+
+def test_recency_weight_takes_effect():
+    """
+    น้ำหนักต้องมีผลจริงผ่านเส้นทางจริงทั้ง 3 โมเดล (§3.6)
+    TransformedTargetRegressor -> Pipeline -> model (ANN ผ่าน SeedAveragedRegressor อีกชั้น)
+    y = +1 ครึ่งแรก, -1 ครึ่งหลัง · X เป็น noise (ไม่มีข้อมูลเวลา)
+      half_life 5 แถว -> ทำนายต้องเอียงไป -1 ชัดเจน
+      ไม่ถ่วงน้ำหนัก   -> ทำนายต้องอยู่ราว 0
+    """
+    from models import get_regressors
+    from weighting import recency_weights
+    rng = np.random.default_rng(0)
+    n = 200
+    X = pd.DataFrame(rng.normal(size=(n, 5)), columns=[f"f{i}" for i in range(5)])
+    y = pd.Series(np.r_[np.ones(n // 2), -np.ones(n // 2)])
+    X_eval = pd.DataFrame(rng.normal(size=(100, 5)), columns=X.columns)
+    w = recency_weights(n, 5)
+    for name in get_regressors():
+        weighted = _wrap(get_regressors()[name]).fit(
+            X, y, model__sample_weight=w).predict(X_eval).mean()
+        plain = _wrap(get_regressors()[name]).fit(X, y).predict(X_eval).mean()
+        assert weighted < -0.7, f"{name}: ถ่วงน้ำหนักแล้วยังไม่เอียงไป -1 ({weighted:.3f})"
+        assert abs(plain) < 0.3, f"{name}: ไม่ถ่วงน้ำหนักควรอยู่ราว 0 ({plain:.3f})"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     failed = 0
