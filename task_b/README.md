@@ -73,5 +73,80 @@ python tests/test_pipeline.py # test 5 ข้อ
 - ไม่มี `R2_price`: ได้ ~0.98 ทุกโมเดลรวมทั้ง naive — วัดข้อมูล ไม่ได้วัดโมเดล
 - ไม่มี `DirAcc` ในเฟส 1 (ต้องกำหนดนโยบายวันราคานิ่งก่อน — เฟส 2)
 
-**จะเห็น `ConvergenceWarning` ของ MLP** — ตั้งใจไม่ซ่อนไว้
-(`max_iter=500` ยังไม่พอให้ converge) ดูรายละเอียดในสรุปงานเฟส 1
+---
+
+## Live prediction (ทำนายวันข้างหน้าจริง)
+
+```bash
+# ทดสอบก่อนเสมอ (ใช้วันใน validation ไม่แตะ test)
+python predict_live.py --target-date 2025-02-25 --as-of 2025-02-24 --dry-run
+
+# ของจริง -- ต้องระบุวันเอง สคริปต์ไม่เดาวันทำการให้
+python predict_live.py --target-date 2026-09-28
+```
+
+ผล append ลง `results/prediction_log.csv` ทั้ง 3 โมเดล × 2 หุ้น
+
+### ทำไมนี่ไม่ใช่การเปิด test set
+
+| | `main.py --dev` | `predict_live.py` |
+|---|---|---|
+| วัตถุประสงค์ | historical evaluation | prospective prediction |
+| เทรนถึง | `train_end` (2023-09-01) | วันล่าสุดที่รู้ผลแล้ว |
+| ประเมินกับ | val ที่กันไว้ | อนาคตที่ยังไม่เกิด |
+
+ช่วง 2025-02-26 → 2026-08-28 **ไม่ใช่อนาคตของการทำนายวันพรุ่งนี้อีกแล้ว**
+มันคือ labeled data ที่รู้ผลแล้ว การเอามาเทรนเพื่อทำนายวันข้างหน้าจึงถูกต้อง
+แต่ **ห้ามเอาผลจาก `predict_live.py` ไปรายงานเป็นผล test set เด็ดขาด**
+— คนละวัตถุประสงค์ คนละไฟล์ คนละ log
+
+### Guard ก่อนเขียน log (เฉพาะ non-dry-run)
+
+| guard | กัน |
+|---|---|
+| clean tree | `*.py` / `raw_data/` ต้อง commit แล้ว ไม่งั้น `code_commit` ใน log ไม่ตรงโค้ดที่รันจริง |
+| pending log | log รอบก่อนต้อง commit แล้ว ไม่งั้นหลักฐานของรอบก่อนอ่อนลง |
+| duplicate | ห้ามทำนายซ้ำ key `(prediction_type, ticker, target_date, model)` |
+| วันที่ | เสาร์-อาทิตย์ / มีข้อมูลแล้ว / อยู่ในอดีต |
+
+ไม่ตรวจวันหยุดของ SET เพราะปฏิทินไทยเดาไม่ได้ — ผู้ใช้ต้องระบุ `--target-date` ที่ถูกเอง
+
+### หลังรันจริงต้อง commit + push ทันที
+
+```bash
+git add task_b/results/prediction_log.csv
+git commit -m "prediction log: 2026-09-28"
+git push
+```
+
+การ push commit ที่บรรจุ prediction log ไปยัง remote repository **ก่อน outcome เกิด**
+ทำให้มีหลักฐานภายนอกที่ตรวจย้อนกลับได้ว่า commit hash ใดบรรจุ prediction ชุดใด
+จึงแข็งแรงกว่าการเก็บ CSV ไว้เฉพาะในเครื่อง
+(หมายเหตุ: timestamp ใน git commit ผู้ใช้กำหนดเองได้ สิ่งที่แข็งคือการมี
+บันทึกฝั่ง remote ว่า commit ไหนถูก push เมื่อไหร่ ไม่ใช่ตัว commit timestamp เอง)
+
+ทำนายวันจันทร์ได้ตั้งแต่คืนวันอาทิตย์ เพราะใช้ข้อมูลถึงวันศุกร์
+
+---
+
+## อัปเดตข้อมูล
+
+ดาวน์โหลดจาก **investing.com แหล่งเดิมเท่านั้น** แล้ววางทับ `raw_data/*.csv`
+รูปแบบต้องเหมือนเดิมเป๊ะ: `Date,Price,Open,High,Low,Vol. ('000),Change %`
+(วันที่ `MM/DD/YYYY`, `Price` = ราคาปิด, `Vol.` หน่วยพันหุ้น)
+
+**ต้อง regression check ทุกครั้ง** เพราะ split ใช้วันที่ตายตัว
+การเพิ่มข้อมูลท้ายไฟล์ต้องไม่กระทบ train/val เลย:
+
+```bash
+python main.py --dev
+cp results/KBANK_BK_taskB_val.csv /tmp/before_KBANK.csv
+cp results/ADVANC_BK_taskB_val.csv /tmp/before_ADVANC.csv
+# ... วางไฟล์ใหม่ ...
+python main.py --dev
+diff /tmp/before_KBANK.csv results/KBANK_BK_taskB_val.csv    # ต้องว่าง
+diff /tmp/before_ADVANC.csv results/ADVANC_BK_taskB_val.csv  # ต้องว่าง
+```
+
+diff ไม่ว่าง = ข้อมูลใหม่แก้แถวเก่าด้วย **หยุดหาสาเหตุก่อน** อย่าเดินต่อ
+`train: 1688 / val: 362` ต้องเท่าเดิม ส่วน `dataset_fingerprint` จะเปลี่ยน
