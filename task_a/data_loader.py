@@ -20,9 +20,15 @@ REQUIRED_COLS = ["Open", "High", "Low", "Close", "Volume"]
 
 
 def _cache_path(ticker):
-    os.makedirs(CACHE_DIR, exist_ok=True)
+    # ยึดกับตำแหน่งไฟล์นี้เอง ไม่ใช่ CWD ตอนถูกเรียก — เดิม CACHE_DIR
+    # เป็น relative path ธรรมดา พอ task_a2/ import โมดูลนี้ไปเรียกตอน
+    # cwd=task_a2/ จะสร้าง task_a2/data_cache/ อีกชุดแยกจาก task_a/
+    # data_cache/ เงียบๆ (ข้อมูลเหมือนกันแต่คนละไฟล์จริง เสี่ยง desync)
+    here = os.path.dirname(os.path.abspath(__file__))
+    cache_dir = os.path.join(here, CACHE_DIR)
+    os.makedirs(cache_dir, exist_ok=True)
     safe = ticker.replace("^", "").replace(".", "_")
-    return os.path.join(CACHE_DIR, f"{safe}_{START_DATE}_{END_DATE}.csv")
+    return os.path.join(cache_dir, f"{safe}_{START_DATE}_{END_DATE}.csv")
 
 
 def download_from_yahoo(ticker, start=START_DATE, end=END_DATE):

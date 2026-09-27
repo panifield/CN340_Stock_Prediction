@@ -45,8 +45,21 @@ sys.path.insert(0, str(TASK_A))
 
 from config import RANDOM_STATE  # noqa: E402
 from rounding import to_int_baht, parity as parity_fn  # noqa: E402
-from data_loader import clean as clean_daily  # noqa: E402
 from main import _prepare, _reconstruct_parity  # noqa: E402
+
+# ใช้ fetch_live ตัวเดียวกับ task_a/predict_live.py เป๊ะ (ไม่ก็อปโค้ด
+# ดึงราคาปิดรายวันสดซ้ำอีกที่ — เดิมมีสองชุดที่ทำเรื่องเดียวกัน เสี่ยง
+# แก้ไม่ครบทั้งคู่ตอนมีบั๊ก ให้เหลือแหล่งความจริงเดียว)
+# ใช้ importlib โหลดจาก path ตรงๆ แทน "from predict_live import ..."
+# เพราะไฟล์นี้เองก็ชื่อ predict_live.py เหมือนกัน — ถ้าพึ่ง sys.path
+# ล้วนๆ จะเปราะบาง (ผลลัพธ์ขึ้นกับลำดับ sys.path ตอนรัน)
+import importlib.util as _ilu
+
+_spec = _ilu.spec_from_file_location(
+    "task_a_predict_live", str(TASK_A / "predict_live.py"))
+_task_a_predict_live = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_task_a_predict_live)
+fetch_live_daily = _task_a_predict_live.fetch_live
 
 import features_a2  # noqa: E402
 from main_a2 import (  # noqa: E402
@@ -59,7 +72,6 @@ DRYRUN_LOG_PATH = OUTPUT_DIR / "dryrun" / "prediction_log_dryrun.csv"
 BANGKOK = timezone(timedelta(hours=7))
 
 TICKERS = {"KBANK.BK": "KBANK", "ADVANC.BK": "ADVANC"}
-START_DATE = "2016-08-26"
 
 KEY = ["ticker", "target_date"]
 LOG_COLUMNS = [
@@ -86,20 +98,6 @@ def fetch_live_1h(yf_ticker):
     df.index = idx.tz_convert("Asia/Bangkok")
     return df
 
-
-def fetch_live_daily(yf_ticker):
-    end_exclusive = (pd.Timestamp.now(tz=BANGKOK).normalize()
-                     + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    df = yf.download(yf_ticker, start=START_DATE, end=end_exclusive,
-                     auto_adjust=False, progress=False)
-    if df is None or len(df) == 0:
-        raise RuntimeError(f"ดึงราคาปิดรายวันของ {yf_ticker} ไม่ได้")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-    df.index = pd.to_datetime(df.index)
-    df.index.name = "Date"
-    return clean_daily(df, verbose=False)
 
 
 def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
