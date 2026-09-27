@@ -219,6 +219,14 @@ def parse_args():
 def main():
     args = parse_args()
 
+    # ตรวจก่อนโหลดข้อมูลใด ๆ (§1.2)
+    if args.as_of is not None and not args.dry_run:
+        raise ValueError(
+            "--as-of ใช้ได้เฉพาะกับ --dry-run เท่านั้น\n"
+            "  --as-of มีไว้ย้อนเวลาเพื่อทดสอบระบบ ไม่ใช่เพื่อทำนายจริง\n"
+            "  official prediction ต้องใช้ข้อมูลล่าสุดที่มีเสมอ"
+        )
+
     print("=" * 78)
     print("  งาน B : Live Prediction")
     print(f"  target_date = {args.target_date}"
