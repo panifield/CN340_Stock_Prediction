@@ -206,9 +206,13 @@ def parse_args():
     p.add_argument("--dry-run", action="store_true",
                    help="ทดสอบ: ข้าม guard เรื่อง git และ duplicate, "
                         "บันทึก log ด้วย is_dry_run=True")
+    # ค่า "same_day_1600" ถูกจงใจไม่ใส่ใน choices
+    # schema ของ prediction_log รองรับค่านี้แล้ว แต่ pipeline ยังไม่มี
+    # จะเปิดได้เมื่อ Phase 1D (โมเดล 16:00 จากข้อมูลรายชั่วโมง) เสร็จและ freeze แล้วเท่านั้น
+    # -- ดู §6
     p.add_argument("--prediction-type", default="next_day",
-                   choices=["next_day", "same_day_1600"],
-                   help="ชนิดของคำทำนาย (ตอนนี้ใช้ next_day)")
+                   choices=["next_day"],   # same_day_1600 ยังไม่ implement -- ห้ามเปิด
+                   help="ชนิดการทำนาย (ตอนนี้มีแค่ next_day)")
     return p.parse_args()
 
 
