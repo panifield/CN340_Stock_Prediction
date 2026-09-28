@@ -34,6 +34,7 @@ build_task2_dataset() กับข้อมูล**ก่อนวันนี�
 from __future__ import annotations
 
 import argparse
+import subprocess
 import warnings
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -67,8 +68,22 @@ KEY = ["ticker", "target_date"]
 LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "cutoff_hour_used", "cutoff_price",
     "train_rows", "model", "predicted_up_proba", "predicted_up_to_close",
-    "predicted_label", "is_dry_run",
+    "predicted_label", "code_commit", "worktree_dirty", "is_dry_run",
 ]
+
+
+def get_code_commit(cwd=BASE_DIR):
+    """git commit hash ของโค้ดที่รันอยู่ -- ดู task_a/predict_live.py สำหรับเหตุผล"""
+    r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=cwd,
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def worktree_dirty(cwd=BASE_DIR):
+    """True ถ้ามีไฟล์ใน task_c/ ต่างจาก HEAD ตอนรัน"""
+    r = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=cwd,
+                       capture_output=True, text=True)
+    return bool(r.stdout.strip()) if r.returncode == 0 else None
 
 
 # ---------------------------------------------------------------
@@ -335,6 +350,8 @@ def main():
     rows = [predict_one_ticker(t, args.target_date, args.dry_run) for t in TICKERS]
     out = pd.DataFrame(rows)
     out["generated_at"] = generated_at
+    out["code_commit"] = get_code_commit()
+    out["worktree_dirty"] = worktree_dirty()
     out["is_dry_run"] = args.dry_run
     out = out[LOG_COLUMNS]
 
