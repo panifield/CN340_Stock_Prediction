@@ -8,10 +8,11 @@ automation/run_1600.py — รันกลุ่ม t1600 ของทุก tas
 ต้องรันในช่วง ~16:00–16:30 น. ไทย (วันทำการ) — ไม่มี logic โมเดลเอง แค่เรียก
 สคริปต์ของแต่ละ task ตามลำดับ:
 
-  1. task_a2/predict_live.py                              (คู่/คี่ ณ 16:00)
-  2. task_b/tools/fetch_yahoo_intraday.py แล้ว predict_1600.py --official --latest-snapshot
-                                                            (ราคา — เข้มงวดสุด)
-  3. task_c/predict_live_1600.py                           (ขึ้น/ลง ณ 16:00)
+  1. task_a2/predict_live.py         (คู่/คี่ ณ 16:00)
+  2. task_b/daily_1600.py --phase predict   (ราคา — wrapper ทางการของ task_b
+                                        เอง: fetch -> predict -> availability
+                                        check -> commit — เข้มงวดสุด)
+  3. task_c/predict_live_1600.py     (ขึ้น/ลง ณ 16:00)
 
 *** ความเข้มงวดของแต่ละ task ไม่เท่ากัน (สำคัญ อ่านก่อนใช้งานจริง) ***
 task_b เช็คช่วงเวลา 16:00–16:30 ทั้งขอบบนขอบล่างเอง (ถ้า orchestrator นี้
@@ -21,10 +22,16 @@ task_b เช็คช่วงเวลา 16:00–16:30 ทั้งขอบ�
 หรือยัง) ไม่มีขอบบนของเวลา — ดู KNOWN_ISSUES.md หัวข้อ "ความเข้มงวดของ t1600
 guard ต่างกัน"
 
-*** task_a2 และ task_c ไม่ commit เองเหมือน task_b/daily_next_day.py ***
-(task_b/predict_1600.py เองก็ไม่ commit ให้ตัวเองด้วย ต้องให้ orchestrator
-นี้จัดการทั้ง 3 task) — orchestrator นี้จึงรับหน้าที่ commit/push ให้ทั้งหมด
-เมื่อสั่ง --commit/--push
+*** task_a2 และ task_c ไม่ commit เองเหมือน task_b/daily_1600.py ***
+task_b/daily_1600.py commit ให้ตัวเองอยู่แล้วผ่าน --commit/--push (ส่งต่อ
+flag ตรงๆ) แต่ task_a2/task_c ไม่มี wrapper แบบนี้ -- orchestrator นี้จึง
+รับหน้าที่ commit/push แทนเฉพาะสองตัวนั้น
+
+*** ยังไม่ครอบคลุม phase "outcome" ของ task_b ***
+daily_1600.py --phase outcome (บันทึกผลจริงหลัง 17:00 เทียบกับที่ทำนายไว้)
+เป็นคนละช่วงเวลากับ predict (16:00-16:30) ตั้งใจไม่รวมไว้ใน orchestrator นี้
+ต้องตั้ง schedule แยกต่างหาก (ดู task_b/automation/register_tasks.ps1) --
+task_a2/task_c ไม่มี phase "outcome" แบบนี้เลย (KNOWN_ISSUES.md)
 
 หยุดทันทีถ้า task ไหนล้มเหลว
 """
@@ -104,27 +111,16 @@ def main(argv=None):
             commit_log("task_a2 commit", BASE_DIR / "task_a2",
                       "results/prediction_log.csv", today_iso, args.push)
 
-        # 2) task_b -- ต้องดึง live snapshot ก่อน แล้วค่อยทำนาย (predict_1600.py ไม่ดึงเอง)
-        run("task_b fetch-snapshot", [PY, "tools/fetch_yahoo_intraday.py"], BASE_DIR / "task_b")
-        cmd = [PY, "predict_1600.py", "--target-date", today_iso, "--latest-snapshot"]
-        cmd += ["--official"] if args.commit else ["--dry-run"]
-        run("task_b predict", cmd, BASE_DIR / "task_b")
+        # 2) task_b -- ใช้ daily_1600.py (wrapper ทางการของ task_b เอง: fetch ->
+        # predict -> tools/check_snapshot_1600.py availability check -> commit) แทนที่จะ
+        # เรียก fetch_yahoo_intraday.py + predict_1600.py ตรงๆ เอง (แบบเดิม) เพราะแบบเดิม
+        # ข้ามขั้น availability check ไปเฉยๆ และมี commit logic ซ้ำซ้อนกับที่ daily_1600.py
+        # ทำเองอยู่แล้ว -- แก้ตาม pattern เดียวกับที่ run_next_day.py เรียก daily_next_day.py
+        # (2026-09-29)
+        cmd = [PY, "daily_1600.py", "--phase", "predict"]
         if args.commit:
-            git("task_b commit", ["add", "results/prediction_log.csv",
-                                  "results/prediction_log_1600_meta.csv",
-                                  "raw_data_intraday_live"], BASE_DIR / "task_b")
-            has_staged = subprocess.run(
-                ["git", "diff", "--cached", "--quiet"], cwd=BASE_DIR / "task_b"
-            ).returncode != 0
-            if has_staged:
-                git("task_b commit", ["commit", "-m", f"prediction log 1600: {today_iso}"],
-                    BASE_DIR / "task_b")
-                print("[task_b commit] committed")
-                if args.push:
-                    git("task_b commit", ["push"], BASE_DIR / "task_b")
-                    print("[task_b commit] pushed")
-            else:
-                print("[task_b commit] ไม่มีอะไรใหม่ให้ commit")
+            cmd += ["--official", "--commit"] + (["--push"] if args.push else [])
+        run("task_b", cmd, BASE_DIR / "task_b")
 
         # 3) task_c
         cmd = [PY, "predict_live_1600.py", "--target-date", today_iso]
