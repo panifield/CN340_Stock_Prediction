@@ -196,3 +196,20 @@ task_b/requirements.txt` ในสภาพแวดล้อมที่ใช�
 (cross-check OHLC ผ่าน, SHA256 อัปเดตถูก) แต่**ยังไม่ commit** เพราะการ commit ข้อมูลตลาดใหม่ควรเป็นการรัน
 official จริง (`--commit`) ไม่ใช่ผลพลอยได้จากการ debug — รอให้คุณ/เพื่อนตัดสินใจว่าจะ commit เลยหรือรอรัน
 official แยกทีหลัง
+
+---
+
+## อัปเดต 2026-09-29 (ต่อ) — แก้ run_1600.py ให้เรียก daily_1600.py ของ task_b แทนการเรียกสคริปต์ย่อยตรงๆ
+
+ตอนไปดู `task_b/automation/register_tasks.ps1` เจอว่า task_b มี **`daily_1600.py`** เป็น wrapper ทางการของ t1600
+เอง (fetch -> predict -> `tools/check_snapshot_1600.py` availability check -> commit) ที่ `run_1600.py`
+เดิมไม่ได้เรียกเลย — เรียก `tools/fetch_yahoo_intraday.py` + `predict_1600.py` ตรงๆ แทน ทำให้**ข้าม
+availability check ไปเงียบๆ** และมี commit logic ที่ซ้ำซ้อนกับของ `daily_1600.py` เอง **แก้แล้ว**: เปลี่ยนไป
+เรียก `daily_1600.py --phase predict` (ส่ง `--official --commit --push` ต่อเมื่อสั่ง `--commit`) แบบเดียวกับที่
+`run_next_day.py` เรียก `daily_next_day.py` อยู่แล้ว — ทดสอบเรียก `daily_1600.py --phase predict` ตรงๆ ยืนยันว่า
+syntax/flow ถูกต้อง (fail แค่เพราะ guard เวลา 16:00 ของ task_b เอง ไม่ใช่บั๊กจากการเชื่อม)
+
+**หมายเหตุ**: `daily_1600.py` ยังมี **`--phase outcome`** (บันทึกผลจริงหลัง 17:00 เทียบกับที่ทำนายไว้ตอน 16:00)
+ที่ตั้งใจไม่รวมเข้า `run_1600.py` เพราะเป็นคนละช่วงเวลา ต้องมี schedule แยกต่างหาก (ดู
+`register_tasks.ps1` ของ task_b เป็นตัวอย่าง) — **task_a2 และ task_c ไม่มี phase "outcome" แบบนี้เลย** ยังไม่มี
+ใครบันทึกผลจริงของ t1600 เทียบกับที่ทำนายไว้สำหรับสองตัวนี้ (เพิ่มเป็นรายการใหม่ที่ยังไม่แก้)
