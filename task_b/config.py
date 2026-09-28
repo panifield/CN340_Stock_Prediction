@@ -132,7 +132,12 @@ RF_PARAMS = {
     "max_depth": 4,
     "min_samples_leaf": 50,
     "max_features": 0.5,
-    "n_jobs": -1,
+    # n_jobs=1 (เดิม -1) 2026-09-29: n_jobs=-1 ทำให้ลำดับรวมผลแบบขนานไม่คงที่
+    # จริง -- ทดสอบรัน main.py --dev ซ้ำ 5 ครั้งด้วยข้อมูลเดียวกัน เจอ diff ที่
+    # แถวนี้ 2 ใน 4 ครั้ง (ดู KNOWN_ISSUES.md) ทำให้ regression-check guard ของ
+    # daily_next_day.py (git diff results/*_val.csv ต้องว่าง) false-positive
+    # ได้แบบสุ่ม แม้ข้อมูลไม่เปลี่ยนเลย -- n_jobs=1 การันตี reproducible เป๊ะ
+    "n_jobs": 1,
     "random_state": RANDOM_STATE,
 }
 
@@ -151,7 +156,10 @@ XGB_PARAMS = {
     "colsample_bytree": 0.8,
     "reg_lambda": 1.0,
     "random_state": RANDOM_STATE,
-    "n_jobs": -1,
+    # n_jobs=1 (เดิม -1) 2026-09-29: เหตุผลเดียวกับ RF_PARAMS ด้านบน --
+    # ทดสอบซ้ำเจอ diff ของแถวนี้เองด้วย (~1e-7, ใหญ่กว่าที่ models.py เคย
+    # เขียนไว้ว่า "~1e-18" มาก)
+    "n_jobs": 1,
 }
 
 
