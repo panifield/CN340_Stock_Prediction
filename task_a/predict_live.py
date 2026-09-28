@@ -73,6 +73,24 @@ def fetch_live(ticker):
     df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     df.index = pd.to_datetime(df.index)
     df.index.name = "Date"
+
+    # yfinance บางครั้งคืนแถวของวันล่าสุดมาแล้ว แต่ Close ยังเป็น NaN (ยังไม่
+    # backfill แม้ตลาดปิดไปแล้ว) -- clean() ด้านล่างเรียกด้วย verbose=False จะ
+    # ตัดแถวนี้ทิ้งเงียบๆ ทำให้ data_cutoff ถอยไปหลายวันโดยไม่มีใครรู้ตัว เตือน
+    # ให้ชัดตรงนี้ก่อน
+    n_trailing_nan = 0
+    for v in df["Close"].iloc[::-1]:
+        if pd.isna(v):
+            n_trailing_nan += 1
+        else:
+            break
+    if n_trailing_nan:
+        dropped = df.index[-n_trailing_nan:]
+        print(f"[live] !! yfinance ยังไม่มีราคาปิดของ {n_trailing_nan} วันล่าสุด "
+              f"({dropped[0].date()} -> {dropped[-1].date()}, Close=NaN แถวเหล่านี้ "
+              f"มักเกิดจาก backfill ช้าหลังตลาดปิด) -> data_cutoff จะถอยไปใช้วันก่อนหน้า"
+              f"ที่มีราคาปิดจริง")
+
     return clean(df, verbose=False)
 
 
@@ -214,6 +232,25 @@ def append_log(rows, log_path, columns=LOG_COLUMNS):
     print(f"\n[log] เขียนต่อท้าย {len(rows)} แถว -> {log_path}")
 
 
+MARKET_CLOSE_SAFE_HOUR = 18   # เดียวกับ task_b/daily_next_day.py: "รันหลังตลาดปิด (หลัง 18:00 +07:00)"
+
+
+def check_market_closed(now=None):
+    """
+    กันรัน official ก่อนตลาดปิดจริง — fetch_live() ดึงข้อมูลสดทุกครั้งไม่มีอะไร
+    การันตีว่า "วันนี้" นิ่งแล้ว (ดู [live] !! คำเตือน NaN Close ด้านบน) ถ้ารันก่อน
+    18:00 น. ไทย มีโอกาสสูงที่ราคาปิดของวันนี้ยังไม่ backfill ใน yfinance
+    """
+    now = now or pd.Timestamp.now(tz=BANGKOK)
+    if now.hour < MARKET_CLOSE_SAFE_HOUR:
+        raise RuntimeError(
+            f"ตอนนี้ {now.strftime('%H:%M')} น. (เวลาไทย) -- official prediction "
+            f"ควรรันหลัง {MARKET_CLOSE_SAFE_HOUR}:00 น. เท่านั้น เพื่อให้ราคาปิดของ"
+            "วันนี้นิ่งและ backfill ใน yfinance ทันแล้ว ใช้ --dry-run ถ้าต้องการ"
+            "ทดสอบนอกเวลานี้"
+        )
+
+
 def parse_args():
     p = argparse.ArgumentParser(
         description="ทำนายคู่/คี่ของวันข้างหน้าจริง (ไม่ใช่ backtest)"
@@ -235,6 +272,9 @@ def main():
     if args.dry_run:
         print("  *** DRY RUN — ไม่ใช่คำทำนายอย่างเป็นทางการ ***")
     print("=" * 78)
+
+    if not args.dry_run:
+        check_market_closed()
 
     generated_at = datetime.now(BANGKOK).isoformat(timespec="seconds")
 
