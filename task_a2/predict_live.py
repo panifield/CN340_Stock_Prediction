@@ -124,6 +124,22 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
         else:
             raise RuntimeError(msg)
 
+    # เพิ่ม 2026-09-29: เดิมเช็คแค่ขอบล่าง (มีแท่ง 15:00 หรือยัง) ไม่มีขอบบน
+    # -- รันดึกแค่ไหนก็ผ่านได้ ต่างจาก task_b/predict_1600.py ที่บังคับ
+    # 16:00-16:30 ทั้งสองขอบ เพิ่มขอบบนให้ตรงกันเพื่อความน่าเชื่อถือของ
+    # "official = ทำนายจริงตอนใกล้ตลาดปิด" ไม่ใช่ทำนายย้อนหลังตอนรู้ข้อมูล
+    # มากขึ้นแล้ว
+    if not allow_incomplete:
+        deadline = pd.Timestamp(year=now_bkk.year, month=now_bkk.month,
+                                day=now_bkk.day, hour=16, minute=30, tz=BANGKOK)
+        start_window = deadline.replace(hour=16, minute=0)
+        if not (start_window <= now_bkk < deadline):
+            raise RuntimeError(
+                f"official ต้องรันระหว่าง 16:00-16:30 น. (เหมือน "
+                f"task_b/predict_1600.py) ตอนนี้ {now_bkk.strftime('%H:%M:%S')} "
+                "น. -- ใช้ --dry-run ถ้าต้องการทดสอบนอกเวลานี้"
+            )
+
     intraday = features_a2.build_intraday_features(
         yf_ticker, short_name, df_1h=df_1h)
     daily_ctx = features_a2.build_daily_context_features(

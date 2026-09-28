@@ -194,6 +194,21 @@ def predict_one_ticker(ticker, target_date, allow_incomplete, verbose=True):
         else:
             raise RuntimeError(msg)
 
+    # official ต้องรันในช่วง 16:00-16:30 เท่านั้น (เหมือน
+    # task_b/predict_1600.py และ task_a2/predict_live.py) -- เดิมเช็คแค่
+    # ขอบล่าง (มีแท่ง cutoff หรือยัง) รันดึกแค่ไหนก็ผ่านได้ ไม่สอดคล้องกับ
+    # "official = ทำนายจริงตอนใกล้ตลาดปิด"
+    if not allow_incomplete:
+        deadline = pd.Timestamp(year=now_bkk.year, month=now_bkk.month,
+                                day=now_bkk.day, hour=16, minute=30, tz=BANGKOK)
+        start_window = deadline.replace(hour=16, minute=0)
+        if not (start_window <= now_bkk < deadline):
+            raise RuntimeError(
+                f"official ต้องรันระหว่าง 16:00-16:30 น. ตอนนี้ "
+                f"{now_bkk.strftime('%H:%M:%S')} น. -- ใช้ --dry-run "
+                "ถ้าต้องการทดสอบนอกเวลานี้"
+            )
+
     hist_hourly = hourly[hourly["Date"] < today]
     # ราคาปิดทางการรายวันจริง (yfinance interval=1d) -- ใช้เป็น target ของ
     # historical training (build_task2_dataset) และ feature ของวันนี้
