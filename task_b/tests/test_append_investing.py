@@ -29,11 +29,18 @@ def _sha(b):
 
 
 def _pre_append_raw(d):
-    """raw_data ก่อน append 2026-09-27 = ไฟล์ปัจจุบันตัด 20 แถวท้าย"""
-    for t in ("KBANK", "ADVANC"):
-        b = (ROOT / "raw_data" / f"{t}_10Y_Cleaned.csv").read_bytes()
+    """raw_data ก่อน append 2026-09-27 (session1, จาก KB_SRC/AD_SRC จริง) -- ตัดตามวันที่ที่
+    archive นี้ครอบคลุม ไม่ใช่ "20 แถวท้ายของไฟล์ปัจจุบัน" ตายตัว เพราะ raw_data/ โตขึ้นทุกวันจาก
+    daily_next_day.py จริง ถ้าตัดแบบนับแถวจากท้าย จำนวนที่ต้องตัดจะเปลี่ยนทุกครั้งที่มีข้อมูลใหม่
+    กว่าช่วงของ archive นี้ถูก append เข้ามา (เจอบั๊กนี้จริง 2026-09-29 หลัง raw_data ขยับไปถึง
+    28 ก.ย. ทั้งที่ archive นี้ครอบคลุมแค่ถึง 27 ก.ย. เท่านั้น) -- ตัดตามขอบเขตวันที่ของ archive
+    แทน ทำให้ผลลัพธ์คงที่เสมอไม่ว่า raw_data จะโตต่อไปอีกแค่ไหนหลังจากนี้"""
+    for t, src in (("KBANK", KB_SRC), ("ADVANC", AD_SRC)):
+        b, df = A.read_canonical(ROOT / "raw_data" / f"{t}_10Y_Cleaned.csv")
+        boundary = A.parse_investing(src).index.min()
+        keep_n = int((df.index < boundary).sum())
         lines = b.split(b"\r\n")[:-1]
-        old = b"\r\n".join(lines[:-20]) + b"\r\n"
+        old = b"\r\n".join(lines[:1 + keep_n]) + b"\r\n"     # header + keep_n แถวข้อมูล
         assert _sha(old) == PRE_APPEND_SHA[t]
         (Path(d) / f"{t}_10Y_Cleaned.csv").write_bytes(old)
 
@@ -60,7 +67,11 @@ def test_reproduces_session1_append_exactly():
         plans = A.plan_append([KB_SRC, AD_SRC], raw_dir=d)
         for p in plans:
             real = (ROOT / "raw_data" / f"{p['ticker']}_10Y_Cleaned.csv").read_bytes()
-            assert p["candidate"] == real, p["ticker"]
+            # เทียบแค่ prefix ที่ยาวเท่า candidate (= raw_data ตอนนั้น ทันทีหลัง session1) ไม่ใช่
+            # ทั้งไฟล์ปัจจุบัน เพราะ raw_data/ โตขึ้นทุกวันจริงหลังจากนั้น -- append-only แปลว่า
+            # bytes ช่วงต้นของไฟล์ปัจจุบันต้องตรงกับตอนนั้นเป๊ะเสมอไม่ว่าจะมีอะไรถูกเติมต่อท้าย
+            # มาอีกแค่ไหน (เจอบั๊กนี้จริง 2026-09-29 หลัง raw_data ขยับไปถึง 28 ก.ย.)
+            assert p["candidate"] == real[:len(p["candidate"])], p["ticker"]
             assert len(p["new_only"]) == 20
             assert p["candidate"].startswith(p["old_bytes"])
             assert not any("Change %" in w for w in p["warnings"])

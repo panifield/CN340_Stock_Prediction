@@ -21,11 +21,24 @@ import append_investing as A        # noqa: E402
 import fetch_yahoo_daily as F       # noqa: E402
 
 N_CUT = 5
-NOW = datetime(2026, 9, 26, 10, 0, tzinfo=F.BANGKOK)     # เสาร์ -> แถวของ 2026-09-25 จบแล้ว
 
 
 def _raw(t):
     return (ROOT / "raw_data" / f"{t}_10Y_Cleaned.csv").read_bytes()
+
+
+def _last_raw_date():
+    """วันสุดท้ายจริงที่มีอยู่ใน raw_data/ ตอนนี้ (ไม่ hardcode) -- raw_data/ โตขึ้นทุกวันจาก
+    daily_next_day.py จริง ดังนั้น NOW ที่ผูกกับวันที่ตายตัวจะพังทุกครั้งที่มีการ append ข้อมูล
+    ใหม่ (เจอบั๊กนี้จริง 2026-09-29 หลัง raw_data ขยับจาก 25 -> 28 ก.ย.)"""
+    _, old = A.read_canonical(ROOT / "raw_data" / "KBANK_10Y_Cleaned.csv")
+    return old.index[-1]
+
+
+# NOW = วันสุดท้ายจริงใน raw_data + 3 วัน 10:00 -- ห่างพอที่แถวสุดท้ายจริงจะ "จบ" แน่นอน
+# ไม่ว่าจะตรงกับวันหยุดสุดสัปดาห์พอดีหรือไม่ (กันปัญหา edge case ของ drop_unfinished)
+NOW = (_last_raw_date() + pd.Timedelta(days=3)).replace(
+    hour=10, minute=0, tzinfo=F.BANGKOK)
 
 
 def _cut_raw(d, n=N_CUT):
