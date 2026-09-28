@@ -116,6 +116,44 @@ def fetch_live_1h(yf_ticker):
 
 
 
+def check_has_1500_bar(today_bars, today, now_bkk, allow_incomplete):
+    """
+    เช็คว่ามีแท่ง 15:00 ของวันนี้แล้วหรือยัง (= ราคา ณ 16:00 ตาม
+    features_a2.py) -- แยกเป็นฟังก์ชันเดี่ยวเพื่อ unit test ได้โดยไม่ต้อง
+    ดึงข้อมูลสดจริง (2026-09-29)
+    """
+    has_1500_bar = (pd.Timestamp("15:00").time() in
+                    [t.time() for t in today_bars.index])
+    if not has_1500_bar:
+        msg = (f"ยังไม่มีแท่ง 15:00 ของ {today} (= ราคา ณ 16:00) — "
+              f"ตอนนี้เวลา {now_bkk.strftime('%H:%M')} น. "
+              f"ต้องรันหลัง ~16:00 น. ของวันซื้อขาย")
+        if allow_incomplete:
+            print(f"    !! {msg} (ข้ามไปเพราะ --dry-run)")
+        else:
+            raise RuntimeError(msg)
+
+
+def check_time_window(now_bkk, allow_incomplete):
+    """
+    official ต้องรันในช่วง 16:00-16:30 น. เท่านั้น (เหมือน
+    task_b/predict_1600.py) -- เพิ่ม 2026-09-29: เดิมเช็คแค่ขอบล่าง
+    (check_has_1500_bar) ไม่มีขอบบน รันดึกแค่ไหนก็ผ่านได้ ไม่สอดคล้องกับ
+    "official = ทำนายจริงตอนใกล้ตลาดปิด"
+    """
+    if allow_incomplete:
+        return
+    deadline = pd.Timestamp(year=now_bkk.year, month=now_bkk.month,
+                            day=now_bkk.day, hour=16, minute=30, tz=BANGKOK)
+    start_window = deadline.replace(hour=16, minute=0)
+    if not (start_window <= now_bkk < deadline):
+        raise RuntimeError(
+            f"official ต้องรันระหว่าง 16:00-16:30 น. (เหมือน "
+            f"task_b/predict_1600.py) ตอนนี้ {now_bkk.strftime('%H:%M:%S')} "
+            "น. -- ใช้ --dry-run ถ้าต้องการทดสอบนอกเวลานี้"
+        )
+
+
 def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
                       verbose=True):
     print("\n" + "#" * 78)
@@ -127,34 +165,10 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
 
     today = pd.Timestamp(target_date).date()
     today_bars = df_1h[df_1h.index.date == today]
-    has_1500_bar = (pd.Timestamp("15:00").time() in
-                    [t.time() for t in today_bars.index])
-
     now_bkk = pd.Timestamp.now(tz=BANGKOK)
-    if not has_1500_bar:
-        msg = (f"ยังไม่มีแท่ง 15:00 ของ {today} (= ราคา ณ 16:00) — "
-              f"ตอนนี้เวลา {now_bkk.strftime('%H:%M')} น. "
-              f"ต้องรันหลัง ~16:00 น. ของวันซื้อขาย")
-        if allow_incomplete:
-            print(f"    !! {msg} (ข้ามไปเพราะ --dry-run)")
-        else:
-            raise RuntimeError(msg)
 
-    # เพิ่ม 2026-09-29: เดิมเช็คแค่ขอบล่าง (มีแท่ง 15:00 หรือยัง) ไม่มีขอบบน
-    # -- รันดึกแค่ไหนก็ผ่านได้ ต่างจาก task_b/predict_1600.py ที่บังคับ
-    # 16:00-16:30 ทั้งสองขอบ เพิ่มขอบบนให้ตรงกันเพื่อความน่าเชื่อถือของ
-    # "official = ทำนายจริงตอนใกล้ตลาดปิด" ไม่ใช่ทำนายย้อนหลังตอนรู้ข้อมูล
-    # มากขึ้นแล้ว
-    if not allow_incomplete:
-        deadline = pd.Timestamp(year=now_bkk.year, month=now_bkk.month,
-                                day=now_bkk.day, hour=16, minute=30, tz=BANGKOK)
-        start_window = deadline.replace(hour=16, minute=0)
-        if not (start_window <= now_bkk < deadline):
-            raise RuntimeError(
-                f"official ต้องรันระหว่าง 16:00-16:30 น. (เหมือน "
-                f"task_b/predict_1600.py) ตอนนี้ {now_bkk.strftime('%H:%M:%S')} "
-                "น. -- ใช้ --dry-run ถ้าต้องการทดสอบนอกเวลานี้"
-            )
+    check_has_1500_bar(today_bars, today, now_bkk, allow_incomplete)
+    check_time_window(now_bkk, allow_incomplete)
 
     intraday = features_a2.build_intraday_features(
         yf_ticker, short_name, df_1h=df_1h)
