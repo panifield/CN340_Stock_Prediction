@@ -213,3 +213,21 @@ syntax/flow ถูกต้อง (fail แค่เพราะ guard เวล
 ที่ตั้งใจไม่รวมเข้า `run_1600.py` เพราะเป็นคนละช่วงเวลา ต้องมี schedule แยกต่างหาก (ดู
 `register_tasks.ps1` ของ task_b เป็นตัวอย่าง) — **task_a2 และ task_c ไม่มี phase "outcome" แบบนี้เลย** ยังไม่มี
 ใครบันทึกผลจริงของ t1600 เทียบกับที่ทำนายไว้สำหรับสองตัวนี้ (เพิ่มเป็นรายการใหม่ที่ยังไม่แก้)
+
+---
+
+## อัปเดต 2026-09-29 (ต่อ) — สร้าง scheduler template ให้ orchestrator ทั้ง 2 ตัวแล้ว
+
+**`automation/github_actions_next_day.yml`** — สำหรับกลุ่ม next_day (ไม่เร่งเวลามาก ทน cron ของ GitHub ช้าได้)
+mirror โครงสร้างจาก `task_b/automation/github_actions_task_b_daily.yml` เดิม แต่ครอบคลุมทั้ง 3 tasks ผ่าน
+`automation/run_next_day.py`
+
+**`automation/register_1600.ps1`** — สำหรับกลุ่ม t1600 (ใช้ Windows Task Scheduler แทน GitHub Actions เพราะ
+เส้นตาย 16:00-16:30 แคบเกินไป เหตุผลเดียวกับที่ `task_b/automation/register_tasks.ps1` ใช้อยู่แล้ว) ครอบคลุม
+ทั้ง 3 tasks ผ่าน `automation/run_1600.py`
+
+ทั้งคู่เป็น **template เท่านั้น ยังไม่ได้ติดตั้งจริง** (ต้อง copy `.yml` ไปที่ `.github/workflows/` เอง หรือรัน
+`.ps1` ด้วยมือเพื่อลงทะเบียน Task Scheduler) — ตรวจ syntax แล้วผ่านทั้งคู่ (YAML parse ได้, PowerShell parse
+ไม่มี error) และ tests ที่ workflow อ้างถึงผ่านหมด 5/5 (ระหว่างเช็คเจอว่า `task_b/tests/test_fetch_yahoo_daily.py`
+และ `test_append_investing.py` fail ชั่วคราวเพราะ raw_data ที่ยังไม่ commit จากการทดสอบก่อนหน้า -- ยืนยันแล้วว่า
+ไม่ใช่บั๊กใหม่ เป็นเรื่องเดียวกับที่ค้างตัดสินใจอยู่เรื่อง "จะ commit ข้อมูล 28 ก.ย. ไหม")
