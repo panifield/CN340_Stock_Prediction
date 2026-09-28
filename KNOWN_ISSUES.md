@@ -231,3 +231,28 @@ mirror โครงสร้างจาก `task_b/automation/github_actions_ta
 ไม่มี error) และ tests ที่ workflow อ้างถึงผ่านหมด 5/5 (ระหว่างเช็คเจอว่า `task_b/tests/test_fetch_yahoo_daily.py`
 และ `test_append_investing.py` fail ชั่วคราวเพราะ raw_data ที่ยังไม่ commit จากการทดสอบก่อนหน้า -- ยืนยันแล้วว่า
 ไม่ใช่บั๊กใหม่ เป็นเรื่องเดียวกับที่ค้างตัดสินใจอยู่เรื่อง "จะ commit ข้อมูล 28 ก.ย. ไหม")
+
+---
+
+## อัปเดต 2026-09-29 — GitHub Actions รันจริงครั้งแรก เจอ CI fail จริง แก้แล้ว
+
+เพื่อนสร้าง `.github/workflows/next_day.yml` ตาม template แล้วกด "Run workflow" ทดสอบ — **fail จริงที่ขั้น
+"Tests ที่เร็ว"** ของ `task_b/tests/test_fetch_yahoo_daily.py::test_roundtrip_reproduces_raw_prices`
+
+**สาเหตุ**: test นี้ (และอีกไฟล์ `test_append_investing.py` ที่พังแบบเดียวกัน 5 tests) เขียนแบบ hardcode
+วันที่/จำนวนแถวไว้ตายตัว โดยสมมติว่า `raw_data/` จะหยุดอยู่ที่วันที่หนึ่งตลอดไป (25 ก.ย. / 27 ก.ย.) — พอเรา
+commit ข้อมูลจริงถึง 28 ก.ย. เข้าไป (ตามที่คุยกันไว้ก่อนหน้า) สมมติฐานนี้ก็พังทันที **และจะพังซ้ำอีกทุกครั้งที่
+`raw_data/` โตขึ้นจากการรัน `daily_next_day.py` จริงในอนาคต** ไม่ใช่ปัญหาแค่ครั้งเดียว
+
+**แก้แล้วทั้งคู่ให้ทำงานแบบไม่ผูกกับวันที่ตายตัว**:
+- `test_fetch_yahoo_daily.py`: `NOW` เปลี่ยนจาก literal date เป็นคำนวณจากวันสุดท้ายจริงใน `raw_data/` + 3 วัน
+- `test_append_investing.py`: `_pre_append_raw()` เปลี่ยนจากตัด "20 แถวท้ายไฟล์ปัจจุบัน" เป็นตัดตามขอบเขตวันที่
+  ของ archive จริง (`raw_data_sources/investing_20260927`) และ `test_reproduces_session1_append_exactly`
+  เทียบแค่ prefix ที่ยาวเท่า candidate แทนที่จะเทียบทั้งไฟล์ปัจจุบัน (ซึ่งยาวกว่าเพราะมีข้อมูลใหม่กว่าต่อท้ายมา)
+
+ทดสอบผ่านครบ: task_b 83/83, task_a 8/8, task_a2 10/10, task_c 12/12 — commit + push แล้ว (ชน merge กับ
+`.github/workflows/next_day.yml` ที่เพื่อน push มาพร้อมกัน แก้ด้วย `git pull` merge สะอาด ไม่มี conflict)
+
+**บทเรียน**: local test ที่ผ่านตอนแรกไม่ได้แปลว่าปลอดภัยเสมอไป — CI จริงบน GitHub Actions เจอปัญหาที่ local
+environment ตอนนั้นไม่เจอ (เพราะลำดับการทดสอบ/สถานะ raw_data ตอนนั้นบังเอิญไม่ชนกัน) ควรรัน full test suite
+อีกรอบทุกครั้งหลัง merge หรือหลัง raw_data เปลี่ยน ไม่ใช่เชื่อผลรอบเดียวที่ผ่านไปแล้ว
