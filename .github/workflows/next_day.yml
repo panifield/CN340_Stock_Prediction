@@ -1,0 +1,67 @@
+# แม่แบบ GitHub Actions สำหรับกลุ่ม next_day ทั้ง 3 tasks (task_a, task_c, task_b)
+# GitHub อ่าน workflow จาก .github/workflows/ ที่ root ของ repo เท่านั้น -> ไฟล์นี้ยังไม่ทำงานจนกว่า
+# เจ้าของ repo จะคัดลอกไปไว้ที่ .github/workflows/next_day.yml
+# และตั้ง Settings -> Actions -> General -> Workflow permissions = "Read and write"
+#
+# ใช้กับ next_day เท่านั้น (task_a/predict_live.py, task_c/predict_live.py, task_b/daily_next_day.py)
+# รันจันทร์-ศุกร์ 18:30 (+07:00) = 11:30 UTC -- cron ของ GitHub ช้าได้ถึง ~1 ชม. แต่ยังเสร็จก่อนเช้าของ
+# วันทำนาย ไม่มีเส้นตายแคบเหมือนกลุ่ม t1600 เลยใช้ GitHub Actions ได้ (ต่างจาก t1600 ที่ต้องใช้
+# automation/register_1600.ps1 บนเครื่องแทน เพราะเส้นตาย 16:30 แคบเกินกว่าจะทนความช้าของ cron ได้)
+name: next_day daily (all tasks)
+
+on:
+  schedule:
+    - cron: "30 11 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry-run (ไม่ commit / ไม่เขียน production log)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: next_day_all_tasks
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  next_day:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.5"      # ตรงกับที่ task_b/requirements.txt ทดสอบ
+
+      - name: Install task_a/task_a2/task_c deps
+        run: pip install -r requirements.txt
+
+      - name: Install task_b deps (pin เข้มกว่า -- ติดตั้งทับให้ตรง)
+        run: pip install -r task_b/requirements-live.txt
+
+      - name: Git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Tests ที่เร็ว (ไม่ใช้อินเทอร์เน็ต)
+        run: |
+          python task_a/tests/test_predict_live.py
+          python task_c/tests/test_predict_live.py
+          python task_b/tests/test_daily.py
+          python task_b/tests/test_fetch_yahoo_daily.py
+          python task_b/tests/test_append_investing.py
+
+      - name: Daily run (official)
+        if: github.event_name == 'schedule' || inputs.dry_run == false
+        run: python automation/run_next_day.py --commit --push
+
+      - name: Daily run (dry-run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+        run: python automation/run_next_day.py --dry-run
