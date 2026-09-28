@@ -48,7 +48,7 @@ warnings.filterwarnings("ignore")
 from config import TICKERS, INTRADAY_CUTOFF_HOUR, INTRADAY_CLOSE_HOUR
 from models import get_classifiers
 from splits import walk_forward_splits
-from intraday_task2 import build_task2_dataset, _prepare
+from intraday_task2 import build_task2_dataset, _prepare, load_daily_close
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "results"
@@ -98,13 +98,10 @@ def fetch_live_1h(ticker):
     return df
 
 
-def _daily_aggregates(hourly, before_date):
-    """actual_close (จากแท่ง close_hour) และ daily_volume (รวมทั้งวัน) ของทุกวันก่อน before_date"""
+def _daily_volume_history(hourly, before_date):
+    """daily_volume (รวมทั้งวัน) ของทุกวันก่อน before_date"""
     hist = hourly[hourly["Date"] < before_date]
-    daily_volume = hist.groupby("Date")["Volume"].sum().sort_index()
-    close_bars = hist[hist["Hour"] == INTRADAY_CLOSE_HOUR]
-    actual_close = close_bars.groupby("Date")["Close"].last().sort_index()
-    return actual_close, daily_volume
+    return hist.groupby("Date")["Volume"].sum().sort_index()
 
 
 def _today_feature_row(hourly, today, cutoff_hour=INTRADAY_CUTOFF_HOUR):
@@ -198,7 +195,15 @@ def predict_one_ticker(ticker, target_date, allow_incomplete, verbose=True):
             raise RuntimeError(msg)
 
     hist_hourly = hourly[hourly["Date"] < today]
-    X_hist, y_hist, _ = build_task2_dataset(hist_hourly)
+    # ราคาปิดทางการรายวันจริง (yfinance interval=1d) -- ใช้เป็น target ของ
+    # historical training (build_task2_dataset) และ feature ของวันนี้
+    # (prev_day_return/overnight_gap) ร่วมกัน ดึงครั้งเดียวพอ ไม่ใช้แท่ง 1h
+    # ที่ Hour==close_hour อีกต่อไป (ตรง ATC จริงแค่ ~40-46% เท่านั้น ดู
+    # check_settrade_atc_match.py)
+    daily_close = load_daily_close(
+        ticker, hist_hourly["Date"].min(), hist_hourly["Date"].max())
+
+    X_hist, y_hist, _ = build_task2_dataset(hist_hourly, daily_close=daily_close)
     X_hist, y_hist, _ = _prepare(X_hist, y_hist, _)
     if len(X_hist) < 100:
         raise RuntimeError(f"ประวัติมีแค่ {len(X_hist)} วัน น้อยเกินจะเทรน")
@@ -209,7 +214,8 @@ def predict_one_ticker(ticker, target_date, allow_incomplete, verbose=True):
     best, final_model = select_and_fit_best(X_hist, y_hist, verbose=verbose)
 
     row = _today_feature_row(hourly, today)
-    actual_close_hist, daily_volume_hist = _daily_aggregates(hourly, today)
+    actual_close_hist = daily_close
+    daily_volume_hist = _daily_volume_history(hourly, today)
     if len(actual_close_hist) < 21 or len(daily_volume_hist) < 21:
         raise RuntimeError(
             "ประวัติราคาปิด/ปริมาณซื้อขายไม่พอคำนวณ feature ของวันนี้ "

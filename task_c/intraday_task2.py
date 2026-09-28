@@ -3,14 +3,27 @@
 โจทย์เวลา
 -----------
 ใช้ข้อมูลแท่ง 1 ชั่วโมงของ "วัน D" ถึง cutoff (ค่า default 15:00) เพื่อ
-ทำนายว่าราคาปิดเวลา 16:00 ของวัน D จะสูงกว่าราคาที่ cutoff หรือไม่:
+ทำนายว่าราคาปิดทางการ (ATC) ของวัน D จะสูงกว่าราคาที่ cutoff หรือไม่:
 
-    y_intraday[D] = 1  if Close[D, 16:00] > Close[D, cutoff]
+    y_intraday[D] = 1  if OfficialClose[D] > Close[D, cutoff]
                      0  otherwise (ลงหรือเท่าเดิม)
 
 Task นี้แยกจาก main.py / Task 1 โดยสมบูรณ์:
   - Task 1: ก่อนตลาดเปิด ใช้ข้อมูลถึงวันก่อนหน้า ทำนายวันถัดไป
   - Task 2: ระหว่างวัน ใช้ข้อมูลวันเดียวกันถึง cutoff ทำนาย close ของวันนั้น
+
+*** แก้ 2026-09-29: เปลี่ยนแหล่งข้อมูลของ target (OfficialClose) ***
+เดิม target มาจากแท่ง 1h ที่ Hour == 16 ใน data_cache/{ticker}_1h_730d.csv
+(yfinance รายชั่วโมง) -- ตรวจกับราคาปิดทางการจริงจาก Settrade แล้ว
+(check_settrade_atc_match.py) พบว่า **ตรงกันแค่ 40-46%** (KBANK 46.0%,
+ADVANC 40.2% จาก 721 วัน) เพราะแท่ง 1h คือราคาซื้อขายต่อเนื่องช่วง
+15:00-16:00 ไม่ใช่ราคาจากรอบ ATC (call auction) ตอนปิดตลาดจริง
+
+ตอนนี้เปลี่ยนไปใช้ yfinance **daily-interval** close แทน (ดึงแยกจาก 1h,
+cache ไว้ที่ data_cache/{ticker}_daily_close.csv) ซึ่งยืนยันแล้วว่าตรงกับ
+ราคาปิดทางการ 100% (ดู task_b/tools/fetch_yahoo_daily.py ที่เทียบกับ
+investing.com) -- INTRADAY_CLOSE_HOUR ใน config.py ยังใช้เป็นคำอธิบาย
+เจตนา ("ราคาปิดคือ ~16:00 ตามเวลาตลาด") แต่ไม่ได้ใช้เลือกแท่งอีกต่อไป
 
 รันจากโฟลเดอร์ task_c:
     python intraday_task2.py --dev  # train/validation; ไม่แตะ test
@@ -40,6 +53,11 @@ def _hourly_path(ticker):
     return os.path.join("data_cache", f"{safe}_1h_730d.csv")
 
 
+def _daily_close_path(ticker):
+    safe = ticker.replace("^", "").replace(".", "_")
+    return os.path.join("data_cache", f"{safe}_daily_close.csv")
+
+
 def load_hourly(ticker):
     """โหลดแท่ง 1 ชั่วโมงและตรวจ schema ที่จำเป็น."""
     path = _hourly_path(ticker)
@@ -58,24 +76,81 @@ def load_hourly(ticker):
     return df
 
 
+def load_daily_close(ticker, start, end, use_cache=True):
+    """
+    ราคาปิดทางการรายวันจริงจาก yfinance (interval=1d) -- ใช้เป็น target ของ
+    Task 2 แทนแท่ง 1h ที่ Hour==close_hour (ดูเหตุผลใน docstring หัวไฟล์)
+
+    cache ไว้แยกจาก data_cache/{ticker}_1h_730d.csv เพราะคนละ query กัน
+    (interval ต่างกัน) ห้ามใช้ปนกับ cache ของ task_a/task_c เดิมที่แช่แข็ง
+    ไว้ที่ END_DATE ของ config.py -- ไฟล์นี้ต้องครอบคลุมช่วงเดียวกับข้อมูล
+    1h ซึ่งขยับตามวันที่ดึงแต่ละครั้ง ไม่ใช่ค่าคงที่
+    """
+    # yfinance daily index ไม่มี tz -- ตัด tz ของ start/end ทิ้งก่อนเทียบ/query
+    # เสมอ (ผู้เรียกอาจส่ง tz-aware Timestamp มาจาก hourly["Date"] ที่เป็น
+    # Asia/Bangkok)
+    start = pd.Timestamp(start).tz_localize(None) if pd.Timestamp(start).tz else pd.Timestamp(start)
+    end = pd.Timestamp(end).tz_localize(None) if pd.Timestamp(end).tz else pd.Timestamp(end)
+
+    path = _daily_close_path(ticker)
+    if use_cache and os.path.exists(path):
+        s = pd.read_csv(path, index_col=0, parse_dates=True)["Close"]
+        s.index = s.index.normalize()
+        s_start, s_end = s.index.min(), s.index.max()
+        if s_start <= pd.Timestamp(start) and s_end >= pd.Timestamp(end) - pd.Timedelta(days=3):
+            return s
+        # cache ไม่ครอบคลุมช่วงที่ต้องการ (เช่นข้อมูล 1h ใหม่กว่า) -> ดึงใหม่
+
+    import yfinance as yf
+    end_exclusive = (pd.Timestamp(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    df = yf.download(ticker, start=pd.Timestamp(start).strftime("%Y-%m-%d"),
+                     end=end_exclusive, interval="1d",
+                     auto_adjust=False, progress=False)
+    if df is None or len(df) == 0:
+        raise RuntimeError(f"ดึงราคาปิดรายวันของ {ticker} ไม่ได้")
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    s = df["Close"].dropna().copy()
+    s.index = pd.to_datetime(s.index).normalize()
+    os.makedirs("data_cache", exist_ok=True)
+    s.to_frame("Close").to_csv(path)
+    return s
+
+
 def build_task2_dataset(hourly, cutoff_hour=INTRADAY_CUTOFF_HOUR,
-                        close_hour=INTRADAY_CLOSE_HOUR):
+                        close_hour=INTRADAY_CLOSE_HOUR, daily_close=None):
     """สร้าง X/y รายวัน โดยไม่ใช้แท่งหลัง cutoff เป็น input.
 
-    วันหนึ่งต้องมีแท่ง close_hour เพื่อเป็น target เท่านั้น ส่วน input ใช้แท่ง
-    timestamp <= cutoff_hour. ถ้าไม่มี cutoff_hour ใช้แท่งล่าสุดก่อนหน้านั้น
-    และบันทึก cutoff_hour_used เป็น feature เพื่อให้โมเดลรับรู้ความต่างนี้.
+    input (feature) ใช้แท่ง timestamp <= cutoff_hour เท่านั้น ถ้าไม่มีแท่งตรง
+    cutoff_hour พอดี ใช้แท่งล่าสุดก่อนหน้านั้น และบันทึก cutoff_hour_used เป็น
+    feature เพื่อให้โมเดลรับรู้ความต่างนี้
+
+    target (actual_close): ถ้าใส่ daily_close (pd.Series, index=วันที่,
+    ค่า=ราคาปิดทางการรายวันจาก yfinance interval=1d) มาจะใช้ค่านี้เป็น
+    ราคาปิดทางการแทนแท่ง 1h ที่ Hour==close_hour — **แนะนำให้ใส่เสมอ**
+    เพราะแท่ง 1h ตรวจแล้วว่าตรง ATC จริงแค่ ~40-46% เท่านั้น (ดู
+    check_settrade_atc_match.py) การไม่ใส่ daily_close (None) ยังรองรับไว้
+    เพื่อ backward-compat กับ test เดิม แต่ไม่ควรใช้ใน pipeline จริงอีกแล้ว
     """
     rows = []
     for date, day in hourly.groupby("Date", sort=True):
         day = day.sort_values("Datetime")
-        closing = day.loc[day["Hour"] == close_hour]
         available = day.loc[day["Hour"] <= cutoff_hour]
-        if closing.empty or available.empty:
+        if available.empty:
             continue
 
+        if daily_close is not None:
+            date_key = pd.Timestamp(date).normalize().tz_localize(None)
+            if date_key not in daily_close.index:
+                continue
+            actual_close_val = float(daily_close.loc[date_key])
+        else:
+            closing = day.loc[day["Hour"] == close_hour]
+            if closing.empty:
+                continue
+            actual_close_val = float(closing.iloc[-1]["Close"])
+
         cutoff = available.iloc[-1]
-        close_row = closing.iloc[-1]
         observed = available.loc[available["Datetime"] <= cutoff["Datetime"]]
         open_price = float(observed.iloc[0]["Open"])
         cutoff_close = float(cutoff["Close"])
@@ -88,7 +163,7 @@ def build_task2_dataset(hourly, cutoff_hour=INTRADAY_CUTOFF_HOUR,
             "Date": date,
             # ใช้เก็บเพื่อสร้าง target / export เท่านั้น ไม่เป็น feature ดิบ
             "cutoff_price": cutoff_close,
-            "actual_close": float(close_row["Close"]),
+            "actual_close": actual_close_val,
             "daily_volume": float(day["Volume"].fillna(0).sum()),
             "session_open": open_price,
             "cutoff_hour_used": int(cutoff["Hour"]),
@@ -149,7 +224,8 @@ def run_task2_for_ticker(ticker, dev=False):
     print("=" * 78)
 
     hourly = load_hourly(ticker)
-    X, y, details = build_task2_dataset(hourly)
+    daily_close = load_daily_close(ticker, hourly["Date"].min(), hourly["Date"].max())
+    X, y, details = build_task2_dataset(hourly, daily_close=daily_close)
     X, y, details = _prepare(X, y, details)
     print(f"[task2] ได้ {len(X)} วัน, {X.shape[1]} intraday features "
           f"({X.index[0].date()} -> {X.index[-1].date()})")
