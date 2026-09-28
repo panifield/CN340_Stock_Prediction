@@ -1,7 +1,11 @@
-numpy>=1.24
-pandas>=2.0
-scikit-learn>=1.3
-xgboost>=2.0
-lightgbm>=4.0
-yfinance>=0.2.40
-matplotlib>=3.7
+# root -- ใช้กับ task_a, task_a2, task_c (task_b มี requirements.txt ของตัวเอง)
+# pin ตามเวอร์ชันที่ทดสอบ predict_live*.py และ main.py ผ่านจริง (2026-09-29)
+# default ของ library เปลี่ยนได้ตามเวอร์ชัน -> ผลอาจไม่ตรงถ้าใช้เวอร์ชันอื่น
+# (เหตุผลเดียวกับที่ task_b/requirements.txt pin ไว้)
+numpy==2.1.1
+pandas==2.3.3
+scikit-learn==1.9.1
+xgboost==3.4.1
+lightgbm==4.7.0
+yfinance==1.3.0
+matplotlib==3.11.0
