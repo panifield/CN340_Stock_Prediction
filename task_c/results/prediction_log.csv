@@ -1,0 +1,3 @@
+generated_at,ticker,target_date,data_cutoff,train_rows,model,last_close,last_direction,predicted_up_proba,predicted_updown,predicted_label,code_commit,worktree_dirty,is_dry_run
+2026-09-29T23:56:50+07:00,KBANK.BK,2026-09-30,2026-09-29,2457,ANN (MLP),242.0,ลง,0.192431,0.0,ลง/นิ่ง,96d68cb611ad3082ce307dbf3bb7ad4b5c80ed5e,False,False
+2026-09-29T23:56:50+07:00,ADVANC.BK,2026-09-30,2026-09-29,2457,ANN (MLP),349.0,ขึ้น,0.363067,0.0,ลง/นิ่ง,96d68cb611ad3082ce307dbf3bb7ad4b5c80ed5e,False,False
