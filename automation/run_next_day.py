@@ -18,10 +18,9 @@ target_date (วันทำการถัดไป) คำนวณจาก t
 ปฏิทินวันหยุด SET เดียวที่มีในเรโป — ใช้ร่วมกับ task_a/task_c ได้เพราะหุ้น
 ทั้ง 4 ตัวเทรดในตลาดเดียวกัน (SET)
 
-*** task_a และ task_c ไม่เช็คว่าตลาดปิดแล้วหรือยัง (ดู KNOWN_ISSUES.md #6) ***
-ถ้ารัน orchestrator นี้ก่อนตลาดปิดจริง อาจได้ข้อมูล "วันนี้" ที่ยังไม่นิ่งไป
-ทำนาย — ผู้รัน (คน หรือ scheduler) ต้องรับผิดชอบเรื่องเวลาเอง ยังไม่มี guard
-อัตโนมัติในสคริปต์เหล่านี้
+task_a และ task_c มี check_market_closed() กันรันช่วง 10:00-18:00 เอง (ตลาดอาจ
+เปิดอยู่ หรือเพิ่งปิดไม่ถึง 2 ชม. ข้อมูลยังไม่ settle) แก้ให้ครอบคลุมกรณีรันข้าม
+เที่ยงคืนตอนเช้ามืดด้วยแล้ว (เดิมเช็คแค่ now.hour < 18 ซึ่งบล็อกตอนเช้าผิดพลาด)
 
 *** task_a และ task_c ไม่ commit เองเหมือน task_b ***
 predict_live.py ของสองตัวนี้แค่เขียนไฟล์แล้วพิมพ์เตือนให้ commit เอง —
@@ -43,6 +42,7 @@ import pandas as pd
 BASE_DIR = Path(__file__).resolve().parent.parent          # now/
 TASK_B_HOLIDAYS = BASE_DIR / "task_b" / "set_holidays.txt"
 PY = sys.executable
+MARKET_OPEN_HOUR = 10   # เดียวกับ task_a/task_c: check_market_closed()
 
 
 class StepError(RuntimeError):
@@ -129,8 +129,16 @@ def main(argv=None):
 
     try:
         holidays, through = read_holidays(TASK_B_HOLIDAYS)
-        today = pd.Timestamp.now(tz="Asia/Bangkok").normalize().tz_localize(None)
-        target = next_trading_day(today, holidays, through)
+        now = pd.Timestamp.now(tz="Asia/Bangkok")
+        today = now.normalize().tz_localize(None)
+        # ถ้ารันตอนเช้ามืดก่อนตลาดเปิด (เช่น automation/register_next_day.ps1 ตั้งไว้
+        # 08:30) ข้อมูลที่นิ่งล่าสุดคือของ "เมื่อวาน" (วันนี้ยังไม่เปิดตลาด) ต้องถอย
+        # reference กลับ 1 วันปฏิทินก่อนหา next_trading_day มิฉะนั้นจะได้ target เกิน
+        # ไป 1 วันทำการเสมอ (พบจริงตอนทดสอบ 2026-10-01: วันนี้=10-01 หลุดไปคำนวณ
+        # target=10-02 ทั้งที่ data_cutoff จริงยังเป็น 09-29 เพราะยังไม่ได้ fetch ของ
+        # 09-30 เลยด้วยซ้ำ -- ควรได้ target=09-30 ไม่ใช่ 10-02 แก้ 2026-10-01)
+        reference = today - pd.Timedelta(days=1) if now.hour < MARKET_OPEN_HOUR else today
+        target = next_trading_day(reference, holidays, through)
         print(f"วันนี้ = {today.date()} -> target_date (วันทำการถัดไป) = {target.date()}")
         target_iso = target.date().isoformat()
 

@@ -14,6 +14,13 @@
 # log ของแต่ละรอบอยู่ที่ automation\.staging\logs\ (ไม่ถูก commit)
 # ข้อกำหนด: เครื่องเปิดอยู่ช่วงเวลานั้น (16:00-16:30) · git push ได้โดยไม่ต้องพิมพ์รหัส ·
 #           ไม่มีไฟล์ค้างไม่ commit ใน task_b (predict_1600.py เช็คเอง)
+#
+# ตั้ง WakeToRun ไว้ด้วย (ปลุกเครื่องจาก Sleep มารันเองได้ ไม่ต้องเปิดเครื่องทัน) แต่ต้องมี 2 อย่างนี้
+# เพิ่ม (เป็นค่า Windows เอง ตั้งในสคริปต์ไม่ได้ ต้องทำมือครั้งเดียว):
+#   1. เสียบชาร์จไว้ (DisallowStartIfOnBatteries=True -- ใช้แบตอย่างเดียวจะไม่รัน)
+#   2. Control Panel -> Power Options -> Change plan settings -> Change advanced power
+#      settings -> Sleep -> Allow wake timers -> Enable
+# เครื่องต้องอยู่ในโหมด Sleep ไม่ใช่ Shutdown ถึงจะปลุกได้ (ล็อกหน้าจอได้ปกติ ไม่กระทบ)
 
 param(
     [string]$Python = (Get-Command python).Source,
@@ -40,7 +47,7 @@ $log = Join-Path $LogDir "run_1600.log"
 $cmd = "/c set PYTHONUTF8=1 && echo ===== %DATE% %TIME% >> `"$log`" && `"$Python`" automation\run_1600.py $ModeArg >> `"$log`" 2>&1"
 $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument $cmd -WorkingDirectory $Root
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At "16:02"
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
 Register-ScheduledTask -TaskName $Name -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
 
 Write-Output "ลงทะเบียน '$Name' 16:02 -> python automation\run_1600.py $ModeArg"

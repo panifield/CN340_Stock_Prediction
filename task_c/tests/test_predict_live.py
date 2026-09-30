@@ -55,6 +55,18 @@ def test_check_market_closed_allows_after_1800():
     PL.check_market_closed(now=now)   # ไม่ raise = ผ่าน
 
 
+def test_check_market_closed_allows_early_morning_next_day():
+    """regression test: เดิมเช็คแค่ now.hour < 18 ซึ่งบล็อก 08:30 ผิดพลาด (8 < 18)
+    ทั้งที่ automation/register_next_day.ps1 ตั้งรันตอน 08:30 จริง (แก้ 2026-10-01)"""
+    now = T("2026-09-30 08:30", tz=BANGKOK)
+    PL.check_market_closed(now=now)   # ไม่ raise = ผ่าน
+
+
+def test_check_market_closed_blocks_market_open_hours():
+    now = T("2026-09-30 10:00", tz=BANGKOK)
+    _raises(PL.check_market_closed, now=now, match="18:00")
+
+
 def test_check_no_duplicate_raises_on_existing_key():
     with tempfile.TemporaryDirectory() as d:
         log = Path(d) / "log.csv"

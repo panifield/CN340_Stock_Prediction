@@ -253,22 +253,29 @@ def append_log(rows, log_path, columns=LOG_COLUMNS):
     print(f"\n[log] เขียนต่อท้าย {len(rows)} แถว -> {log_path}")
 
 
+MARKET_OPEN_HOUR = 10          # SET เปิดเช้า ~10:00
 MARKET_CLOSE_SAFE_HOUR = 18   # เดียวกับ task_b/daily_next_day.py: "รันหลังตลาดปิด (หลัง 18:00 +07:00)"
 
 
 def check_market_closed(now=None):
     """
-    กันรัน official ก่อนตลาดปิดจริง — fetch_live() ดึงข้อมูลสดทุกครั้งไม่มีอะไร
-    การันตีว่า "วันนี้" นิ่งแล้ว (ดู [live] !! คำเตือน NaN Close ด้านบน) ถ้ารันก่อน
-    18:00 น. ไทย มีโอกาสสูงที่ราคาปิดของวันนี้ยังไม่ backfill ใน yfinance
+    กันรัน official ระหว่างตลาดอาจเปิดอยู่ หรือเพิ่งปิดแต่ข้อมูลยังไม่ settle —
+    fetch_live() ดึงข้อมูลสดทุกครั้งไม่มีอะไรการันตีว่า "วันนี้" นิ่งแล้ว (ดู
+    [live] !! คำเตือน NaN Close ด้านบน)
+
+    ช่วงอันตรายคือ 10:00-18:00 (ตลาดอาจเปิดอยู่ หรือเพิ่งปิด 16:30 ไม่ถึง 2 ชม.
+    ข้อมูลมักยังไม่ backfill) นอกช่วงนี้ (18:00 ถึงก่อน 10:00 ของวันถัดไป) ถือว่า
+    ปลอดภัย รวมถึงรันข้ามเที่ยงคืนตอนเช้ามืด (เช่น automation/register_next_day.ps1
+    ตั้งไว้ 08:30 -- เดิมเช็คแค่ `now.hour < 18` ซึ่งบล็อก 08:30 ผิดพลาดเพราะ 8 < 18
+    ทั้งที่จริงห่างจากตลาดปิดมากกว่า 18:00 เดิมด้วยซ้ำ แก้ 2026-10-01)
     """
     now = now or pd.Timestamp.now(tz=BANGKOK)
-    if now.hour < MARKET_CLOSE_SAFE_HOUR:
+    if MARKET_OPEN_HOUR <= now.hour < MARKET_CLOSE_SAFE_HOUR:
         raise RuntimeError(
             f"ตอนนี้ {now.strftime('%H:%M')} น. (เวลาไทย) -- official prediction "
-            f"ควรรันหลัง {MARKET_CLOSE_SAFE_HOUR}:00 น. เท่านั้น เพื่อให้ราคาปิดของ"
-            "วันนี้นิ่งและ backfill ใน yfinance ทันแล้ว ใช้ --dry-run ถ้าต้องการ"
-            "ทดสอบนอกเวลานี้"
+            f"ควรรันหลัง {MARKET_CLOSE_SAFE_HOUR}:00 น. หรือก่อน {MARKET_OPEN_HOUR}:00 น."
+            "ของวันถัดไปเท่านั้น เพื่อให้ราคาปิดของวันนี้นิ่งและ backfill ใน yfinance"
+            "ทันแล้ว ใช้ --dry-run ถ้าต้องการทดสอบนอกเวลานี้"
         )
 
 

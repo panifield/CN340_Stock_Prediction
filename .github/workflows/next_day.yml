@@ -57,6 +57,7 @@ jobs:
           python task_b/tests/test_daily.py
           python task_b/tests/test_fetch_yahoo_daily.py
           python task_b/tests/test_append_investing.py
+          python automation/tests/test_run_next_day.py
 
       - name: Daily run (official)
         if: github.event_name == 'schedule' || inputs.dry_run == false
