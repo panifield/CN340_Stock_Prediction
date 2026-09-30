@@ -59,6 +59,13 @@ def git(*args, check=True):
     return r
 
 
+#  R2_return ไม่ใช่ตัวตัดสินใจ (ตัดสินด้วย MAE_return เท่านั้น -- ดู main.py) และ
+#  ไม่เสถียรทางคณิตศาสตร์โดยธรรมชาติ: ค่าที่นี่อยู่ใกล้ 0 มาก (โมเดลแทบไม่ต่างจาก
+#  baseline) ทำให้ float diff เล็กๆ ข้าม platform ขยายเป็น relative diff ใหญ่ได้ง่าย
+#  จึงให้ atol กว้างกว่าคอลัมน์อื่นแทนที่จะใช้ rtol กับค่าที่ใกล้ 0
+_COLUMN_ATOL = {"R2_return": 0.05}
+
+
 def check_val_regression(glob_pattern=VAL_GLOB, rtol=5e-3, atol=1e-5):
     """
     เทียบ results/*_val.csv กับเวอร์ชันที่ commit ไว้ (HEAD) แบบมี tolerance ตัวเลข
@@ -71,6 +78,9 @@ def check_val_regression(glob_pattern=VAL_GLOB, rtol=5e-3, atol=1e-5):
     ไปแล้วก่อนหน้านี้ -- แต่นี่เป็นคนละปัญหา: floating point ต่างกันข้าม
     platform/CPU/BLAS backend ซึ่งเลี่ยงไม่ได้แม้โค้ด/ข้อมูล/seed จะเหมือนกัน
     เป๊ะ) ดู KNOWN_ISSUES.md
+
+    แก้รอบ 2 (2026-10-01): rtol เดียวกันทุกคอลัมน์ยังพังกับ R2_return เพราะค่าใกล้ 0
+    เกินไป (ดู _COLUMN_ATOL) -- ใช้ atol เฉพาะคอลัมน์แทนสำหรับคอลัมน์ที่ไม่เสถียร
 
     คืน (ok, detail) -- ok=False เฉพาะตอนโครงสร้างต่างกัน (โมเดล/คอลัมน์ไม่ตรง
     กับที่ commit ไว้) หรือค่าต่างเกิน tolerance เท่านั้น ไม่ใช่ทุกครั้งที่ตัวเลข
@@ -94,11 +104,13 @@ def check_val_regression(glob_pattern=VAL_GLOB, rtol=5e-3, atol=1e-5):
             problems.append(f"{rel}: โครงสร้างเปลี่ยน (โมเดล/คอลัมน์ไม่ตรงกับที่ commit ไว้)")
             continue
         diff = (df_new - df_old).abs()
-        bound = atol + rtol * df_old.abs()
+        col_atol = pd.Series({c: _COLUMN_ATOL.get(c, atol) for c in df_old.columns})
+        bound = col_atol + rtol * df_old.abs()
         bad = diff > bound
         if bad.to_numpy().any():
-            worst = diff.to_numpy().max()
-            problems.append(f"{rel}: ค่าต่างเกิน tolerance (rtol={rtol}, atol={atol}) diff สูงสุด={worst:.6g}")
+            worst_col = diff.where(bad).max().idxmax()
+            worst = diff.where(bad).max().max()
+            problems.append(f"{rel}: ค่าต่างเกิน tolerance ที่คอลัมน์ {worst_col} diff สูงสุด={worst:.6g}")
     return (not problems), "; ".join(problems)
 
 
