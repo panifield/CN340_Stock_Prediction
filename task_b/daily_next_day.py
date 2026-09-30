@@ -21,6 +21,7 @@ daily_next_day.py — รันขั้นตอนประจำวันข�
 """
 
 import argparse
+import io
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -56,6 +57,49 @@ def git(*args, check=True):
     if check and r.returncode != 0:
         raise StepError(f"git {' '.join(args)} ล้มเหลว:\n{r.stderr.strip()}")
     return r
+
+
+def check_val_regression(glob_pattern=VAL_GLOB, rtol=5e-3, atol=1e-5):
+    """
+    เทียบ results/*_val.csv กับเวอร์ชันที่ commit ไว้ (HEAD) แบบมี tolerance ตัวเลข
+    แทนการเทียบ byte-ต่อ-byte แบบเดิม (`git diff --quiet`)
+
+    เดิมเทียบแบบเป๊ะ พังจริงตอน GitHub Actions (ubuntu-latest) รันเป็นครั้งแรก
+    2026-09-29 -- ค่าที่คำนวณได้บน Linux ต่างจากที่ commit ไว้จากเครื่อง Windows
+    ในระดับทศนิยมที่ 5-6 (เช่น XGBoost MAE_return 0.009430 vs 0.009423) แม้จะ
+    ตั้ง n_jobs=1 ไปแล้วก็ตาม (แก้ปัญหา non-determinism ข้าม run บนเครื่องเดียวกัน
+    ไปแล้วก่อนหน้านี้ -- แต่นี่เป็นคนละปัญหา: floating point ต่างกันข้าม
+    platform/CPU/BLAS backend ซึ่งเลี่ยงไม่ได้แม้โค้ด/ข้อมูล/seed จะเหมือนกัน
+    เป๊ะ) ดู KNOWN_ISSUES.md
+
+    คืน (ok, detail) -- ok=False เฉพาะตอนโครงสร้างต่างกัน (โมเดล/คอลัมน์ไม่ตรง
+    กับที่ commit ไว้) หรือค่าต่างเกิน tolerance เท่านั้น ไม่ใช่ทุกครั้งที่ตัวเลข
+    ขยับแม้แต่นิดเดียว
+    """
+    # git show HEAD:<path> ตีความ path จาก repo root เสมอ ไม่ใช่จาก cwd (ต่างจาก
+    # git diff/status ที่ตีความจาก cwd) -- BASE_DIR (task_b/) ไม่ใช่ repo root
+    # (repo root คือ now/) ต้องหา prefix มาต่อหน้า path ก่อนทุกครั้ง
+    prefix = git("rev-parse", "--show-prefix").stdout.strip()
+
+    problems = []
+    for path in sorted(BASE_DIR.glob(glob_pattern)):
+        rel = path.relative_to(BASE_DIR).as_posix()
+        old = git("show", f"HEAD:{prefix}{rel}", check=False)
+        if old.returncode != 0:
+            problems.append(f"{rel}: ไฟล์ใหม่ ไม่มีใน HEAD ให้เทียบ -- ตรวจด้วยตาก่อน commit")
+            continue
+        df_old = pd.read_csv(io.StringIO(old.stdout), index_col=0)
+        df_new = pd.read_csv(path, index_col=0)
+        if not (df_old.index.equals(df_new.index) and list(df_old.columns) == list(df_new.columns)):
+            problems.append(f"{rel}: โครงสร้างเปลี่ยน (โมเดล/คอลัมน์ไม่ตรงกับที่ commit ไว้)")
+            continue
+        diff = (df_new - df_old).abs()
+        bound = atol + rtol * df_old.abs()
+        bad = diff > bound
+        if bad.to_numpy().any():
+            worst = diff.to_numpy().max()
+            problems.append(f"{rel}: ค่าต่างเกิน tolerance (rtol={rtol}, atol={atol}) diff สูงสุด={worst:.6g}")
+    return (not problems), "; ".join(problems)
 
 
 # ---------------------------------------------------------------
@@ -137,10 +181,11 @@ def main(argv=None):
             files = sorted(staging.glob("*.csv"))
             run("2 append", [PY, TOOLS / "append_investing.py", *files, "--source", "yahoo", "--date-tag", tag])
             run("3 regression", [PY, "main.py", "--dev"])
-            if git("diff", "--quiet", "--", VAL_GLOB, check=False).returncode != 0:
-                raise StepError("results/*_val.csv เปลี่ยนหลัง append -- ข้อมูลเก่าถูกกระทบ ห้ามไปต่อ "
+            ok, detail = check_val_regression()
+            if not ok:
+                raise StepError(f"results/*_val.csv เปลี่ยนเกิน tolerance หลัง append -- {detail} "
                                 "(คืนไฟล์ด้วย git checkout -- raw_data results แล้วหาสาเหตุ)")
-            print("[3 regression] ok: *_val.csv ไม่เปลี่ยน")
+            print("[3 regression] ok: *_val.csv ไม่เปลี่ยนเกิน tolerance")
             if args.commit:
                 git("add", "raw_data", "raw_data_sources")
                 git("commit", "-m", f"data: task_b raw_data ถึง {data_cutoff().date()} (yahoo)")
