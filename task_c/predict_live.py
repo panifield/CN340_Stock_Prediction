@@ -64,7 +64,7 @@ LOG_PATH = OUTPUT_DIR / "prediction_log.csv"
 DRYRUN_LOG_PATH = OUTPUT_DIR / "dryrun" / "prediction_log_dryrun.csv"
 BANGKOK = timezone(timedelta(hours=7))
 
-KEY = ["ticker", "target_date"]
+KEY = ["ticker", "target_date", "model"]   # ต้องมี model ด้วย เพราะตอนนี้ทำนาย 3 โมเดล/หุ้น (2026-09-30)
 LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "data_cutoff", "train_rows",
     "model", "last_close", "last_direction", "predicted_up_proba",
@@ -138,11 +138,15 @@ def build_live_feature(df):
     return last, df.index[-1]
 
 
-def select_and_fit_best(X_all, y_all, verbose=True):
+def fit_all_models(X_all, y_all, verbose=True):
     """
-    เลือกโมเดลด้วย walk-forward CV บนข้อมูลทั้งหมดที่มี (ไม่มี held-out
-    val/test แยก เพราะนี่คือการ deploy ไม่ใช่การประเมิน) แล้ว refit ตัวที่
-    ชนะบนข้อมูลทั้งหมดอีกที ก่อนเอาไปทำนายจริง
+    เทรนทั้ง 3 โมเดลบนข้อมูลทั้งหมดที่มี (ไม่มี held-out val/test แยก เพราะ
+    นี่คือการ deploy ไม่ใช่การประเมิน) -- เปลี่ยน 2026-09-30: เดิมเลือกแค่
+    โมเดลที่ชนะ walk-forward OOF ตัวเดียวมาทำนาย ตอนนี้ทำนายด้วยทั้ง 3 โมเดล
+    แล้ว log ทุกตัว (เหมือน task_b/predict_live.py ที่ไม่เคยเลือกผู้ชนะอยู่
+    แล้ว และ task_a/task_a2/task_c t1600 ที่เพิ่งแก้ตาม) ยัง print
+    walk-forward OOF accuracy ไว้ให้เห็นว่าตัวไหนแม่นกว่ากันในอดีต แค่ไม่ใช้
+    ตัดสินว่าจะทำนายด้วยตัวไหน
     """
     models = get_classifiers()
     oof_correct = {name: 0 for name in models}
@@ -165,15 +169,13 @@ def select_and_fit_best(X_all, y_all, verbose=True):
         )
 
     accs = {name: oof_correct[name] / oof_total for name in models}
-    best = max(accs, key=accs.get)
     if verbose:
-        print(f"    เลือกจาก walk-forward OOF (n={oof_total}): "
-              + ", ".join(f"{k}={v:.4f}" for k, v in accs.items())
-              + f"  -> ใช้ {best}")
+        print(f"    walk-forward OOF (n={oof_total}): "
+              + ", ".join(f"{k}={v:.4f}" for k, v in accs.items()))
 
-    final_model = models[best]
-    final_model.fit(X_all, y_all)
-    return best, final_model
+    for model in models.values():
+        model.fit(X_all, y_all)
+    return models
 
 
 def predict_one_ticker(ticker, target_date, verbose=True):
@@ -202,18 +204,10 @@ def predict_one_ticker(ticker, target_date, verbose=True):
               f"(วันทำการถัดจาก data_cutoff) แต่ --target-date = {target_date} "
               f"— ถ้าตั้งใจข้ามวันหยุดยาวก็โอเค ถ้าไม่ตั้งใจ ให้เช็คอีกที")
 
-    best, final_model = select_and_fit_best(X_all, y_all, verbose=verbose)
+    models = fit_all_models(X_all, y_all, verbose=verbose)
 
     X_live, live_date = build_live_feature(df)
     assert live_date == data_cutoff
-
-    updown_pred = final_model.predict(X_live)
-    try:
-        up_proba = final_model.predict_proba(X_live)[:, 1]
-    except Exception:
-        up_proba = [np.nan]
-
-    label = "ขึ้น" if updown_pred[0] == 1 else "ลง/นิ่ง"
 
     close = df["Close"]
     last_close = float(close.iloc[-1])
@@ -222,24 +216,32 @@ def predict_one_ticker(ticker, target_date, verbose=True):
     else:
         last_direction = "นิ่ง"
 
-    print(f"    โมเดล: {best}")
     print(f"    ราคาปิดล่าสุด ({data_cutoff.date()}) = {last_close:.2f} "
           f"(ทิศทางของวันนั้น: {last_direction})")
-    print(f"    P(ขึ้น พรุ่งนี้) = {up_proba[0]:.4f}")
-    print(f"    ทำนาย {pd.Timestamp(target_date).date()}: {label}")
 
-    return {
-        "ticker": ticker,
-        "target_date": pd.Timestamp(target_date).date().isoformat(),
-        "data_cutoff": data_cutoff.date().isoformat(),
-        "train_rows": len(X_all),
-        "model": best,
-        "last_close": round(last_close, 4),
-        "last_direction": last_direction,
-        "predicted_up_proba": round(float(up_proba[0]), 6),
-        "predicted_updown": float(updown_pred[0]),
-        "predicted_label": label,
-    }
+    rows = []
+    for name, model in models.items():
+        updown_pred = model.predict(X_live)
+        try:
+            up_proba = model.predict_proba(X_live)[:, 1]
+        except Exception:
+            up_proba = [np.nan]
+        label = "ขึ้น" if updown_pred[0] == 1 else "ลง/นิ่ง"
+        print(f"    {name:20s} P(ขึ้น พรุ่งนี้)={up_proba[0]:.4f} "
+              f"-> ทำนาย {pd.Timestamp(target_date).date()}: {label}")
+        rows.append({
+            "ticker": ticker,
+            "target_date": pd.Timestamp(target_date).date().isoformat(),
+            "data_cutoff": data_cutoff.date().isoformat(),
+            "train_rows": len(X_all),
+            "model": name,
+            "last_close": round(last_close, 4),
+            "last_direction": last_direction,
+            "predicted_up_proba": round(float(up_proba[0]), 6),
+            "predicted_updown": float(updown_pred[0]),
+            "predicted_label": label,
+        })
+    return rows
 
 
 # ---------------------------------------------------------------
@@ -325,7 +327,9 @@ def main():
 
     generated_at = datetime.now(BANGKOK).isoformat(timespec="seconds")
 
-    rows = [predict_one_ticker(t, args.target_date) for t in TICKERS]
+    rows = []
+    for t in TICKERS:
+        rows.extend(predict_one_ticker(t, args.target_date))
     out = pd.DataFrame(rows)
     out["generated_at"] = generated_at
     out["code_commit"] = get_code_commit()

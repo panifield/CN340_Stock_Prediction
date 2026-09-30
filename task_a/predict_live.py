@@ -49,7 +49,7 @@ LOG_PATH = OUTPUT_DIR / "prediction_log.csv"
 DRYRUN_LOG_PATH = OUTPUT_DIR / "dryrun" / "prediction_log_dryrun.csv"
 BANGKOK = timezone(timedelta(hours=7))
 
-KEY = ["ticker", "target_date"]
+KEY = ["ticker", "target_date", "model"]   # ต้องมี model ด้วย เพราะตอนนี้ทำนาย 3 โมเดล/หุ้น (2026-09-30)
 LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "data_cutoff", "train_rows",
     "model", "prev_parity", "predicted_flip_proba", "predicted_parity",
@@ -126,11 +126,14 @@ def build_live_feature(df):
     return last, df.index[-1]
 
 
-def select_and_fit_best(X_all, yflip_all, extra_all, verbose=True):
+def fit_all_models(X_all, yflip_all, extra_all, verbose=True):
     """
-    เลือกโมเดลด้วย walk-forward CV บนข้อมูลทั้งหมดที่มี (ไม่มี held-out
-    test แยก เพราะนี่คือการ deploy ไม่ใช่การประเมิน) แล้ว refit ตัวที่
-    ชนะบนข้อมูลทั้งหมดอีกที ก่อนเอาไปทำนายจริง
+    เทรนทั้ง 3 โมเดลบนข้อมูลทั้งหมดที่มี (ไม่มี held-out test แยก เพราะนี่คือ
+    การ deploy ไม่ใช่การประเมิน) -- เปลี่ยน 2026-09-30: เดิมเลือกแค่โมเดลที่
+    ชนะ walk-forward OOF ตัวเดียวมาทำนาย ตอนนี้ทำนายด้วยทั้ง 3 โมเดลแล้ว log
+    ทุกตัว (เหมือน task_b/predict_live.py ที่ไม่เคยเลือกผู้ชนะอยู่แล้ว และ
+    task_a2/task_c t1600 ที่เพิ่งแก้ตาม) ยัง print walk-forward OOF accuracy
+    ไว้ให้เห็นว่าตัวไหนแม่นกว่ากันในอดีต แค่ไม่ใช้ตัดสินว่าจะทำนายด้วยตัวไหน
     """
     y_oof, preds_oof, probas_oof = _walk_forward_eval(
         X_all, yflip_all, extra_all, verbose=verbose)
@@ -141,15 +144,14 @@ def select_and_fit_best(X_all, yflip_all, extra_all, verbose=True):
         pred = preds_oof[name]
         yt = y_oof.loc[pred.index]
         accs[name] = float(np.mean(pred.values == yt.values))
-    best = max(accs, key=accs.get)
     if verbose:
-        print(f"    เลือกจาก walk-forward OOF (n={len(y_oof)}): "
-              + ", ".join(f"{k}={v:.4f}" for k, v in accs.items())
-              + f"  -> ใช้ {best}")
+        print(f"    walk-forward OOF (n={len(y_oof)}): "
+              + ", ".join(f"{k}={v:.4f}" for k, v in accs.items()))
 
-    final_model = get_classifiers()[best]
-    final_model.fit(X_all, yflip_all)
-    return best, final_model
+    models = get_classifiers()
+    for model in models.values():
+        model.fit(X_all, yflip_all)
+    return models
 
 
 def predict_one_ticker(ticker, target_date, verbose=True):
@@ -179,39 +181,39 @@ def predict_one_ticker(ticker, target_date, verbose=True):
               f"(วันทำการถัดจาก data_cutoff) แต่ --target-date = {target_date} "
               f"— ถ้าตั้งใจข้ามวันหยุดยาวก็โอเค ถ้าไม่ตั้งใจ ให้เช็คอีกที")
 
-    best, final_model = select_and_fit_best(X_all, yflip_all, extra_all,
-                                            verbose=verbose)
+    models = fit_all_models(X_all, yflip_all, extra_all, verbose=verbose)
 
     X_live, live_date = build_live_feature(df)
     assert live_date == data_cutoff
 
     prev_parity = float(targets["y_parity"].loc[data_cutoff])
-    flip_pred = final_model.predict(X_live)
-    try:
-        flip_proba = final_model.predict_proba(X_live)[:, 1]
-    except Exception:
-        flip_proba = [np.nan]
-    parity_pred, _ = _reconstruct_parity(
-        np.array([prev_parity]), flip_pred, np.array(flip_proba))
-
-    label = "คี่" if parity_pred[0] == 1 else "คู่"
-    print(f"    โมเดล: {best}")
     print(f"    parity ของวันนี้ ({data_cutoff.date()}) = "
           f"{'คี่' if prev_parity == 1 else 'คู่'}")
-    print(f"    P(พลิก parity พรุ่งนี้) = {flip_proba[0]:.4f}")
-    print(f"    ทำนาย {pd.Timestamp(target_date).date()}: parity = {label}")
 
-    return {
-        "ticker": ticker,
-        "target_date": pd.Timestamp(target_date).date().isoformat(),
-        "data_cutoff": data_cutoff.date().isoformat(),
-        "train_rows": len(X_all),
-        "model": best,
-        "prev_parity": prev_parity,
-        "predicted_flip_proba": round(float(flip_proba[0]), 6),
-        "predicted_parity": float(parity_pred[0]),
-        "predicted_label": label,
-    }
+    rows = []
+    for name, model in models.items():
+        flip_pred = model.predict(X_live)
+        try:
+            flip_proba = model.predict_proba(X_live)[:, 1]
+        except Exception:
+            flip_proba = [np.nan]
+        parity_pred, _ = _reconstruct_parity(
+            np.array([prev_parity]), flip_pred, np.array(flip_proba))
+        label = "คี่" if parity_pred[0] == 1 else "คู่"
+        print(f"    {name:20s} P(พลิก parity พรุ่งนี้)={flip_proba[0]:.4f} "
+              f"-> ทำนาย {pd.Timestamp(target_date).date()}: parity = {label}")
+        rows.append({
+            "ticker": ticker,
+            "target_date": pd.Timestamp(target_date).date().isoformat(),
+            "data_cutoff": data_cutoff.date().isoformat(),
+            "train_rows": len(X_all),
+            "model": name,
+            "prev_parity": prev_parity,
+            "predicted_flip_proba": round(float(flip_proba[0]), 6),
+            "predicted_parity": float(parity_pred[0]),
+            "predicted_label": label,
+        })
+    return rows
 
 
 # ---------------------------------------------------------------
@@ -297,7 +299,9 @@ def main():
 
     generated_at = datetime.now(BANGKOK).isoformat(timespec="seconds")
 
-    rows = [predict_one_ticker(t, args.target_date) for t in TICKERS]
+    rows = []
+    for t in TICKERS:
+        rows.extend(predict_one_ticker(t, args.target_date))
     out = pd.DataFrame(rows)
     out["generated_at"] = generated_at
     out["code_commit"] = get_code_commit()

@@ -50,8 +50,9 @@ def test_check_no_duplicate_raises_on_existing_key():
     with tempfile.TemporaryDirectory() as d:
         log = Path(d) / "log.csv"
         pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-30",
-                       "is_dry_run": False}]).to_csv(log, index=False)
-        new_rows = pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-30"}])
+                       "model": "ANN (MLP)", "is_dry_run": False}]).to_csv(log, index=False)
+        new_rows = pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-30",
+                                  "model": "ANN (MLP)"}])
         _raises(PL.check_no_duplicate, new_rows, log, match="มีคำทำนาย")
 
 
@@ -60,8 +61,9 @@ def test_check_no_duplicate_ignores_dry_run_rows():
     with tempfile.TemporaryDirectory() as d:
         log = Path(d) / "log.csv"
         pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-30",
-                       "is_dry_run": True}]).to_csv(log, index=False)
-        new_rows = pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-30"}])
+                       "model": "ANN (MLP)", "is_dry_run": True}]).to_csv(log, index=False)
+        new_rows = pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-30",
+                                  "model": "ANN (MLP)"}])
         # หมายเหตุ: check_no_duplicate ของ task_a ปัจจุบันไม่กรอง is_dry_run ออก
         # ก่อนเทียบ -- ถ้า assert นี้ fail แปลว่าพฤติกรรมเปลี่ยนไปแล้ว (อาจตั้งใจ
         # หรือไม่ตั้งใจก็ได้ ให้ไปดูโค้ดจริงอีกที)
