@@ -53,3 +53,21 @@ bash automation/run_1600_with_retry.sh --dry-run
 
 อย่างไรก็ตาม `--dry-run` ยังผ่าน time/data guard ของแต่ละ task; ไม่ควรใช้
 เพื่อ bypass ช่วง 16:00–16:30.
+
+## ทางเลือก: เปิด terminal รอเอง
+
+หากไม่ต้องการให้ `launchd` จัดเวลาเอง สามารถเปิด watcher ทิ้งไว้ล่วงหน้าได้:
+
+```bash
+venv/bin/python automation/wait_until_1602.py
+```
+
+มันจะรอถึง 16:02 เวลาไทยของวันทำการถัดไป แล้วเรียก official run พร้อม retry
+ให้อัตโนมัติ โดย terminal อาจปิดได้หลังงานจบ. ใช้ `Ctrl-C` เพื่อยกเลิก.
+
+**ห้ามใช้พร้อมกับ launchd ที่ติดตั้งอยู่** เพราะจะทำให้ run ซ้ำ. หากจะใช้ watcher
+แทน launchd ให้ถอน job ก่อน:
+
+```bash
+bash automation/install_1600_launchd_macos.sh --uninstall
+```
