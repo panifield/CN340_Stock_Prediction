@@ -4,14 +4,14 @@
 # และตั้ง Settings -> Actions -> General -> Workflow permissions = "Read and write"
 #
 # ใช้กับ next_day เท่านั้น (task_a/predict_live.py, task_c/predict_live.py, task_b/daily_next_day.py)
-# รันจันทร์-ศุกร์ 18:30 (+07:00) = 11:30 UTC -- cron ของ GitHub ช้าได้ถึง ~1 ชม. แต่ยังเสร็จก่อนเช้าของ
-# วันทำนาย ไม่มีเส้นตายแคบเหมือนกลุ่ม t1600 เลยใช้ GitHub Actions ได้ (ต่างจาก t1600 ที่ต้องใช้
-# automation/register_1600.ps1 บนเครื่องแทน เพราะเส้นตาย 16:30 แคบเกินกว่าจะทนความช้าของ cron ได้)
+# ปิด schedule ไว้ชั่วคราว (2026-10-01) -- รันเอง manual ผ่าน workflow_dispatch แทน จนกว่าจะมั่นใจว่า
+# task_b ผ่านทุกวันจริง (cron ดีเลย์ได้หลายชม. ทำให้ debug รอบ tolerance ช้า) ถ้าจะกลับมาใช้ auto ให้
+# ใส่คืน:
+#   schedule:
+#     - cron: "30 11 * * 1-5"   # 18:30 (+07:00) = 11:30 UTC, จันทร์-ศุกร์
 name: next_day daily (all tasks)
 
 on:
-  schedule:
-    - cron: "30 11 * * 1-5"
   workflow_dispatch:
     inputs:
       dry_run:
