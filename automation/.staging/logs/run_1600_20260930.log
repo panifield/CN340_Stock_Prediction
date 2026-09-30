@@ -1,0 +1,21 @@
+
+===== 2026-09-30 15:54:03 +07 : run_1600 launcher started =====
+[launcher] attempt 1/2: /Users/donpani/Documents/CN340/CN340_Stock_Prediction/venv/bin/python automation/run_1600.py --commit --push
+target_date (วันนี้) = 2026-09-30
+
+==============================================================================
+[task_a2] (cwd=task_a2) /Users/donpani/Documents/CN340/CN340_Stock_Prediction/venv/bin/python predict_live.py --target-date 2026-09-30
+==============================================================================
+Traceback (most recent call last):
+  File "/Users/donpani/Documents/CN340/CN340_Stock_Prediction/task_a2/predict_live.py", line 49, in <module>
+    from main import _prepare, _reconstruct_parity  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/donpani/Documents/CN340/CN340_Stock_Prediction/task_a2/../task_a/main.py", line 40, in <module>
+    from models import get_classifiers
+  File "/Users/donpani/Documents/CN340/CN340_Stock_Prediction/task_a2/../task_a/models.py", line 36, in <module>
+    from lightgbm import LGBMClassifier
+ModuleNotFoundError: No module named 'lightgbm'
+
+!! ขั้น task_a2 ล้มเหลว (exit 1) -- หยุด ไม่ไปต่อ task ถัดไป
+[launcher] attempt 1 ล้มเหลว
+[launcher] รอ 180 วินาที แล้ว retry 1 ครั้ง
