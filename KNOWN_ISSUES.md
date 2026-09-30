@@ -256,3 +256,28 @@ commit ข้อมูลจริงถึง 28 ก.ย. เข้าไป (�
 **บทเรียน**: local test ที่ผ่านตอนแรกไม่ได้แปลว่าปลอดภัยเสมอไป — CI จริงบน GitHub Actions เจอปัญหาที่ local
 environment ตอนนั้นไม่เจอ (เพราะลำดับการทดสอบ/สถานะ raw_data ตอนนั้นบังเอิญไม่ชนกัน) ควรรัน full test suite
 อีกรอบทุกครั้งหลัง merge หรือหลัง raw_data เปลี่ยน ไม่ใช่เชื่อผลรอบเดียวที่ผ่านไปแล้ว
+
+---
+
+## อัปเดต 2026-09-30 — next_day รันอัตโนมัติสำเร็จจริงครั้งแรก! เจอบั๊กใหม่ที่ task_b แก้แล้ว
+
+**ข่าวดี**: scheduled trigger (18:30 น.) ของ `next_day.yml` ทำงานจริงแล้ว (แม้จะดีเลย์ไปมาก — ยิง
+จริงตอน 23:56 น. แทนที่จะเป็น 18:30 น. ดีเลย์ไปเกือบ 5.5 ชั่วโมง จากที่เพิ่งสร้าง workflow วันแรก) —
+`task_a` และ `task_c` ทำนายจริงสำเร็จ commit เข้า `prediction_log.csv` แล้ว (target 2026-09-30) — แต่
+**overall run ขึ้น "failure"** เพราะ **task_b พังที่ regression-check**
+
+**สาเหตุ**: `daily_next_day.py` เช็ค `results/*_val.csv` แบบ byte-ต่อ-byte เทียบกับที่ commit ไว้
+(`git diff --quiet`) — ค่าที่ commit ไว้มาจากเครื่อง Windows (ตอนแก้ `n_jobs=1` ไปก่อนหน้านี้) แต่ GitHub
+Actions รันบน **Linux (ubuntu-latest)** ผลลัพธ์ floating point ต่างกันข้าม platform/CPU/BLAS backend
+ได้จริงแม้โค้ด/ข้อมูล/seed จะเหมือนกันเป๊ะ (พบว่า XGBoost MAE_return ต่างกัน ~0.08%) — **`n_jobs=1` แก้
+ปัญหา non-determinism ข้าม run บนเครื่องเดียวกันได้ แต่แก้ปัญหาข้าม platform ไม่ได้** เป็นคนละปัญหากัน
+
+**แก้แล้ว**: เขียน `check_val_regression()` ใหม่ ให้เทียบแบบมี tolerance ตัวเลข (rtol=0.5%, atol=1e-5)
+แทนการเทียบเป๊ะ — ยังคง fail ทันทีถ้าโครงสร้างเปลี่ยน (โมเดล/คอลัมน์ไม่ตรง) หรือค่าต่างเกิน tolerance จริง
+(ทดสอบแล้ว: diff สังเคราะห์ 0.08% ผ่าน, diff สังเคราะห์ 10% ยัง fail ถูกต้อง) ระหว่างแก้เจอบั๊กเสริมอีกจุด:
+`git show HEAD:<path>` ตีความ path จาก repo root เสมอ (ต่าง จาก `git diff`/`git status` ที่ตีความจาก cwd)
+ทำให้ path ผิดเงียบๆ ถ้าไม่ใส่ prefix ให้ถูก (`git rev-parse --show-prefix`)
+
+**บทเรียนสำคัญ**: การ dev/test บนเครื่อง Windows ไม่ได้การันตีว่า CI บน Linux จะได้ผลเดียวกันเป๊ะ แม้จะแก้
+`n_jobs=1` ไปแล้วก็ตาม — regression-check ที่เทียบผลลัพธ์ ML แบบเป๊ะไบต์ต่อไบต์ ควรมี tolerance เสมอเมื่อ
+รันข้าม environment กัน
