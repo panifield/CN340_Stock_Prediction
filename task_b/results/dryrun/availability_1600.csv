@@ -5,3 +5,9 @@ date,ticker,snapshot,source,downloaded_at,minutes_after_1600,hours_present,requi
 2026-09-30,KBANK.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\KBANK_BK_1h_162242.csv,yahoo,2026-09-30T16:22:42+07:00,22.7,10 11 12 13 14 15,True,False,False,0,
 2026-09-30,ADVANC.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\ADVANC_BK_1h_161939.csv,yahoo,2026-09-30T16:19:39+07:00,19.65,10 11 12 13 14 15,True,False,False,0,True
 2026-09-30,ADVANC.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\ADVANC_BK_1h_162242.csv,yahoo,2026-09-30T16:22:42+07:00,22.7,10 11 12 13 14 15,True,False,False,0,
+2026-09-30,KBANK.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\KBANK_BK_1h_161939.csv,yahoo,2026-09-30T16:19:39+07:00,19.65,10 11 12 13 14 15,True,False,False,1,True
+2026-09-30,KBANK.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\KBANK_BK_1h_162242.csv,yahoo,2026-09-30T16:22:42+07:00,22.7,10 11 12 13 14 15,True,False,False,0,True
+2026-09-30,KBANK.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\KBANK_BK_1h_164239.csv,yahoo,2026-09-30T16:42:39+07:00,42.65,10 11 12 13 14 15 16,True,True,False,0,
+2026-09-30,ADVANC.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\ADVANC_BK_1h_161939.csv,yahoo,2026-09-30T16:19:39+07:00,19.65,10 11 12 13 14 15,True,False,False,0,True
+2026-09-30,ADVANC.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\ADVANC_BK_1h_162242.csv,yahoo,2026-09-30T16:22:42+07:00,22.7,10 11 12 13 14 15,True,False,False,0,True
+2026-09-30,ADVANC.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20260930\ADVANC_BK_1h_164239.csv,yahoo,2026-09-30T16:42:39+07:00,42.65,10 11 12 13 14 15 16,True,True,False,0,
