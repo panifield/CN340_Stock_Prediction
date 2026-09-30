@@ -74,7 +74,7 @@ BANGKOK = timezone(timedelta(hours=7))
 
 TICKERS = {"KBANK.BK": "KBANK", "ADVANC.BK": "ADVANC"}
 
-KEY = ["ticker", "target_date"]
+KEY = ["ticker", "target_date", "model"]   # ต้องมี model ด้วย เพราะตอนนี้ทำนาย 3 โมเดล/หุ้น (2026-09-30)
 LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "bar_1600_time", "train_rows",
     "model", "price_1600", "parity_1600", "predicted_flip_proba",
@@ -211,13 +211,12 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
         pred = preds_oof[name]
         yt = y_oof.loc[pred.index]
         accs[name] = float(np.mean(pred.values == yt.values))
-    best = max(accs, key=accs.get)
-    print(f"    เลือกจาก walk-forward OOF (n={len(y_oof)}): "
-          + ", ".join(f"{k}={v:.4f}" for k, v in accs.items())
-          + f"  -> ใช้ {best}")
-
-    final_model = get_classifiers()[best]
-    final_model.fit(X_hist, yflip_hist)
+    # เปลี่ยน 2026-09-30: เดิมเลือกแค่โมเดลที่ชนะ walk-forward OOF ตัวเดียวมาทำนาย
+    # ตอนนี้ทำนายด้วยทั้ง 3 โมเดลแล้ว log ทุกตัว (เหมือน task_b/predict_1600.py
+    # ที่ไม่เลือกผู้ชนะ แต่ให้คนอ่าน log เห็นทุกโมเดล) -- OOF accuracy ยัง print
+    # ไว้ให้เห็นว่าตัวไหนแม่นกว่ากันในอดีต แค่ไม่ใช้ตัดสินว่าจะทำนายด้วยตัวไหน
+    print(f"    walk-forward OOF (n={len(y_oof)}): "
+          + ", ".join(f"{k}={v:.4f}" for k, v in accs.items()))
 
     if today not in intraday.index.date:
         raise RuntimeError(f"ไม่มี feature ของวันนี้ ({today}) เลย")
@@ -232,37 +231,40 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
     price_1600 = float(intraday.loc[today_ts, "price_1600"])
     parity_1600 = float(parity_fn(to_int_baht(pd.Series([price_1600]))).iloc[0])
 
-    flip_pred = final_model.predict(X_live)
-    try:
-        flip_proba = final_model.predict_proba(X_live)[:, 1]
-    except Exception:
-        flip_proba = np.array([np.nan])
-    parity_pred, _ = _reconstruct_parity(
-        np.array([parity_1600]), flip_pred, flip_proba)
-
-    label = "คี่" if parity_pred[0] == 1 else "คู่"
     bar_time = [t.strftime("%H:%M") for t in today_bars.index
                if t.time() == pd.Timestamp("15:00").time()]
     bar_time = bar_time[0] if bar_time else None
 
-    print(f"    โมเดล: {best}")
     print(f"    ราคา ณ 16:00 = {price_1600:.2f}  "
           f"(parity = {'คี่' if parity_1600 == 1 else 'คู่'})")
-    print(f"    P(พลิก parity ตอนปิด) = {flip_proba[0]:.4f}")
-    print(f"    ทำนายราคาปิดวันนี้ ({today}): parity = {label}")
 
-    return {
-        "ticker": yf_ticker,
-        "target_date": today.isoformat(),
-        "bar_1600_time": bar_time,
-        "train_rows": len(hist_dates),
-        "model": best,
-        "price_1600": price_1600,
-        "parity_1600": parity_1600,
-        "predicted_flip_proba": round(float(flip_proba[0]), 6),
-        "predicted_parity": float(parity_pred[0]),
-        "predicted_label": label,
-    }
+    rows = []
+    for name in model_names:
+        model = get_classifiers()[name]
+        model.fit(X_hist, yflip_hist)
+        flip_pred = model.predict(X_live)
+        try:
+            flip_proba = model.predict_proba(X_live)[:, 1]
+        except Exception:
+            flip_proba = np.array([np.nan])
+        parity_pred, _ = _reconstruct_parity(
+            np.array([parity_1600]), flip_pred, flip_proba)
+        label = "คี่" if parity_pred[0] == 1 else "คู่"
+        print(f"    {name:20s} P(พลิก parity ตอนปิด)={flip_proba[0]:.4f} "
+              f"-> parity = {label}")
+        rows.append({
+            "ticker": yf_ticker,
+            "target_date": today.isoformat(),
+            "bar_1600_time": bar_time,
+            "train_rows": len(hist_dates),
+            "model": name,
+            "price_1600": price_1600,
+            "parity_1600": parity_1600,
+            "predicted_flip_proba": round(float(flip_proba[0]), 6),
+            "predicted_parity": float(parity_pred[0]),
+            "predicted_label": label,
+        })
+    return rows
 
 
 def check_no_duplicate(new_rows, log_path=LOG_PATH):
@@ -321,8 +323,9 @@ def main():
 
     generated_at = datetime.now(BANGKOK).isoformat(timespec="seconds")
 
-    rows = [predict_one_ticker(t, short, args.target_date, args.dry_run)
-           for t, short in TICKERS.items()]
+    rows = []
+    for t, short in TICKERS.items():
+        rows.extend(predict_one_ticker(t, short, args.target_date, args.dry_run))
     out = pd.DataFrame(rows)
     out["generated_at"] = generated_at
     out["code_commit"] = get_code_commit()

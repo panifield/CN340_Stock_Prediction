@@ -64,7 +64,7 @@ FEATURE_COLUMNS = [
     "volume_progress_vs_20d", "day_of_week",
 ]
 
-KEY = ["ticker", "target_date"]
+KEY = ["ticker", "target_date", "model"]   # ต้องมี model ด้วย เพราะตอนนี้ทำนาย 3 โมเดล/หุ้น (2026-09-30)
 LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "cutoff_hour_used", "cutoff_price",
     "train_rows", "model", "predicted_up_proba", "predicted_up_to_close",
@@ -149,11 +149,14 @@ def _today_feature_row(hourly, today, cutoff_hour=INTRADAY_CUTOFF_HOUR):
     }
 
 
-def select_and_fit_best(X_all, y_all, verbose=True):
+def fit_all_models(X_all, y_all, verbose=True):
     """
-    เลือกโมเดลด้วย walk-forward CV บนข้อมูลทั้งหมดที่มี (ไม่มี held-out
-    val/test แยก เพราะนี่คือการ deploy ไม่ใช่การประเมิน) แล้ว refit ตัวที่
-    ชนะบนข้อมูลทั้งหมดอีกที ก่อนเอาไปทำนายจริง (เหมือน task_c/predict_live.py)
+    เทรนทั้ง 3 โมเดลบนข้อมูลทั้งหมด (ไม่มี held-out val/test แยก เพราะนี่คือ
+    การ deploy ไม่ใช่การประเมิน) -- เปลี่ยน 2026-09-30: เดิมเลือกแค่โมเดลที่
+    ชนะ walk-forward OOF ตัวเดียวมาทำนาย ตอนนี้ทำนายด้วยทั้ง 3 โมเดลแล้ว log
+    ทุกตัว (เหมือน task_b/predict_1600.py ที่ไม่เลือกผู้ชนะ ให้คนอ่าน log เห็น
+    ทุกโมเดล) -- OOF accuracy ยัง print ไว้ให้เห็นว่าตัวไหนแม่นกว่ากันในอดีต
+    แค่ไม่ใช้ตัดสินว่าจะทำนายด้วยตัวไหน
     """
     models = get_classifiers()
     oof_correct = {name: 0 for name in models}
@@ -176,15 +179,13 @@ def select_and_fit_best(X_all, y_all, verbose=True):
         )
 
     accs = {name: oof_correct[name] / oof_total for name in models}
-    best = max(accs, key=accs.get)
     if verbose:
-        print(f"    เลือกจาก walk-forward OOF (n={oof_total}): "
-              + ", ".join(f"{k}={v:.4f}" for k, v in accs.items())
-              + f"  -> ใช้ {best}")
+        print(f"    walk-forward OOF (n={oof_total}): "
+              + ", ".join(f"{k}={v:.4f}" for k, v in accs.items()))
 
-    final_model = models[best]
-    final_model.fit(X_all, y_all)
-    return best, final_model
+    for model in models.values():
+        model.fit(X_all, y_all)
+    return models
 
 
 def predict_one_ticker(ticker, target_date, allow_incomplete, verbose=True):
@@ -241,7 +242,7 @@ def predict_one_ticker(ticker, target_date, allow_incomplete, verbose=True):
     print(f"[live] ประวัติสำหรับเทรน: {len(X_hist)} วัน "
           f"({X_hist.index[0].date()} -> {X_hist.index[-1].date()})")
 
-    best, final_model = select_and_fit_best(X_hist, y_hist, verbose=verbose)
+    models = fit_all_models(X_hist, y_hist, verbose=verbose)
 
     row = _today_feature_row(hourly, today)
     actual_close_hist = daily_close
@@ -260,30 +261,30 @@ def predict_one_ticker(ticker, target_date, allow_incomplete, verbose=True):
 
     X_live = pd.DataFrame([row], index=[today])[FEATURE_COLUMNS]
 
-    up_pred = final_model.predict(X_live)
-    try:
-        up_proba = final_model.predict_proba(X_live)[:, 1]
-    except Exception:
-        up_proba = [np.nan]
-
-    label = "ขึ้น" if up_pred[0] == 1 else "ลง/นิ่ง"
-
-    print(f"    โมเดล: {best}")
     print(f"    ราคา ณ cutoff {row['cutoff_hour_used']}:00 = {row['cutoff_price']:.2f}")
-    print(f"    P(ขึ้นถึง close {INTRADAY_CLOSE_HOUR}:00) = {up_proba[0]:.4f}")
-    print(f"    ทำนายราคาปิดวันนี้ ({today.date()}): {label}")
 
-    return {
-        "ticker": ticker,
-        "target_date": today.date().isoformat(),
-        "cutoff_hour_used": row["cutoff_hour_used"],
-        "cutoff_price": round(row["cutoff_price"], 4),
-        "train_rows": len(X_hist),
-        "model": best,
-        "predicted_up_proba": round(float(up_proba[0]), 6),
-        "predicted_up_to_close": float(up_pred[0]),
-        "predicted_label": label,
-    }
+    rows = []
+    for name, model in models.items():
+        up_pred = model.predict(X_live)
+        try:
+            up_proba = model.predict_proba(X_live)[:, 1]
+        except Exception:
+            up_proba = [np.nan]
+        label = "ขึ้น" if up_pred[0] == 1 else "ลง/นิ่ง"
+        print(f"    {name:20s} P(ขึ้นถึง close {INTRADAY_CLOSE_HOUR}:00)="
+              f"{up_proba[0]:.4f} -> {label}")
+        rows.append({
+            "ticker": ticker,
+            "target_date": today.date().isoformat(),
+            "cutoff_hour_used": row["cutoff_hour_used"],
+            "cutoff_price": round(row["cutoff_price"], 4),
+            "train_rows": len(X_hist),
+            "model": name,
+            "predicted_up_proba": round(float(up_proba[0]), 6),
+            "predicted_up_to_close": float(up_pred[0]),
+            "predicted_label": label,
+        })
+    return rows
 
 
 # ---------------------------------------------------------------
@@ -347,7 +348,9 @@ def main():
 
     generated_at = datetime.now(BANGKOK).isoformat(timespec="seconds")
 
-    rows = [predict_one_ticker(t, args.target_date, args.dry_run) for t in TICKERS]
+    rows = []
+    for t in TICKERS:
+        rows.extend(predict_one_ticker(t, args.target_date, args.dry_run))
     out = pd.DataFrame(rows)
     out["generated_at"] = generated_at
     out["code_commit"] = get_code_commit()

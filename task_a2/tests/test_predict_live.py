@@ -99,8 +99,9 @@ def test_check_no_duplicate_raises_on_existing_key():
     with tempfile.TemporaryDirectory() as d:
         log = Path(d) / "log.csv"
         pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-28",
-                       "is_dry_run": False}]).to_csv(log, index=False)
-        new_rows = pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-28"}])
+                       "model": "ANN (MLP)", "is_dry_run": False}]).to_csv(log, index=False)
+        new_rows = pd.DataFrame([{"ticker": "KBANK.BK", "target_date": "2026-09-28",
+                                  "model": "ANN (MLP)"}])
         _raises(PL.check_no_duplicate, new_rows, log, match="มีคำทำนาย")
 
 
