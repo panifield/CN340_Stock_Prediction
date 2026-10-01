@@ -33,11 +33,21 @@ prediction ของวันนั้นแล้วบ้าง)
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
+
+# ต้องตั้งก่อน import/subprocess อื่นใด -- รันผ่าน Task Scheduler บน Windows พบว่า
+# "cmd.exe /c set PYTHONUTF8=1 && ... && python.exe ..." แบบ inline ทำให้ python.exe
+# fatal error "invalid PYTHONUTF8 environment variable value" (เหตุผลไม่ชัดเจน อาจเป็น
+# quirk เฉพาะเครื่อง) เปลี่ยนมาตั้งจากใน python เองแทน (ยืนยันแล้วว่า os.environ ตรงนี้
+# propagate ไปถึง subprocess ลูกหลานได้ปกติแม้รันผ่าน Task Scheduler) -- จำเป็นเพราะ
+# task_a/task_c/task_b พิมพ์ข้อความไทยออก stdout ซึ่งพังด้วย cp1252 (ค่า default ของ
+# console บนเครื่องนี้) ถ้าไม่มีตัวนี้ (แก้ 2026-10-01)
+os.environ.setdefault("PYTHONUTF8", "1")
 
 BASE_DIR = Path(__file__).resolve().parent.parent          # now/
 TASK_B_HOLIDAYS = BASE_DIR / "task_b" / "set_holidays.txt"

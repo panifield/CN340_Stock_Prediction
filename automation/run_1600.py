@@ -39,11 +39,17 @@ task_a2/task_c ไม่มี phase "outcome" แบบนี้เลย (KNOW
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
+
+# ต้องตั้งก่อน subprocess อื่นใด -- เหตุผลเดียวกับ automation/run_next_day.py: inline
+# "cmd.exe /c set PYTHONUTF8=1 && ... && python.exe ..." ผ่าน Task Scheduler ทำให้
+# python.exe fatal error เรื่อง PYTHONUTF8 (แก้ 2026-10-01)
+os.environ.setdefault("PYTHONUTF8", "1")
 
 BASE_DIR = Path(__file__).resolve().parent.parent          # now/
 PY = sys.executable
