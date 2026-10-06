@@ -12,58 +12,23 @@
 
 | ticker | model | n | first_date | last_date | MAE_return | MAE_naive | relMAE | R2_OOS | RMSE_return | MAE_baht | wins | losses | ties | win_rate_ex_ties |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| ADVANC.BK | ANN (MLP) | 2 | 2026-10-01 | 2026-10-02 | 0.003835 | 0.004386 | 0.874326 | 0.247702 | 0.005380 | 1.311581 | 1 | 1 | 0 | 0.500000 |
-| ADVANC.BK | Random Forest | 2 | 2026-10-01 | 2026-10-02 | 0.003722 | 0.004386 | 0.848647 | 0.332817 | 0.005066 | 1.273398 | 1 | 1 | 0 | 0.500000 |
-| ADVANC.BK | XGBoost | 2 | 2026-10-01 | 2026-10-02 | 0.003670 | 0.004386 | 0.836709 | 0.360330 | 0.004961 | 1.255562 | 1 | 1 | 0 | 0.500000 |
-| KBANK.BK | ANN (MLP) | 2 | 2026-10-01 | 2026-10-02 | 0.008779 | 0.008575 | 1.023900 | -0.015533 | 0.009667 | 2.047978 | 1 | 1 | 0 | 0.500000 |
-| KBANK.BK | Random Forest | 2 | 2026-10-01 | 2026-10-02 | 0.007902 | 0.008575 | 0.921583 | 0.193472 | 0.008615 | 1.843433 | 1 | 1 | 0 | 0.500000 |
-| KBANK.BK | XGBoost | 2 | 2026-10-01 | 2026-10-02 | 0.008683 | 0.008575 | 1.012595 | 0.020361 | 0.009495 | 2.025447 | 1 | 1 | 0 | 0.500000 |
+| ADVANC.BK | ANN (MLP) | 3 | 2026-10-01 | 2026-10-05 | 0.003481 | 0.003890 | 0.894695 | 0.231727 | 0.004675 | 1.193167 | 2 | 1 | 0 | 0.666667 |
+| ADVANC.BK | Random Forest | 3 | 2026-10-01 | 2026-10-05 | 0.003345 | 0.003890 | 0.859903 | 0.319823 | 0.004399 | 1.146921 | 2 | 1 | 0 | 0.666667 |
+| ADVANC.BK | XGBoost | 3 | 2026-10-01 | 2026-10-05 | 0.003328 | 0.003890 | 0.855428 | 0.341409 | 0.004329 | 1.141066 | 2 | 1 | 0 | 0.666667 |
+| KBANK.BK | ANN (MLP) | 3 | 2026-10-01 | 2026-10-05 | 0.006085 | 0.005716 | 1.064417 | -0.018157 | 0.007903 | 1.419979 | 1 | 2 | 0 | 0.333333 |
+| KBANK.BK | Random Forest | 3 | 2026-10-01 | 2026-10-05 | 0.005551 | 0.005716 | 0.971015 | 0.189567 | 0.007051 | 1.295642 | 1 | 2 | 0 | 0.333333 |
+| KBANK.BK | XGBoost | 3 | 2026-10-01 | 2026-10-05 | 0.006023 | 0.005716 | 1.053695 | 0.017662 | 0.007763 | 1.405743 | 1 | 2 | 0 | 0.333333 |
 
 ### รูปร่างคำทำนาย ทิศทาง และสัญญาณ
 
 | ticker | model | Bias | StdRatio | Rho | zero_move_days | dir_hit_rate_moved_days | long_signal_days | long_signal_up_rate | prev_close_mismatch | enough_data |
 |---|---|---|---|---|---|---|---|---|---|---|
-| ADVANC.BK | ANN (MLP) | -0.003835 | 0.139680 | NaN | 1 | 1.000000 | 0 | NaN | 0 | False |
-| ADVANC.BK | Random Forest | -0.003722 | 0.216313 | NaN | 1 | 1.000000 | 0 | NaN | 0 | False |
-| ADVANC.BK | XGBoost | -0.003670 | 0.238911 | NaN | 1 | 1.000000 | 0 | NaN | 0 | False |
-| KBANK.BK | ANN (MLP) | -0.004046 | 0.023900 | NaN | 0 | 0.500000 | 0 | NaN | 0 | False |
-| KBANK.BK | Random Forest | -0.003431 | 0.078417 | NaN | 0 | 0.500000 | 0 | NaN | 0 | False |
-| KBANK.BK | XGBoost | -0.003842 | 0.012595 | NaN | 0 | 0.500000 | 0 | NaN | 0 | False |
-
-### ความครบและตรงเวลา
-
-| ticker | model | predictions | missing_trading_days | missing_dates | early_predictions | late_predictions |
-|---|---|---|---|---|---|---|
-| ADVANC.BK | ANN (MLP) | 2 | 0 |  | 0 | 0 |
-| ADVANC.BK | Random Forest | 2 | 0 |  | 0 | 0 |
-| ADVANC.BK | XGBoost | 2 | 0 |  | 0 | 0 |
-| KBANK.BK | ANN (MLP) | 2 | 0 |  | 0 | 0 |
-| KBANK.BK | Random Forest | 2 | 0 |  | 0 | 0 |
-| KBANK.BK | XGBoost | 2 | 0 |  | 0 | 0 |
-
-## same_day_1600
-
-### ความแม่นเทียบ Naive
-
-| ticker | model | n | first_date | last_date | MAE_return | MAE_naive | relMAE | R2_OOS | RMSE_return | MAE_baht | wins | losses | ties | win_rate_ex_ties |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| ADVANC.BK | ANN (MLP) | 2 | 2026-09-30 | 2026-10-01 | 0.001807 | 0.001449 | 1.246849 | -0.075264 | 0.002125 | 0.623081 | 0 | 2 | 0 | 0.000000 |
-| ADVANC.BK | Random Forest | 2 | 2026-09-30 | 2026-10-01 | 0.001669 | 0.001449 | 1.151469 | -0.016481 | 0.002066 | 0.575510 | 1 | 1 | 0 | 0.500000 |
-| ADVANC.BK | XGBoost | 2 | 2026-09-30 | 2026-10-01 | 0.001636 | 0.001449 | 1.128592 | 0.124801 | 0.001917 | 0.563979 | 1 | 1 | 0 | 0.500000 |
-| KBANK.BK | ANN (MLP) | 2 | 2026-09-30 | 2026-10-01 | 0.003643 | 0.004283 | 0.850590 | 0.251078 | 0.003706 | 0.850935 | 1 | 1 | 0 | 0.500000 |
-| KBANK.BK | Random Forest | 2 | 2026-09-30 | 2026-10-01 | 0.003257 | 0.004283 | 0.760567 | 0.396133 | 0.003328 | 0.760912 | 2 | 0 | 0 | 1.000000 |
-| KBANK.BK | XGBoost | 2 | 2026-09-30 | 2026-10-01 | 0.002980 | 0.004283 | 0.695808 | 0.500876 | 0.003026 | 0.696074 | 2 | 0 | 0 | 1.000000 |
-
-### รูปร่างคำทำนาย ทิศทาง และสัญญาณ
-
-| ticker | model | Bias | StdRatio | Rho | zero_move_days | dir_hit_rate_moved_days | long_signal_days | long_signal_up_rate | prev_close_mismatch | enough_data |
-|---|---|---|---|---|---|---|---|---|---|---|
-| ADVANC.BK | ANN (MLP) | -0.001119 | 0.246849 | NaN | 1 | 0.000000 | 0 | NaN | 1 | False |
-| ADVANC.BK | Random Forest | -0.001219 | 0.151469 | NaN | 1 | 1.000000 | 0 | NaN | 1 | False |
-| ADVANC.BK | XGBoost | -0.001001 | 0.128592 | NaN | 1 | 1.000000 | 0 | NaN | 1 | False |
-| KBANK.BK | ANN (MLP) | 0.000683 | 0.149410 | NaN | 0 | 0.500000 | 0 | NaN | 0 | False |
-| KBANK.BK | Random Forest | 0.000683 | 0.239433 | NaN | 0 | 1.000000 | 0 | NaN | 0 | False |
-| KBANK.BK | XGBoost | 0.000524 | 0.304192 | NaN | 0 | 1.000000 | 0 | NaN | 0 | False |
+| ADVANC.BK | ANN (MLP) | -0.001633 | 0.119629 | 0.980850 | 1 | 1.000000 | 0 | NaN | 0 | False |
+| ADVANC.BK | Random Forest | -0.001618 | 0.181360 | 0.973519 | 1 | 1.000000 | 0 | NaN | 0 | False |
+| ADVANC.BK | XGBoost | -0.001565 | 0.195571 | 0.962927 | 1 | 1.000000 | 0 | NaN | 0 | False |
+| KBANK.BK | ANN (MLP) | -0.002929 | 0.065569 | -0.075730 | 1 | 0.500000 | 0 | NaN | 0 | False |
+| KBANK.BK | Random Forest | -0.002005 | 0.075335 | 0.965613 | 1 | 0.500000 | 0 | NaN | 0 | False |
+| KBANK.BK | XGBoost | -0.002326 | 0.019980 | -0.802981 | 1 | 0.500000 | 0 | NaN | 0 | False |
 
 ### ความครบและตรงเวลา
 
@@ -75,3 +40,38 @@
 | KBANK.BK | ANN (MLP) | 3 | 0 |  | 0 | 0 |
 | KBANK.BK | Random Forest | 3 | 0 |  | 0 | 0 |
 | KBANK.BK | XGBoost | 3 | 0 |  | 0 | 0 |
+
+## same_day_1600
+
+### ความแม่นเทียบ Naive
+
+| ticker | model | n | first_date | last_date | MAE_return | MAE_naive | relMAE | R2_OOS | RMSE_return | MAE_baht | wins | losses | ties | win_rate_ex_ties |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ADVANC.BK | ANN (MLP) | 3 | 2026-09-30 | 2026-10-02 | 0.001269 | 0.000966 | 1.313090 | -0.079651 | 0.001739 | 0.437467 | 0 | 3 | 0 | 0.000000 |
+| ADVANC.BK | Random Forest | 3 | 2026-09-30 | 2026-10-02 | 0.001147 | 0.000966 | 1.187439 | -0.017775 | 0.001688 | 0.395663 | 1 | 2 | 0 | 0.333333 |
+| ADVANC.BK | XGBoost | 3 | 2026-09-30 | 2026-10-02 | 0.001122 | 0.000966 | 1.161410 | 0.123724 | 0.001567 | 0.386925 | 1 | 2 | 0 | 0.333333 |
+| KBANK.BK | ANN (MLP) | 3 | 2026-09-30 | 2026-10-02 | 0.003825 | 0.004256 | 0.898749 | 0.171498 | 0.003874 | 0.899598 | 2 | 1 | 0 | 0.666667 |
+| KBANK.BK | Random Forest | 3 | 2026-09-30 | 2026-10-02 | 0.003521 | 0.004256 | 0.827311 | 0.290795 | 0.003584 | 0.828398 | 3 | 0 | 0 | 1.000000 |
+| KBANK.BK | XGBoost | 3 | 2026-09-30 | 2026-10-02 | 0.003482 | 0.004256 | 0.818127 | 0.292812 | 0.003579 | 0.819876 | 2 | 1 | 0 | 0.666667 |
+
+### รูปร่างคำทำนาย ทิศทาง และสัญญาณ
+
+| ticker | model | Bias | StdRatio | Rho | zero_move_days | dir_hit_rate_moved_days | long_signal_days | long_signal_up_rate | prev_close_mismatch | enough_data |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ADVANC.BK | ANN (MLP) | -0.000682 | 0.219054 | -0.736086 | 2 | 0.000000 | 0 | NaN | 1 | False |
+| ADVANC.BK | Random Forest | -0.000847 | 0.174797 | -0.319442 | 2 | 1.000000 | 0 | NaN | 1 | False |
+| ADVANC.BK | XGBoost | -0.000699 | 0.218172 | -0.012099 | 2 | 1.000000 | 0 | NaN | 1 | False |
+| KBANK.BK | ANN (MLP) | 0.001851 | 0.153991 | 0.998740 | 0 | 0.666667 | 0 | NaN | 1 | False |
+| KBANK.BK | Random Forest | 0.001804 | 0.230623 | 0.997416 | 0 | 1.000000 | 0 | NaN | 1 | False |
+| KBANK.BK | XGBoost | 0.001844 | 0.266155 | 0.918680 | 0 | 0.666667 | 0 | NaN | 1 | False |
+
+### ความครบและตรงเวลา
+
+| ticker | model | predictions | missing_trading_days | missing_dates | early_predictions | late_predictions |
+|---|---|---|---|---|---|---|
+| ADVANC.BK | ANN (MLP) | 4 | 0 |  | 0 | 0 |
+| ADVANC.BK | Random Forest | 4 | 0 |  | 0 | 0 |
+| ADVANC.BK | XGBoost | 4 | 0 |  | 0 | 0 |
+| KBANK.BK | ANN (MLP) | 4 | 0 |  | 0 | 0 |
+| KBANK.BK | Random Forest | 4 | 0 |  | 0 | 0 |
+| KBANK.BK | XGBoost | 4 | 0 |  | 0 | 0 |
