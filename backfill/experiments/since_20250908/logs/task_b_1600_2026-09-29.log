@@ -1,0 +1,14 @@
+    KBANK.BK ANN (MLP)       ŷ = +0.000303 -> close_bar16 244.0738 (C15 244.0, train_days 701)
+    KBANK.BK Random Forest   ŷ = +0.000170 -> close_bar16 244.0414 (C15 244.0, train_days 701)
+    KBANK.BK XGBoost         ŷ = +0.000551 -> close_bar16 244.1343 (C15 244.0, train_days 701)
+    ADVANC.BK ANN (MLP)       ŷ = -0.000023 -> close_bar16 348.9920 (C15 349.0, train_days 700)
+    ADVANC.BK Random Forest   ŷ = -0.000032 -> close_bar16 348.9889 (C15 349.0, train_days 700)
+    ADVANC.BK XGBoost         ŷ = +0.000005 -> close_bar16 349.0019 (C15 349.0, train_days 700)
+[backfill] เขียน 6 แถว -> C:\UNi\thirdyer\CN340\StockPrediction2\backfill\experiments\since_20250908\results\task_b_1600_t1600.csv
+   ticker target_date         model  predicted_return  predicted_close
+ KBANK.BK  2026-09-29     ANN (MLP)          0.000303       244.073819
+ KBANK.BK  2026-09-29 Random Forest          0.000170       244.041383
+ KBANK.BK  2026-09-29       XGBoost          0.000551       244.134332
+ADVANC.BK  2026-09-29     ANN (MLP)         -0.000023       348.991985
+ADVANC.BK  2026-09-29 Random Forest         -0.000032       348.988889
+ADVANC.BK  2026-09-29       XGBoost          0.000005       349.001874

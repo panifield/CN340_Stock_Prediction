@@ -1,0 +1,6 @@
+task_a2 2026-10-06 exit=1
+task_b_1600 2026-10-05 exit=0
+task_c_1600 2026-10-05 exit=0
+task_c 2026-10-06 exit=0
+task_a 2026-10-06 exit=0
+task_b 2026-10-06 exit=0

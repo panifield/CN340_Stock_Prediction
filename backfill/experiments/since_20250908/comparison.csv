@@ -1,0 +1,7 @@
+task,n,same_label,mean_abs_dproba,acc_full,acc_since,base_rate,mean_abs_dclose,mae_full,mae_since,mae_naive
+task_a,36,53%,0.214,55.6%,58.3%,58.3%,,,,
+task_c,42,64%,0.139,71.4%,64.3%,71.4%,,,,
+task_b,42,,,,,,0.467,3.541,3.776,3.5
+task_a2,36,72%,0.081,58.3%,41.7%,58.3%,,,,
+task_b_1600,36,,,,,,0.103,0.332,0.319,0.25
+task_c_1600,42,79%,0.106,69.0%,57.1%,57.1%,,,,

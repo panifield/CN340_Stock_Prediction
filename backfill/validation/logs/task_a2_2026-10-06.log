@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "C:\UNi\thirdyer\CN340\StockPrediction2\backfill\run_one.py", line 284, in <module>
+    main()
+  File "C:\UNi\thirdyer\CN340\StockPrediction2\backfill\run_one.py", line 280, in main
+    RUNNERS[a.task](a.task, a.target_date, a.reason)
+  File "C:\UNi\thirdyer\CN340\StockPrediction2\backfill\run_one.py", line 79, in run_t1600_a2
+    import predict_live as pl
+  File "C:\UNi\thirdyer\CN340\StockPrediction2\task_a2\predict_live.py", line 66, in <module>
+    from main_a2 import (  # noqa: E402
+  File "C:\UNi\thirdyer\CN340\StockPrediction2\task_a2\main_a2.py", line 42, in <module>
+    import matplotlib
+ModuleNotFoundError: No module named 'matplotlib'

@@ -1,0 +1,28 @@
+
+##############################################################################
+#  หุ้น: KBANK.BK  ->  ทำนายราคาปิด 2026-09-29
+##############################################################################
+[live] ประวัติสำหรับเทรน: 255 วัน (2025-09-08 -> 2026-09-28)
+    walk-forward OOF (n=105): ANN (MLP)=0.7048, Logistic Regression=0.6000, XGBoost=0.7048
+    ราคา ณ cutoff 15:00 = 244.00
+    ANN (MLP)            P(ขึ้นถึง close 16:00)=0.3009 -> ลง/นิ่ง
+    Logistic Regression  P(ขึ้นถึง close 16:00)=0.6690 -> ขึ้น
+    XGBoost              P(ขึ้นถึง close 16:00)=0.2640 -> ลง/นิ่ง
+
+##############################################################################
+#  หุ้น: ADVANC.BK  ->  ทำนายราคาปิด 2026-09-29
+##############################################################################
+[live] ประวัติสำหรับเทรน: 255 วัน (2025-09-08 -> 2026-09-28)
+    walk-forward OOF (n=105): ANN (MLP)=0.6952, Logistic Regression=0.5429, XGBoost=0.6952
+    ราคา ณ cutoff 15:00 = 349.00
+    ANN (MLP)            P(ขึ้นถึง close 16:00)=0.4285 -> ลง/นิ่ง
+    Logistic Regression  P(ขึ้นถึง close 16:00)=0.5274 -> ขึ้น
+    XGBoost              P(ขึ้นถึง close 16:00)=0.7486 -> ขึ้น
+[backfill] เขียน 6 แถว -> C:\UNi\thirdyer\CN340\StockPrediction2\backfill\experiments\since_20250908\results\task_c_1600_t1600.csv
+   ticker target_date               model predicted_label
+ KBANK.BK  2026-09-29           ANN (MLP)         ลง/นิ่ง
+ KBANK.BK  2026-09-29 Logistic Regression            ขึ้น
+ KBANK.BK  2026-09-29             XGBoost         ลง/นิ่ง
+ADVANC.BK  2026-09-29           ANN (MLP)         ลง/นิ่ง
+ADVANC.BK  2026-09-29 Logistic Regression            ขึ้น
+ADVANC.BK  2026-09-29             XGBoost            ขึ้น

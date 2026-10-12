@@ -1,0 +1,7 @@
+generated_at,ticker,target_date,bar_1600_time,train_rows,model,price_1600,parity_1600,predicted_flip_proba,predicted_parity,predicted_label,code_commit,worktree_dirty,is_dry_run,is_backfill,backfill_reason
+2026-10-12T23:28:42+07:00,KBANK.BK,2026-10-06,15:00,718,ANN (MLP),234.0,0.0,0.44993,0.0,คู่,223e60be8900572c27eb6ccaf936ae092dc959ab,False,False,True,missing
+2026-10-12T23:28:42+07:00,KBANK.BK,2026-10-06,15:00,718,LightGBM,234.0,0.0,0.423016,0.0,คู่,223e60be8900572c27eb6ccaf936ae092dc959ab,False,False,True,missing
+2026-10-12T23:28:42+07:00,KBANK.BK,2026-10-06,15:00,718,Logistic Regression,234.0,0.0,0.54108,1.0,คี่,223e60be8900572c27eb6ccaf936ae092dc959ab,False,False,True,missing
+2026-10-12T23:28:42+07:00,ADVANC.BK,2026-10-06,15:00,718,ANN (MLP),340.0,0.0,0.4374,0.0,คู่,223e60be8900572c27eb6ccaf936ae092dc959ab,False,False,True,missing
+2026-10-12T23:28:42+07:00,ADVANC.BK,2026-10-06,15:00,718,LightGBM,340.0,0.0,0.478848,0.0,คู่,223e60be8900572c27eb6ccaf936ae092dc959ab,False,False,True,missing
+2026-10-12T23:28:42+07:00,ADVANC.BK,2026-10-06,15:00,718,Logistic Regression,340.0,0.0,0.540178,1.0,คี่,223e60be8900572c27eb6ccaf936ae092dc959ab,False,False,True,missing

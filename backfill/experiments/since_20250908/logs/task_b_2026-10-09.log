@@ -1,0 +1,56 @@
+
+##############################################################################
+#  หุ้น: KBANK.BK  ->  ทำนาย 2026-10-09
+##############################################################################
+[data] อ่านจาก raw_data: KBANK_10Y_Cleaned.csv
+[data] KBANK_10Y_Cleaned.csv  rows=2463  sha256=e1ad4eddc95c31be...
+[data] KBANK.BK: 2463 แถว (2016-08-26 ถึง 2026-10-09)
+[data] KBANK_10Y_Cleaned.csv  rows=2463  sha256=e1ad4eddc95c31be...
+[live] --as-of 2026-10-08: ตัดข้อมูลเหลือ 2462/2463 แถว
+[features] สร้าง 29 features (market 24 ตัว shift(1) แล้ว + calendar 5 ตัวไม่ shift)
+[targets] สร้าง target งาน B (return) เรียบร้อย
+[prepare] ตัด 20 แถวอุ่นเครื่องต้นชุด (ต่อเนื่องกัน)
+[live] ข้อมูลเทรน 2441 แถว (2016-09-26 -> 2026-10-08)
+[live] สร้าง feature 29 ตัว สำหรับ 2026-10-09
+[live] ใช้ข้อมูลถึง 2026-10-08  prev_close = 230.0
+[live] ANN (MLP): recency half-life = None (ไม่ถ่วงน้ำหนัก)
+    เทรน ANN (MLP) บน 265 แถว ... เสร็จ
+[live] Random Forest: recency half-life = None (ไม่ถ่วงน้ำหนัก)
+    เทรน Random Forest บน 265 แถว ... เสร็จ
+[live] XGBoost: recency half-life = None (ไม่ถ่วงน้ำหนัก)
+    เทรน XGBoost บน 265 แถว ... เสร็จ
+    ANN (MLP)       return = +0.001970  ->  ราคา 230.4531 บาท
+    Random Forest   return = +0.002341  ->  ราคา 230.5384 บาท
+    XGBoost         return = +0.004377  ->  ราคา 231.0067 บาท
+
+##############################################################################
+#  หุ้น: ADVANC.BK  ->  ทำนาย 2026-10-09
+##############################################################################
+[data] อ่านจาก raw_data: ADVANC_10Y_Cleaned.csv
+[data] ADVANC_10Y_Cleaned.csv  rows=2463  sha256=f16722951030884f...
+[data] ADVANC.BK: 2463 แถว (2016-08-26 ถึง 2026-10-09)
+[data] ADVANC_10Y_Cleaned.csv  rows=2463  sha256=f16722951030884f...
+[live] --as-of 2026-10-08: ตัดข้อมูลเหลือ 2462/2463 แถว
+[features] สร้าง 29 features (market 24 ตัว shift(1) แล้ว + calendar 5 ตัวไม่ shift)
+[targets] สร้าง target งาน B (return) เรียบร้อย
+[prepare] ตัด 20 แถวอุ่นเครื่องต้นชุด (ต่อเนื่องกัน)
+[live] ข้อมูลเทรน 2441 แถว (2016-09-26 -> 2026-10-08)
+[live] สร้าง feature 29 ตัว สำหรับ 2026-10-09
+[live] ใช้ข้อมูลถึง 2026-10-08  prev_close = 335.0
+[live] ANN (MLP): recency half-life = None (ไม่ถ่วงน้ำหนัก)
+    เทรน ANN (MLP) บน 265 แถว ... เสร็จ
+[live] Random Forest: recency half-life = None (ไม่ถ่วงน้ำหนัก)
+    เทรน Random Forest บน 265 แถว ... เสร็จ
+[live] XGBoost: recency half-life = None (ไม่ถ่วงน้ำหนัก)
+    เทรน XGBoost บน 265 แถว ... เสร็จ
+    ANN (MLP)       return = +0.003960  ->  ราคา 336.3268 บาท
+    Random Forest   return = +0.002084  ->  ราคา 335.6983 บาท
+    XGBoost         return = +0.002462  ->  ราคา 335.8247 บาท
+[backfill] เขียน 6 แถว -> C:\UNi\thirdyer\CN340\StockPrediction2\backfill\experiments\since_20250908\results\task_b_next_day.csv
+   ticker target_date         model  predicted_return  predicted_close
+ KBANK.BK  2026-10-09     ANN (MLP)          0.001970       230.453097
+ KBANK.BK  2026-10-09 Random Forest          0.002341       230.538434
+ KBANK.BK  2026-10-09       XGBoost          0.004377       231.006691
+ADVANC.BK  2026-10-09     ANN (MLP)          0.003960       336.326760
+ADVANC.BK  2026-10-09 Random Forest          0.002084       335.698285
+ADVANC.BK  2026-10-09       XGBoost          0.002462       335.824709

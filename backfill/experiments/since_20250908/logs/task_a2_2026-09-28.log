@@ -1,0 +1,38 @@
+
+##############################################################################
+#  หุ้น: KBANK.BK  ->  ทำนาย 2026-09-28
+##############################################################################
+[live] ประวัติสำหรับเทรน: 254 วัน (2025-09-08 -> 2026-09-25)
+    fold 1/5 (2026-04-24~2026-05-25, n=20): ANN (MLP)=0.600, LightGBM=0.500, Logistic Regression=0.550
+    fold 2/5 (2026-05-26~2026-06-24, n=20): ANN (MLP)=0.450, LightGBM=0.500, Logistic Regression=0.450
+    fold 3/5 (2026-06-25~2026-07-22, n=20): ANN (MLP)=0.400, LightGBM=0.450, Logistic Regression=0.500
+    fold 4/5 (2026-07-23~2026-08-24, n=20): ANN (MLP)=0.600, LightGBM=0.650, Logistic Regression=0.500
+    fold 5/5 (2026-08-25~2026-09-21, n=20): ANN (MLP)=0.550, LightGBM=0.500, Logistic Regression=0.550
+    walk-forward OOF (n=100): ANN (MLP)=0.5200, LightGBM=0.5200, Logistic Regression=0.5100
+    ราคา ณ 16:00 = 252.00  (parity = คู่)
+    ANN (MLP)            P(พลิก parity ตอนปิด)=0.6406 -> parity = คี่
+    LightGBM             P(พลิก parity ตอนปิด)=0.3929 -> parity = คู่
+    Logistic Regression  P(พลิก parity ตอนปิด)=0.3412 -> parity = คู่
+
+##############################################################################
+#  หุ้น: ADVANC.BK  ->  ทำนาย 2026-09-28
+##############################################################################
+[live] ประวัติสำหรับเทรน: 254 วัน (2025-09-08 -> 2026-09-25)
+    fold 1/5 (2026-04-24~2026-05-25, n=20): ANN (MLP)=0.350, LightGBM=0.450, Logistic Regression=0.350
+    fold 2/5 (2026-05-26~2026-06-24, n=20): ANN (MLP)=0.450, LightGBM=0.500, Logistic Regression=0.400
+    fold 3/5 (2026-06-25~2026-07-22, n=20): ANN (MLP)=0.600, LightGBM=0.600, Logistic Regression=0.450
+    fold 4/5 (2026-07-23~2026-08-24, n=20): ANN (MLP)=0.600, LightGBM=0.600, Logistic Regression=0.400
+    fold 5/5 (2026-08-25~2026-09-21, n=20): ANN (MLP)=0.450, LightGBM=0.550, Logistic Regression=0.550
+    walk-forward OOF (n=100): ANN (MLP)=0.4900, LightGBM=0.5400, Logistic Regression=0.4300
+    ราคา ณ 16:00 = 348.00  (parity = คู่)
+    ANN (MLP)            P(พลิก parity ตอนปิด)=0.3858 -> parity = คู่
+    LightGBM             P(พลิก parity ตอนปิด)=0.4905 -> parity = คู่
+    Logistic Regression  P(พลิก parity ตอนปิด)=0.4571 -> parity = คู่
+[backfill] เขียน 6 แถว -> C:\UNi\thirdyer\CN340\StockPrediction2\backfill\experiments\since_20250908\results\task_a2_t1600.csv
+   ticker target_date               model predicted_label
+ KBANK.BK  2026-09-28           ANN (MLP)             คี่
+ KBANK.BK  2026-09-28            LightGBM             คู่
+ KBANK.BK  2026-09-28 Logistic Regression             คู่
+ADVANC.BK  2026-09-28           ANN (MLP)             คู่
+ADVANC.BK  2026-09-28            LightGBM             คู่
+ADVANC.BK  2026-09-28 Logistic Regression             คู่

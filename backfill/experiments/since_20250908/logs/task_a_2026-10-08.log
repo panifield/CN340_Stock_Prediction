@@ -1,0 +1,26 @@
+
+##############################################################################
+#  หุ้น: KBANK.BK  ->  ทำนาย 2026-10-08
+##############################################################################
+[live] ข้อมูลล่าสุด (data_cutoff) = 2026-10-07  (2456 แถวใช้เทรนได้)
+    parity ของวันนี้ (2026-10-07) = คี่
+    ANN (MLP)            P(พลิก parity พรุ่งนี้)=0.0543 -> ทำนาย 2026-10-08: parity = คี่
+    LightGBM             P(พลิก parity พรุ่งนี้)=0.4933 -> ทำนาย 2026-10-08: parity = คี่
+    Logistic Regression  P(พลิก parity พรุ่งนี้)=0.2110 -> ทำนาย 2026-10-08: parity = คี่
+
+##############################################################################
+#  หุ้น: ADVANC.BK  ->  ทำนาย 2026-10-08
+##############################################################################
+[live] ข้อมูลล่าสุด (data_cutoff) = 2026-10-07  (2456 แถวใช้เทรนได้)
+    parity ของวันนี้ (2026-10-07) = คี่
+    ANN (MLP)            P(พลิก parity พรุ่งนี้)=0.5935 -> ทำนาย 2026-10-08: parity = คู่
+    LightGBM             P(พลิก parity พรุ่งนี้)=0.4830 -> ทำนาย 2026-10-08: parity = คี่
+    Logistic Regression  P(พลิก parity พรุ่งนี้)=0.3485 -> ทำนาย 2026-10-08: parity = คี่
+[backfill] เขียน 6 แถว -> C:\UNi\thirdyer\CN340\StockPrediction2\backfill\experiments\since_20250908\results\task_a_next_day.csv
+   ticker target_date               model predicted_label
+ KBANK.BK  2026-10-08           ANN (MLP)             คี่
+ KBANK.BK  2026-10-08            LightGBM             คี่
+ KBANK.BK  2026-10-08 Logistic Regression             คี่
+ADVANC.BK  2026-10-08           ANN (MLP)             คู่
+ADVANC.BK  2026-10-08            LightGBM             คี่
+ADVANC.BK  2026-10-08 Logistic Regression             คี่

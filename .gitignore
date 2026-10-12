@@ -16,3 +16,10 @@ env/
 Thumbs.db
 
 automation/.staging/
+
+# backfill: ไฟล์ชั่วคราว/สร้างใหม่ได้ (ผล backfill/results และแคช backfill/data ยังเก็บใน git)
+backfill/logs/
+backfill/leak_test/*/
+backfill/*.log
+backfill/rolling_backtest/*.log
+backfill/rolling_backtest/status.txt
