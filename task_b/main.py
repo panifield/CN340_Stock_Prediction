@@ -109,6 +109,7 @@ def run_task_b(X, targets, use_test, verbose=True):
     # (return มีขนาดเล็กมาก ~0.01 ANN จะเทรนไม่ดีถ้าไม่ scale)
     val_results, val_preds = {}, {}
     test_results, test_preds = {}, {}
+    fitted = {}
 
     for name, model in get_regressors().items():
         if verbose:
@@ -125,6 +126,7 @@ def run_task_b(X, targets, use_test, verbose=True):
             regressor=model, transformer=StandardScaler()
         )
         wrapped.fit(X_train, y_train, **fit_params)
+        fitted[name] = wrapped
 
         y_val_pred = wrapped.predict(X_val)
         val_results[name] = regression_metrics(y_val, y_val_pred, prev_close_val)
@@ -203,7 +205,8 @@ def run_task_b(X, targets, use_test, verbose=True):
 
     return {"table": df, "preds": eval_preds, "y_eval": y_eval,
             "prev_close_eval": prev_close_eval, "diag": diag,
-            "eval_index": y_eval.index, "best_model": best, "stage": eval_split}
+            "eval_index": y_eval.index, "best_model": best, "stage": eval_split,
+            "fitted": fitted}
 
 
 def truncate_for_mode(df, use_test):
@@ -270,6 +273,7 @@ def parse_args():
         "--open-test", action="store_true",
         help="เปิด historical test (ครั้งเดียว) -- ต้องมี PRE_TEST_LOCK.md ครบทุกหัวข้อ",
     )
+    parser.add_argument("--curves", action="store_true", help="วาด curve ลง results/curves/")
     return parser.parse_args()
 
 
@@ -290,6 +294,9 @@ def main():
     all_results = [run_one_ticker(ticker, use_test=use_test) for ticker in TICKERS]
 
     save_results(all_results)
+    if args.curves:
+        from curves import make_all
+        make_all(all_results)
     print("\nเสร็จสิ้น")
     return all_results
 
