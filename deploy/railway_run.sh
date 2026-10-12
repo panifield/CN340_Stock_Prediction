@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # deploy/railway_run.sh -- สคริปต์เริ่มงานของ Railway cron
 # =========================================================================================
+#   railway_run.sh auto        # service เดียวรับทั้งสองงาน: เลือกตามเวลาไทย (ดูด้านล่าง) <- ใช้ตัวนี้บน Railway
 #   railway_run.sh next_day    # งานเช้า: automation/run_next_day.py  (task_a -> task_c -> task_b)
 #   railway_run.sh t1600       # งาน 16:02: automation/run_1600.py    (task_a2 -> task_b -> task_c)
 #   railway_run.sh smoke       # ทดสอบสภาพแวดล้อมอย่างเดียว (ไม่ทำนาย ไม่ commit)
@@ -15,7 +16,8 @@
 #   GIT_REPO         ค่าเริ่มต้น panifield/CN340_Stock_Prediction · GIT_BRANCH ค่าเริ่มต้น main
 #   GIT_USER_NAME / GIT_USER_EMAIL   ตัวตนของ commit (ค่าเริ่มต้น railway-bot)
 #   SKIP_TIME_CHECK=1 / SKIP_HOLIDAY_CHECK=1   ข้ามการเช็ควัน/เวลา (ใช้ตอนทดสอบเท่านั้น)
-#   NOT_READY_FINAL_HHMM  ค่าเริ่มต้น 930 -- next_day รอบที่เริ่มก่อนเวลานี้ ถ้า Yahoo ยังไม่พร้อมจะ "จบเงียบ (exit 0)" รอ cron รอบถัดไป
+#   AUTO_FORCE_MODE=next_day|t1600  บังคับโหมดของ auto โดยไม่ดูเวลา (ทดสอบ)
+#   NOT_READY_FINAL_HHMM  ค่าเริ่มต้น 950 -- next_day รอบที่เริ่มก่อนเวลานี้ ถ้า Yahoo ยังไม่พร้อมจะ "จบเงียบ (exit 0)" รอ cron รอบถัดไป
 #                         รอบตั้งแต่เวลานี้เป็นต้นไปถ้ายังไม่พร้อมจะล้มเหลวจริง (exit 4)
 #
 # exit code: 0 สำเร็จ/ข้ามอย่างตั้งใจ · 1 clone หรือ task ล้มเหลว · 2 ตั้งค่าผิด · 3 เริ่มผิดเวลา · 4 ข้อมูลไม่พร้อมจนรอบสุดท้าย
@@ -115,11 +117,16 @@ PY
 
 # ------------------------------------------------------------------ main
 case "$MODE" in
-  next_day) SCRIPT="automation/run_next_day.py" ;;
-  t1600)    SCRIPT="automation/run_1600.py" ;;
-  smoke)    ;;
-  *) echo "usage: railway_run.sh {next_day|t1600|smoke}" >&2; exit 2 ;;
+  next_day|t1600|smoke|auto) ;;
+  *) echo "usage: railway_run.sh {auto|next_day|t1600|smoke}" >&2; exit 2 ;;
 esac
+
+# เวลาไทย (หรือเวลาจำลอง) -- คำนวณก่อน clone เพราะโหมด auto ต้องตัดสินใจจากเวลาก่อน
+NOW="$(now_bkk)"
+TODAY="${NOW%% *}"
+HHMM="$(echo "${NOW##* }" | tr -d ':')"
+HHMM=$((10#$HHMM))
+NOT_READY_FINAL_HHMM="${NOT_READY_FINAL_HHMM:-950}"   # next_day: รอบที่เริ่มตั้งแต่เวลานี้ (09:50) ถ้ายังไม่พร้อมถือว่าล้มเหลวจริง
 
 log "mode=$MODE DRY_RUN=$DRY_RUN SMOKE_ONLY=$SMOKE_ONLY repo=$GIT_REPO@$GIT_BRANCH"
 setup_auth
@@ -139,15 +146,32 @@ else
   ARGS=(--dry-run)
 fi
 
+# โหมด auto: service เดียวรับทั้งสองงาน cron ตั้งให้ยิงหลายรอบต่อวัน ให้เวลาไทยเป็นตัวเลือกงาน
+#   08:00-09:59 -> next_day · 16:00-16:29 -> t1600 · เวลาอื่น -> จบทันที (ไม่ clone ไม่ทำอะไร)
+# ผลข้างเคียงที่ดี: deploy/redeploy ตอนไหนก็ไม่เผลอรันงานจริงผิดเวลา
+# AUTO_FORCE_MODE=next_day|t1600 บังคับโหมดโดยไม่ดูเวลา (ใช้ทดสอบ เช่น กด Run now ตอนกลางคืน) -- ตัวเช็คเวลาด้านล่างยังทำงานเมื่อ DRY_RUN=0
+if [ "$MODE" = "auto" ]; then
+  if [ -n "${AUTO_FORCE_MODE:-}" ]; then
+    MODE="$AUTO_FORCE_MODE"
+  elif [ "$HHMM" -ge 800 ] && [ "$HHMM" -lt 1000 ]; then
+    MODE="next_day"
+  elif [ "$HHMM" -ge 1600 ] && [ "$HHMM" -lt 1630 ]; then
+    MODE="t1600"
+  else
+    log "auto: $NOW ไม่อยู่ในช่วงงาน (08:00-09:59 / 16:00-16:29) -- ไม่ทำอะไร (exit 0)"
+    exit 0
+  fi
+  log "auto -> mode=$MODE"
+fi
+case "$MODE" in
+  next_day) SCRIPT="automation/run_next_day.py" ;;
+  t1600)    SCRIPT="automation/run_1600.py" ;;
+  *) log "ผิดพลาด: AUTO_FORCE_MODE ต้องเป็น next_day หรือ t1600 (ได้ $MODE)"; exit 2 ;;
+esac
+
 clone_repo || { log "ผิดพลาด: clone ไม่สำเร็จ"; exit 1; }
 cd "$WORKDIR/repo"
 log "HEAD = $(git rev-parse --short HEAD) : $(git log -1 --format=%s)"
-
-NOW="$(now_bkk)"
-TODAY="${NOW%% *}"
-HHMM="$(echo "${NOW##* }" | tr -d ':')"
-HHMM=$((10#$HHMM))
-NOT_READY_FINAL_HHMM="${NOT_READY_FINAL_HHMM:-930}"   # next_day: รอบที่เริ่มตั้งแต่เวลานี้ (09:30) ถ้ายังไม่พร้อมถือว่าล้มเหลวจริง
 
 if [ "$DRY_RUN" = "0" ]; then
   # 1) วันหยุด/เสาร์-อาทิตย์ -> ข้าม (ไม่ถือว่าล้มเหลว) กันทำนายซ้ำ key เดิมในวันทำการถัดไป
