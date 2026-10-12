@@ -121,6 +121,57 @@ def next_trading_day(after, holidays, through):
     return d
 
 
+# ---------------------------------------------------------------
+# preflight: ข้อมูลรายวันของ Yahoo ต้องพร้อมก่อนรันจริง (เพิ่ม 2026-10-13)
+# ---------------------------------------------------------------
+
+def expected_cutoff(target, holidays):
+    """วันทำการสุดท้ายก่อน target = data_cutoff ที่ task_a/task_c/task_b ควรได้เมื่อข้อมูลครบ"""
+    d = pd.Timestamp(target) - pd.Timedelta(days=1)
+    while d.dayofweek > 4 or d in holidays:
+        d -= pd.Timedelta(days=1)
+    return d
+
+
+def download_daily(ticker):
+    import yfinance as yf          # import ตอนใช้ ไม่ให้ไฟล์นี้พึ่ง yfinance ตอน import (tests/orchestrator ปกติไม่ต้องใช้)
+    df = yf.download(ticker, period="15d", interval="1d", auto_adjust=False, progress=False, threads=False)
+    if df is not None and hasattr(df.columns, "get_level_values"):
+        df.columns = df.columns.get_level_values(0)
+    return df
+
+
+def yahoo_ready(cutoff, downloader=download_daily, tickers=("KBANK.BK", "ADVANC.BK")):
+    """ทุกหุ้นต้องมีแถวของวัน cutoff และ Close เป็นตัวเลข > 0 -- คืน (ok, รายการปัญหา)
+
+    ทำไมต้องเช็คในตัวคุม: Yahoo บางวันส่ง Close ของวันล่าสุดเป็น NaN นานหลายชั่วโมง ผลคือ task_a/task_c "ถอย" data_cutoff
+    ไปใช้ข้อมูลเก่ากว่า 1 วันทำการแล้วเขียน log ต่อ (ทำนายด้วยข้อมูลเก่า แต่ติดป้าย target เดิม) ขณะที่ task_b หยุดตาม guard
+    ของมัน -> ได้ log ครึ่งเดียว และรันซ้ำไม่ได้ (task_a ชน guard กันทำนายซ้ำก่อนถึง task_b)
+    ไม่แก้ที่ task_b ให้ "ตัดแถว NaN แล้วเดินต่อ" เพราะ task_b คำนวณ target จาก data_cutoff ของตัวเอง
+    (วันทำการถัดจากข้อมูลล่าสุด) จะได้ทำนายวันที่ผ่านไปแล้วลง log จริง ขัดกับ target ที่ task_a/c ใช้ -- ให้ "รอ" ดีกว่า
+    """
+    problems = []
+    for tk in tickers:
+        try:
+            df = downloader(tk)
+        except Exception as e:                      # noqa: BLE001 -- เครือข่าย/Yahoo ล่ม = "ยังไม่พร้อม" ไม่ใช่บั๊กของโค้ด
+            problems.append(f"{tk}: ดึงข้อมูลไม่ได้ ({type(e).__name__}: {e})")
+            continue
+        if df is None or len(df) == 0:
+            problems.append(f"{tk}: Yahoo ไม่คืนข้อมูล")
+            continue
+        idx = pd.to_datetime(df.index)
+        idx = idx.tz_localize(None) if idx.tz is not None else idx
+        row = df[idx.normalize() == pd.Timestamp(cutoff)]
+        if len(row) == 0:
+            problems.append(f"{tk}: ยังไม่มีแถวของ {pd.Timestamp(cutoff).date()}")
+            continue
+        close = row["Close"].iloc[-1]
+        if not (close == close and close > 0):
+            problems.append(f"{tk}: Close ของ {pd.Timestamp(cutoff).date()} ยังเป็น NaN (Yahoo ยังไม่ backfill)")
+    return (not problems), problems
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="เรียก predict_live ของกลุ่ม next_day ทุก task")
     ap.add_argument("--dry-run", action="store_true",
@@ -129,6 +180,8 @@ def main(argv=None):
                     help="commit prediction log ของทุก task (ต้องไม่ใช้กับ --dry-run)")
     ap.add_argument("--push", action="store_true",
                     help="git push หลัง commit (ต้องใช้กับ --commit)")
+    ap.add_argument("--no-preflight", action="store_true",
+                    help="ข้ามการตรวจว่า Yahoo มี Close ของวัน cutoff ครบ (ใช้เฉพาะกรณีฉุกเฉิน -- ปกติ --commit จะตรวจเสมอ)")
     args = ap.parse_args(argv)
     if args.dry_run and args.commit:
         ap.error("--dry-run ใช้กับ --commit ไม่ได้")
@@ -151,6 +204,22 @@ def main(argv=None):
         target = next_trading_day(reference, holidays, through)
         print(f"วันนี้ = {today.date()} -> target_date (วันทำการถัดไป) = {target.date()}")
         target_iso = target.date().isoformat()
+
+        # preflight: รันจริง (--commit) ต้องมีข้อมูลครบก่อน ไม่งั้นหยุดทันที "ก่อนเขียนอะไร" (ดูเหตุผลที่ yahoo_ready)
+        # dry-run แค่แสดงผลเตือน ไม่หยุด เพื่อให้ทดสอบ pipeline ได้ต่อแม้ Yahoo ยังไม่พร้อม
+        if not args.no_preflight:
+            cutoff = expected_cutoff(target, holidays)
+            ok, problems = yahoo_ready(cutoff)
+            if ok:
+                print(f"[preflight] Yahoo มี Close ของ {cutoff.date()} ครบทั้ง 2 หุ้น")
+            else:
+                detail = "".join(f"\n   - {p}" for p in problems)
+                msg = (f"[preflight] ข้อมูลของ {cutoff.date()} (data_cutoff ที่ควรเป็นสำหรับ target {target.date()}) "
+                       f"ยังไม่พร้อม:{detail}")
+                if args.commit:
+                    raise StepError(msg + "\n   -> หยุดก่อนเขียนอะไร รันใหม่ภายหลังเมื่อ Yahoo อัปเดตแล้ว "
+                                    "(ข้ามได้ด้วย --no-preflight แต่จะได้ log ที่ใช้ข้อมูลเก่ากว่า 1 วันทำการ)")
+                print(msg + "\n   (dry-run: ไม่หยุด)")
 
         # 1) task_a
         cmd = [PY, "predict_live.py", "--target-date", target_iso]

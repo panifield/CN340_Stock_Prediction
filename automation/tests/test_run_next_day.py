@@ -53,6 +53,47 @@ def test_target_date_evening_still_next_trading_day():
     assert evening == pd.Timestamp("2026-09-30")
 
 
+def _daily(close, day="2026-10-12"):
+    return lambda tk: pd.DataFrame({"Close": [close]}, index=pd.DatetimeIndex([day]))
+
+
+def test_expected_cutoff_skips_weekend_and_holidays():
+    """cutoff = วันทำการสุดท้ายก่อน target (ข้าม ส-อา และวันหยุด SET เช่น 10-13, 10-16)"""
+    f = lambda t: str(R.expected_cutoff(pd.Timestamp(t), HOLIDAYS).date())
+    assert f("2026-10-14") == "2026-10-12"      # 10-13 วันนวมินทรมหาราช
+    assert f("2026-10-19") == "2026-10-15"      # จันทร์: ถอยข้าม ส-อา และ 10-16 (หยุดพิเศษ)
+    assert f("2026-10-06") == "2026-10-05"
+
+
+def test_yahoo_ready_blocks_nan_missing_and_errors():
+    """regression: 2026-10-13 Yahoo ส่ง Close ของวันล่าสุดเป็น NaN หลายชั่วโมง -> ต้องไม่ปล่อยให้ task_a/c ทำนายด้วยข้อมูลเก่า"""
+    c = pd.Timestamp("2026-10-12")
+    assert R.yahoo_ready(c, _daily(231.0)) == (True, [])
+    ok, why = R.yahoo_ready(c, _daily(float("nan")))
+    assert not ok and len(why) == 2 and "NaN" in why[0]
+    ok, why = R.yahoo_ready(c, _daily(231.0, day="2026-10-09"))
+    assert not ok and "ยังไม่มีแถวของ 2026-10-12" in why[0]
+    ok, why = R.yahoo_ready(c, lambda tk: (_ for _ in ()).throw(ConnectionError("x")))
+    assert not ok and "ดึงข้อมูลไม่ได้" in why[0]
+
+
+def test_commit_run_stops_before_any_task_when_yahoo_not_ready():
+    """--commit + ข้อมูลไม่พร้อม -> หยุดก่อนเรียก task ใด ๆ (ไม่มี log ครึ่งเดียว) · --dry-run ไม่หยุด"""
+    calls = []
+    orig = (R.run, R.commit_log, R.yahoo_ready)
+    R.run = lambda step, args, cwd: calls.append(step)
+    R.commit_log = lambda *a, **k: calls.append("commit")
+    R.yahoo_ready = lambda cutoff, *a, **k: (False, ["KBANK.BK: Close ของ x ยังเป็น NaN"])
+    try:
+        assert R.main(["--commit"]) == 1 and calls == []                   # หยุดก่อนรันอะไร
+        calls.clear()
+        assert R.main(["--commit", "--no-preflight"]) == 0 and "task_a" in calls   # ข้ามได้ตั้งใจเท่านั้น
+        calls.clear()
+        assert R.main(["--dry-run"]) == 0 and "task_a" in calls            # dry-run เดินต่อ
+    finally:
+        R.run, R.commit_log, R.yahoo_ready = orig
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     for t in tests:
