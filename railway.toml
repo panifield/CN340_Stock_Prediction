@@ -1,7 +1,11 @@
 "$schema" = "https://railway.com/railway.schema.json"
 
-# service "next_day" -- งานเช้า 08:30 น. ไทย (= 01:30 UTC) จันทร์-ศุกร์
-# Railway cron ใช้เวลา UTC และ "ไม่การันตีนาทีที่เริ่ม อาจคลาดได้ไม่กี่นาที"
+# service "next_day" -- งานเช้า จันทร์-ศุกร์ ลองทุก 20 นาที 08:00-09:40 น. ไทย (UTC 01:00-02:40)
+#
+# ทำไมถี่: Yahoo บางเช้ายังไม่ backfill ราคาปิดของวันก่อนหน้า (Close = NaN) deploy/precheck.py จะตรวจก่อนรัน
+# ถ้ายังไม่พร้อมจะจบเงียบโดยไม่เขียนอะไร แล้วรอบถัดไปลองใหม่ · พอทำเสร็จครบทุก task รอบหลัง ๆ ข้ามเอง
+# รอบสุดท้าย 09:40 น. ยังอยู่ก่อน 10:00 ที่ task_a/task_c ห้ามรัน (ตลาดเปิด) · Railway cron ใช้เวลา UTC ห่างกันขั้นต่ำ 5 นาที
+# และไม่การันตีนาทีที่เริ่ม (คลาดได้ไม่กี่นาที) · ถ้ารอบก่อนยังไม่จบ รอบถัดไปจะถูกข้าม
 # (งาน t1600 ใช้ไฟล์ railway.t1600.toml -- ต้องสร้างอีก service แล้วชี้ไฟล์นั้นใน Settings)
 [build]
 builder = "DOCKERFILE"
@@ -9,6 +13,6 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "bash /usr/local/bin/railway_run.sh next_day"
-cronSchedule = "30 1 * * 1-5"
+cronSchedule = "*/20 1-2 * * 1-5"
 # ไม่ retry อัตโนมัติ: งานนี้เขียน log + push ทีละขั้น รันซ้ำเองอาจชน guard กันทำนายซ้ำ/ได้ log ครึ่ง ๆ
 restartPolicyType = "NEVER"
