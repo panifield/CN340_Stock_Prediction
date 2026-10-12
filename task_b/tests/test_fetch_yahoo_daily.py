@@ -8,7 +8,6 @@ tests/test_fetch_yahoo_daily.py — tools/fetch_yahoo_daily.py (ตัวเช�
 
 import sys
 import tempfile
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -27,17 +26,23 @@ def _raw(t):
     return (ROOT / "raw_data" / f"{t}_10Y_Cleaned.csv").read_bytes()
 
 
-def _last_raw_date():
-    """วันสุดท้ายจริงที่มีอยู่ใน raw_data/ ตอนนี้ (ไม่ hardcode) -- raw_data/ โตขึ้นทุกวันจาก
-    daily_next_day.py จริง ดังนั้น NOW ที่ผูกกับวันที่ตายตัวจะพังทุกครั้งที่มีการ append ข้อมูล
-    ใหม่ (เจอบั๊กนี้จริง 2026-09-29 หลัง raw_data ขยับจาก 25 -> 28 ก.ย.)"""
+def _raw_dates():
+    """วันที่ทั้งหมดที่มีอยู่ใน raw_data/ ตอนนี้ (ไม่ hardcode) -- raw_data/ โตขึ้นทุกวันจาก
+    daily_next_day.py จริง ดังนั้นวันที่ตายตัวในไฟล์นี้จะพังทุกครั้งที่มีการ append ข้อมูลใหม่
+    (เจอบั๊กนี้จริง 2026-09-29 หลัง raw_data ขยับจาก 25 -> 28 ก.ย. และอีกครั้ง 2026-10-13
+    หลังขยับถึง 5 ต.ค. -- รอบนั้นเหลือวันตายตัวค้างอยู่ในตัว test เอง ไม่ใช่แค่ NOW)
+    ทุก test ด้านล่างจึงต้องอ้างวันที่ผ่าน DATES[...] เท่านั้น ห้ามพิมพ์วันที่ลงไปตรง ๆ"""
     _, old = A.read_canonical(ROOT / "raw_data" / "KBANK_10Y_Cleaned.csv")
-    return old.index[-1]
+    return old.index
 
+
+DATES = _raw_dates()            # DATES[-1] = วันสุดท้ายจริง · DATES[-N_CUT-1] = วันสุดท้ายหลัง _cut_raw()
+NEXT_DAY = DATES[-1] + pd.Timedelta(days=1)   # วันที่ยังไม่มีใน raw_data -> ใช้เป็น "แถวใหม่" ที่แต่งขึ้น
+OVERLAP_PROBE = DATES[-10]      # วันที่อยู่กลางช่วงทับแน่นอน (เก่ากว่าขอบ _cut_raw ไม่กี่วันทำการ)
 
 # NOW = วันสุดท้ายจริงใน raw_data + 3 วัน 10:00 -- ห่างพอที่แถวสุดท้ายจริงจะ "จบ" แน่นอน
 # ไม่ว่าจะตรงกับวันหยุดสุดสัปดาห์พอดีหรือไม่ (กันปัญหา edge case ของ drop_unfinished)
-NOW = (_last_raw_date() + pd.Timedelta(days=3)).replace(
+NOW = (DATES[-1] + pd.Timedelta(days=3)).replace(
     hour=10, minute=0, tzinfo=F.BANGKOK)
 
 
@@ -99,28 +104,31 @@ def test_roundtrip_reproduces_raw_prices():
 
 
 def test_unfinished_today_dropped():
+    """now = วันสุดท้ายจริง เวลา 16:45 (< FINAL_AFTER) -> แถวของ "วันนี้" ต้องถูกตัด เหลือถึงวันทำการก่อนหน้า"""
     with tempfile.TemporaryDirectory() as d:
         _cut_raw(d)
-        early = datetime(2026, 9, 25, 16, 45, tzinfo=F.BANGKOK)
+        early = DATES[-1].replace(hour=16, minute=45, tzinfo=F.BANGKOK)
         plans = F.plan_fetch(early, raw_dir=d, downloader=_fake_downloader())
-        assert all(p["new"].index[-1] == pd.Timestamp("2026-09-24") for p in plans)
+        assert all(p["new"].index[-1] == DATES[-2] for p in plans)
 
 
 def test_phantom_holiday_row_dropped():
-    extra = {"2026-09-28": [252.0, 252.0, 252.0, 252.0, 0]}
+    """แถวผีวันหยุด (Volume = 0 และ O=H=L=C) ที่ Yahoo แถมมา ต้องถูกตัดพร้อมคำเตือน"""
+    extra = {NEXT_DAY: [252.0, 252.0, 252.0, 252.0, 0]}
     with tempfile.TemporaryDirectory() as d:
         _cut_raw(d)
-        now = datetime(2026, 9, 28, 20, 0, tzinfo=F.BANGKOK)
+        now = NEXT_DAY.replace(hour=20, minute=0, tzinfo=F.BANGKOK)
         plans = F.plan_fetch(now, raw_dir=d, downloader=_fake_downloader(extra))
         for p in plans:
-            assert pd.Timestamp("2026-09-28") not in p["new"].index
+            assert len(p["new"]) == N_CUT      # ได้แถวจริงที่ตัดไว้ครบ ไม่ใช่ว่างเพราะพลาดไปหมด
+            assert NEXT_DAY not in p["new"].index
             assert any("แถวผี" in w for w in p["warnings"])
 
 
 def test_price_mismatch_in_overlap_stops():
     def mut(ticker, df):
         if ticker == "ADVANC.BK":
-            df.loc[pd.Timestamp("2026-09-01"), "Close"] += 1
+            df.loc[OVERLAP_PROBE, "Close"] += 1
     with tempfile.TemporaryDirectory() as d:
         _cut_raw(d)
         _raises(F.plan_fetch, NOW, raw_dir=d, downloader=_fake_downloader(mutate=mut), match="Price ไม่ตรง")
@@ -128,17 +136,18 @@ def test_price_mismatch_in_overlap_stops():
 
 def test_missing_overlap_date_stops():
     def mut(ticker, df):
-        df.drop(pd.Timestamp("2026-09-02"), inplace=True)
+        df.drop(OVERLAP_PROBE, inplace=True)
     with tempfile.TemporaryDirectory() as d:
         _cut_raw(d)
         _raises(F.plan_fetch, NOW, raw_dir=d, downloader=_fake_downloader(mutate=mut), match="วันที่ในช่วงทับ")
 
 
 def test_zero_volume_real_move_stops():
-    extra = {"2026-09-28": [252.0, 255.0, 250.0, 253.0, 0]}
+    """Volume = 0 แต่ราคาไม่แบน = ไม่ใช่แถวผีปกติ -> ต้องหยุด ไม่ใช่ตัดทิ้งเงียบ ๆ"""
+    extra = {NEXT_DAY: [252.0, 255.0, 250.0, 253.0, 0]}
     with tempfile.TemporaryDirectory() as d:
         _cut_raw(d)
-        now = datetime(2026, 9, 28, 20, 0, tzinfo=F.BANGKOK)
+        now = NEXT_DAY.replace(hour=20, minute=0, tzinfo=F.BANGKOK)
         _raises(F.plan_fetch, now, raw_dir=d, downloader=_fake_downloader(extra), match="Volume <= 0")
 
 
@@ -152,6 +161,7 @@ def test_tickers_must_end_same_day():
 
 
 def test_volume_format_exact():
+    # วันที่ตรงนี้เป็นแค่ index ของตารางสังเคราะห์ 1 แถว ไม่ได้อ่าน raw_data เลย -> ไม่ต้องผูกกับ DATES
     new = pd.DataFrame({"Open": [1.0], "High": [1.0], "Low": [1.0], "Close": [1.0], "Volume": [4564800]},
                        index=[pd.Timestamp("2026-09-28")])
     row = F.investing_rows(new, 1.0)[0]
