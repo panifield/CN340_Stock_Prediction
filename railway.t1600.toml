@@ -1,0 +1,15 @@
+"$schema" = "https://railway.com/railway.schema.json"
+
+# service "t1600" -- งาน 16:02 น. ไทย (= 09:02 UTC) จันทร์-ศุกร์
+# ต้องเริ่มภายใน 16:00-16:29 (task_b ปฏิเสธนอกช่วงนี้ และ deploy/railway_run.sh ก็เช็คซ้ำก่อนเริ่ม)
+# Railway อาจเริ่มช้าได้ไม่กี่นาที -- เผื่อได้ราว 25 นาที ถ้าช้ากว่านั้นรอบนั้นจะถูกยกเลิก (exit 3) ไม่เขียน log ครึ่งเดียว
+#
+# ใช้กับ service ที่สอง: Settings -> Config-as-code -> ใส่ path เป็น  /railway.t1600.toml
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "bash /usr/local/bin/railway_run.sh t1600"
+cronSchedule = "2 9 * * 1-5"
+restartPolicyType = "NEVER"

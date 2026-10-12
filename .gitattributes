@@ -1,0 +1,5 @@
+# บังคับ LF กับไฟล์ที่รันบน Linux (Railway) -- ถ้าเป็น CRLF จะรันไม่ได้ ("bash\r: command not found")
+# เครื่อง Windows นี้ตั้ง core.autocrlf=true จึงเสี่ยงที่ editor จะเซฟเป็น CRLF
+*.sh text eol=lf
+Dockerfile text eol=lf
+railway*.toml text eol=lf

@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# deploy/railway_run.sh -- สคริปต์เริ่มงานของ Railway cron
+# =========================================================================================
+#   railway_run.sh next_day    # งานเช้า: automation/run_next_day.py  (task_a -> task_c -> task_b)
+#   railway_run.sh t1600       # งาน 16:02: automation/run_1600.py    (task_a2 -> task_b -> task_c)
+#   railway_run.sh smoke       # ทดสอบสภาพแวดล้อมอย่างเดียว (ไม่ทำนาย ไม่ commit)
+#
+# ลำดับ: เช็ค env -> clone repo ล่าสุด -> เช็ควัน/เวลา -> รัน orchestrator -> คืน exit code
+# (cron ต้อง "ทำงานเสร็จแล้วจบ" -- ห้ามค้าง ไม่งั้นรอบถัดไปจะถูกข้าม)
+#
+# ตัวแปร environment (ตั้งใน Railway -> service -> Variables)
+#   DRY_RUN=1        ค่าเริ่มต้น = ทดสอบ (--dry-run ไม่ commit/push) · ต้องตั้ง DRY_RUN=0 ถึงจะบันทึกจริง
+#   GITHUB_TOKEN     token ที่มีสิทธิ์เขียน repo (ต้องมีเมื่อ DRY_RUN=0 และตอน smoke ที่อยากทดสอบสิทธิ์ push)
+#   SMOKE_ONLY=1     ทุกโหมดรันแค่ smoke test แล้วจบ (ใช้ตอนทดสอบรอบแรก)
+#   GIT_REPO         ค่าเริ่มต้น panifield/CN340_Stock_Prediction · GIT_BRANCH ค่าเริ่มต้น main
+#   GIT_USER_NAME / GIT_USER_EMAIL   ตัวตนของ commit (ค่าเริ่มต้น railway-bot)
+#   SKIP_TIME_CHECK=1 / SKIP_HOLIDAY_CHECK=1   ข้ามการเช็ควัน/เวลา (ใช้ตอนทดสอบเท่านั้น)
+#   FAKE_NOW_BKK="YYYY-MM-DD HH:MM"   จำลองเวลาไทย (ใช้ทดสอบ logic วัน/เวลา)
+set -euo pipefail
+
+MODE="${1:-${RUN_MODE:-smoke}}"
+DRY_RUN="${DRY_RUN:-1}"
+SMOKE_ONLY="${SMOKE_ONLY:-0}"
+GIT_REPO="${GIT_REPO:-panifield/CN340_Stock_Prediction}"
+GIT_URL="${GIT_URL:-https://github.com/${GIT_REPO}.git}"
+GIT_BRANCH="${GIT_BRANCH:-main}"
+GIT_USER_NAME="${GIT_USER_NAME:-railway-bot}"
+GIT_USER_EMAIL="${GIT_USER_EMAIL:-railway-bot@users.noreply.github.com}"
+WORKDIR="${WORKDIR:-/app}"
+PY="${PYTHON:-python}"
+TMP="${TMPDIR:-/tmp}"
+
+# เวลาไทย = UTC+7 (ไม่มี DST) -- คำนวณจาก UTC ตรง ๆ ไม่พึ่งฐานข้อมูล timezone ของระบบ (ซึ่งบางสภาพแวดล้อมไม่มี)
+log() { echo "[railway_run $(date -u -d '+7 hours' '+%F %T') +07] $*"; }
+
+# เวลาไทยปัจจุบัน (หรือเวลาจำลอง) รูปแบบ "YYYY-MM-DD HH:MM"
+now_bkk() {
+  if [ -n "${FAKE_NOW_BKK:-}" ]; then echo "$FAKE_NOW_BKK"; else date -u -d '+7 hours' '+%F %H:%M'; fi
+}
+
+setup_auth() {
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    # token ไม่ถูกใส่ใน URL / ไม่ถูกพิมพ์ลง log -- git ถามผ่าน askpass ซึ่งอ่านจาก env ตอนรัน
+    cat > "$TMP/git-askpass.sh" <<'EOS'
+#!/bin/sh
+case "$1" in
+  Username*) echo "x-access-token" ;;
+  *) echo "$GITHUB_TOKEN" ;;
+esac
+EOS
+    chmod +x "$TMP/git-askpass.sh"
+    export GIT_ASKPASS="$TMP/git-askpass.sh" GIT_TERMINAL_PROMPT=0
+  fi
+}
+
+clone_repo() {
+  local dest="$WORKDIR/repo" i
+  mkdir -p "$WORKDIR"
+  for i in 1 2 3; do
+    rm -rf "$dest"
+    if git clone --quiet --depth 1 --branch "$GIT_BRANCH" "$GIT_URL" "$dest"; then
+      git -C "$dest" config user.name "$GIT_USER_NAME"
+      git -C "$dest" config user.email "$GIT_USER_EMAIL"
+      return 0
+    fi
+    log "clone ล้มเหลว (ครั้งที่ $i/3) -- รอ 5 วินาทีแล้วลองใหม่"
+    sleep 5
+  done
+  return 1
+}
+
+smoke() {
+  log "== smoke test =="
+  "$PY" --version
+  "$PY" - <<'PY'
+import sys
+import numpy, pandas, sklearn, xgboost, lightgbm, yfinance as yf
+print("versions: numpy", numpy.__version__, "| pandas", pandas.__version__, "| sklearn", sklearn.__version__,
+      "| xgboost", xgboost.__version__, "| lightgbm", lightgbm.__version__, "| yfinance", yf.__version__)
+bad = []
+for tk in ("KBANK.BK", "ADVANC.BK"):
+    for label, kw in (("1d", dict(period="10d", interval="1d")), ("1h", dict(period="5d", interval="1h"))):
+        try:
+            df = yf.download(tk, auto_adjust=False, progress=False, threads=False, **kw)
+        except Exception as e:                      # noqa: BLE001 -- ต้องการรายงานทุกแบบของความล้มเหลว
+            print(f"FAIL {tk} {label}: {type(e).__name__}: {e}")
+            bad.append((tk, label))
+            continue
+        if df is None or len(df) == 0:
+            print(f"FAIL {tk} {label}: Yahoo ไม่คืนข้อมูล (อาจถูกจำกัด IP ของ cloud)")
+            bad.append((tk, label))
+            continue
+        if hasattr(df.columns, "get_level_values"):
+            df.columns = df.columns.get_level_values(0)
+        last = df.iloc[-1]
+        note = "  (!) Close ล่าสุดเป็น NaN -- Yahoo ยังไม่ backfill (พบได้ปกติตอนเช้า)" if last["Close"] != last["Close"] else ""
+        print(f"ok   {tk} {label}: {len(df)} แถว, ล่าสุด {df.index[-1]} close={last['Close']}{note}")
+sys.exit(1 if bad else 0)
+PY
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    log "ทดสอบสิทธิ์ GitHub (clone + push --dry-run ไม่เปลี่ยนอะไรบน remote)"
+    clone_repo
+    git -C "$WORKDIR/repo" push --dry-run origin "HEAD:$GIT_BRANCH"
+    log "สิทธิ์ push ผ่าน"
+  else
+    log "ไม่มี GITHUB_TOKEN -- ข้ามการทดสอบสิทธิ์ GitHub"
+  fi
+  log "== smoke test ผ่าน =="
+}
+
+# ------------------------------------------------------------------ main
+case "$MODE" in
+  next_day) SCRIPT="automation/run_next_day.py" ;;
+  t1600)    SCRIPT="automation/run_1600.py" ;;
+  smoke)    ;;
+  *) echo "usage: railway_run.sh {next_day|t1600|smoke}" >&2; exit 2 ;;
+esac
+
+log "mode=$MODE DRY_RUN=$DRY_RUN SMOKE_ONLY=$SMOKE_ONLY repo=$GIT_REPO@$GIT_BRANCH"
+setup_auth
+
+if [ "$MODE" = "smoke" ] || [ "$SMOKE_ONLY" = "1" ]; then
+  smoke
+  exit 0
+fi
+
+if [ "$DRY_RUN" = "0" ]; then
+  ARGS=(--commit --push)
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    log "ผิดพลาด: DRY_RUN=0 ต้องมี GITHUB_TOKEN (ต้อง push log กลับ GitHub ไม่งั้น log หายเมื่อ container ดับ)"
+    exit 2
+  fi
+else
+  ARGS=(--dry-run)
+fi
+
+clone_repo || { log "ผิดพลาด: clone ไม่สำเร็จ"; exit 1; }
+cd "$WORKDIR/repo"
+log "HEAD = $(git rev-parse --short HEAD) : $(git log -1 --format=%s)"
+
+if [ "$DRY_RUN" = "0" ]; then
+  NOW="$(now_bkk)"
+  TODAY="${NOW%% *}"
+  HHMM="$(echo "${NOW##* }" | tr -d ':')"
+  HHMM=$((10#$HHMM))
+
+  # 1) วันหยุด/เสาร์-อาทิตย์ -> ข้าม (ไม่ถือว่าล้มเหลว) กันทำนายซ้ำ key เดิมในวันทำการถัดไป
+  if [ "${SKIP_HOLIDAY_CHECK:-0}" != "1" ]; then
+    if ! "$PY" - "$TODAY" <<'PY'
+import sys
+import pandas as pd
+today = pd.Timestamp(sys.argv[1])
+hol = set()
+for line in open("task_b/set_holidays.txt", encoding="utf-8").read().splitlines():
+    line = line.split("#", 1)[0].strip()
+    if line and not line.startswith("confirmed_through:"):
+        hol.add(pd.Timestamp(line))
+if today.dayofweek > 4 or today in hol:
+    print(f"{today.date()} ไม่ใช่วันทำการของ SET")
+    sys.exit(10)
+PY
+    then
+      log "ข้ามการรัน: $TODAY ไม่ใช่วันทำการ (exit 0)"
+      exit 0
+    fi
+  fi
+
+  # 2) เวลา -- ตัวคุมรัน task หลายตัวต่อกันและ commit ทีละตัว ถ้าเริ่มผิดเวลา task แรกอาจเขียน log ไปก่อน
+  #    แล้ว task หลังปฏิเสธ (เช่น task_b ปฏิเสธนอก 16:00-16:30) ได้ log ครึ่ง ๆ กลาง ๆ -> กันตั้งแต่ต้น
+  if [ "${SKIP_TIME_CHECK:-0}" != "1" ]; then
+    if [ "$MODE" = "t1600" ]; then
+      if [ "$HHMM" -lt 1600 ] || [ "$HHMM" -ge 1630 ]; then
+        log "ยกเลิก: t1600 ต้องเริ่มระหว่าง 16:00-16:29 (เวลาไทย) ตอนนี้ $NOW -- ไม่รันเพื่อกัน log ที่เขียนไม่ครบทุก task"
+        exit 3
+      fi
+    else
+      if [ "$HHMM" -ge 1000 ] && [ "$HHMM" -lt 1800 ]; then
+        log "ยกเลิก: next_day ห้ามรัน 10:00-17:59 (ตลาดเปิด/ข้อมูลปิดตลาดยังไม่นิ่ง) ตอนนี้ $NOW"
+        exit 3
+      fi
+    fi
+  fi
+fi
+
+log "เริ่ม: python $SCRIPT ${ARGS[*]}"
+set +e
+"$PY" -X utf8 "$SCRIPT" "${ARGS[@]}"
+RC=$?
+set -e
+log "จบ exit=$RC · git log:"
+git log --oneline -3 || true
+exit "$RC"

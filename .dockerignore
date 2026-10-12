@@ -1,0 +1,11 @@
+.git
+.venv
+.vscode
+.idea
+**/__pycache__
+*.pyc
+backfill
+automation/.staging
+task_b/.staging
+task_*/data_cache
+data_cache
