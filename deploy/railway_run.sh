@@ -13,6 +13,7 @@
 #   DRY_RUN=1        ค่าเริ่มต้น = ทดสอบ (--dry-run ไม่ commit/push) · ต้องตั้ง DRY_RUN=0 ถึงจะบันทึกจริง
 #   GITHUB_TOKEN     token ที่มีสิทธิ์เขียน repo (ต้องมีเมื่อ DRY_RUN=0 และตอน smoke ที่อยากทดสอบสิทธิ์ push)
 #   SMOKE_ONLY=1     ทุกโหมดรันแค่ smoke test แล้วจบ (ใช้ตอนทดสอบรอบแรก)
+#   SMOKE_PUSH_TEST=1  (ใช้คู่กับ SMOKE_ONLY=1 + GITHUB_TOKEN) ทดสอบ push จริงไป branch ชั่วคราวแล้วลบทิ้ง ไม่แตะ main · ลบตัวแปรนี้หลังทดสอบ
 #   GIT_REPO         ค่าเริ่มต้น panifield/CN340_Stock_Prediction · GIT_BRANCH ค่าเริ่มต้น main
 #   GIT_USER_NAME / GIT_USER_EMAIL   ตัวตนของ commit (ค่าเริ่มต้น railway-bot)
 #   SKIP_TIME_CHECK=1 / SKIP_HOLIDAY_CHECK=1   ข้ามการเช็ควัน/เวลา (ใช้ตอนทดสอบเท่านั้น)
@@ -76,6 +77,25 @@ clone_repo() {
   return 1
 }
 
+# ทดสอบ "push จริง" โดยไม่แตะ main: สร้าง commit เปล่าบน branch ชั่วคราว -> push -> ลบ branch ทิ้งทันที
+# ใช้เส้นทางเดียวกับที่รอบจริงต้องใช้ (shallow clone + ตัวตน commit + token ผ่าน askpass + สิทธิ์เขียน repo) ยกเว้นตัว branch
+push_test() {
+  local br="smoke-push-test-$(date -u +%Y%m%d%H%M%S)" repo="$WORKDIR/repo"
+  log "ทดสอบ push จริงไปยัง branch ชั่วคราว $br (ไม่แตะ $GIT_BRANCH)"
+  git -C "$repo" checkout -q -b "$br"
+  git -C "$repo" commit -q --allow-empty -m "smoke push test from railway -- safe to delete"
+  if ! git -C "$repo" push -q origin "$br"; then
+    log "ล้มเหลว: push ไม่ผ่าน (token ไม่มีสิทธิ์เขียน / branch protection / เครือข่าย) -- รอบจริงจะ push ไม่ได้"
+    return 1
+  fi
+  log "push ผ่าน -> $br ขึ้น GitHub แล้ว"
+  if ! git -C "$repo" push -q origin --delete "$br"; then
+    log "คำเตือน: push ผ่านแต่ลบ branch ไม่สำเร็จ -- ลบเองที่ GitHub: $br"
+    return 1
+  fi
+  log "ลบ branch ชั่วคราวแล้ว -- ทดสอบ push จริงผ่าน"
+}
+
 smoke() {
   log "== smoke test =="
   "$PY" --version
@@ -109,6 +129,9 @@ PY
     clone_repo
     git -C "$WORKDIR/repo" push --dry-run origin "HEAD:$GIT_BRANCH"
     log "สิทธิ์ push ผ่าน"
+    if [ "${SMOKE_PUSH_TEST:-0}" = "1" ]; then
+      push_test
+    fi
   else
     log "ไม่มี GITHUB_TOKEN -- ข้ามการทดสอบสิทธิ์ GitHub"
   fi
