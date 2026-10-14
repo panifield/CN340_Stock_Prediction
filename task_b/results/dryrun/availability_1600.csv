@@ -19,3 +19,5 @@ date,ticker,snapshot,source,downloaded_at,minutes_after_1600,hours_present,requi
 2026-10-05,ADVANC.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20261005\ADVANC_BK_1h_160223.csv,yahoo,2026-10-05T16:02:23+07:00,2.3833333333333333,10 11 12 13 14 15,True,False,False,1,
 2026-10-12,KBANK.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20261012\KBANK_BK_1h_160232.csv,yahoo,2026-10-12T16:02:32+07:00,2.533333333333333,10 11 12 13 14 15,True,False,False,0,
 2026-10-12,ADVANC.BK,C:\StudyUniversity\CN340\forLog\now\task_b\raw_data_intraday_live\20261012\ADVANC_BK_1h_160232.csv,yahoo,2026-10-12T16:02:32+07:00,2.533333333333333,10 11 12 13 14 15,True,False,False,0,
+2026-10-14,KBANK.BK,/app/repo/task_b/raw_data_intraday_live/20261014/KBANK_BK_1h_160257.csv,yahoo,2026-10-14T16:02:57+07:00,2.95,10 11 12 13 14 15,True,False,False,16,
+2026-10-14,ADVANC.BK,/app/repo/task_b/raw_data_intraday_live/20261014/ADVANC_BK_1h_160257.csv,yahoo,2026-10-14T16:02:57+07:00,2.95,10 11 12 13 14 15,True,False,False,22,
