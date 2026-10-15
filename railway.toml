@@ -11,6 +11,17 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
+# deploy ใหม่เฉพาะเมื่อไฟล์ที่ฝังใน image เปลี่ยนเท่านั้น (ดู Dockerfile: image มีแค่ library + railway_run.sh โค้ดโปรเจกต์ clone สดตอนรัน)
+# ไม่งั้นทุกครั้งที่ bot push log (เช่น task_a ตอน 08:04) Railway จะ deploy ใหม่ แล้วปิด deployment ที่กำลังรันอยู่ทิ้งกลางทาง
+# -> task_b ไม่ถูกรัน ได้ log ครึ่งเดียว (เกิดจริง 2026-10-15)
+watchPatterns = [
+  "Dockerfile",
+  "railway.toml",
+  "requirements.txt",
+  "task_b/requirements.txt",
+  "task_b/requirements-live.txt",
+  "deploy/railway_run.sh",
+]
 
 [deploy]
 startCommand = "bash /usr/local/bin/railway_run.sh auto"

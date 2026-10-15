@@ -54,6 +54,9 @@ os.environ.setdefault("PYTHONUTF8", "1")
 BASE_DIR = Path(__file__).resolve().parent.parent          # now/
 PY = sys.executable
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from run_next_day import already_logged  # noqa: E402  (ตัวเดียวกับที่ deploy/precheck.py ใช้)
+
 
 class StepError(RuntimeError):
     pass
@@ -110,12 +113,21 @@ def main(argv=None):
     print(f"target_date (วันนี้) = {today_iso}")
 
     try:
+        # ข้าม task ที่มี log ของวันนี้แล้ว -- รอบก่อนอาจถูกฆ่ากลางทาง (เช่น Railway deploy ทับ)
+        # ถ้าไม่ข้าม predict จะชน guard กันทำนายซ้ำ แล้ว task ที่ยังขาดไม่ถูกรันตลอดไป
+        # cron ยิง 16:02/16:12/16:22 -> รอบถัดไปเก็บ task ที่ขาดได้เองภายในกรอบ 16:00-16:30
+        def done(rel, ptype=None):
+            return args.commit and already_logged(BASE_DIR / rel, today_iso, ptype)
+
         # 1) task_a2
-        cmd = [PY, "predict_live.py", "--target-date", today_iso]
-        run("task_a2", cmd + (["--dry-run"] if args.dry_run else []), BASE_DIR / "task_a2")
-        if args.commit:
-            commit_log("task_a2 commit", BASE_DIR / "task_a2",
-                      "results/prediction_log.csv", today_iso, args.push)
+        if done("task_a2/results/prediction_log.csv"):
+            print(f"\n[task_a2] มี log official ของ {today_iso} แล้ว -- ข้าม")
+        else:
+            cmd = [PY, "predict_live.py", "--target-date", today_iso]
+            run("task_a2", cmd + (["--dry-run"] if args.dry_run else []), BASE_DIR / "task_a2")
+            if args.commit:
+                commit_log("task_a2 commit", BASE_DIR / "task_a2",
+                          "results/prediction_log.csv", today_iso, args.push)
 
         # 2) task_b -- ใช้ daily_1600.py (wrapper ทางการของ task_b เอง: fetch ->
         # predict -> tools/check_snapshot_1600.py availability check -> commit) แทนที่จะ
@@ -123,17 +135,26 @@ def main(argv=None):
         # ข้ามขั้น availability check ไปเฉยๆ และมี commit logic ซ้ำซ้อนกับที่ daily_1600.py
         # ทำเองอยู่แล้ว -- แก้ตาม pattern เดียวกับที่ run_next_day.py เรียก daily_next_day.py
         # (2026-09-29)
-        cmd = [PY, "daily_1600.py", "--phase", "predict"]
-        if args.commit:
-            cmd += ["--official", "--commit"] + (["--push"] if args.push else [])
-        run("task_b", cmd, BASE_DIR / "task_b")
+        # daily_1600.py ไม่มีตัวข้ามของตัวเองแบบ daily_next_day.py (predict_1600.py จะชน guard
+        # กันทำนายซ้ำแล้ว fail) -- ตัวคุมจึงต้องเช็คให้ · log ของ task_b ใช้ไฟล์เดียวกับ next_day
+        # ต้องกรอง prediction_type ด้วย
+        if done("task_b/results/prediction_log.csv", "same_day_1600"):
+            print(f"\n[task_b] มี log official (same_day_1600) ของ {today_iso} แล้ว -- ข้าม")
+        else:
+            cmd = [PY, "daily_1600.py", "--phase", "predict"]
+            if args.commit:
+                cmd += ["--official", "--commit"] + (["--push"] if args.push else [])
+            run("task_b", cmd, BASE_DIR / "task_b")
 
         # 3) task_c
-        cmd = [PY, "predict_live_1600.py", "--target-date", today_iso]
-        run("task_c", cmd + (["--dry-run"] if args.dry_run else []), BASE_DIR / "task_c")
-        if args.commit:
-            commit_log("task_c commit", BASE_DIR / "task_c",
-                      "results/prediction_log_1600.csv", today_iso, args.push)
+        if done("task_c/results/prediction_log_1600.csv"):
+            print(f"\n[task_c] มี log official ของ {today_iso} แล้ว -- ข้าม")
+        else:
+            cmd = [PY, "predict_live_1600.py", "--target-date", today_iso]
+            run("task_c", cmd + (["--dry-run"] if args.dry_run else []), BASE_DIR / "task_c")
+            if args.commit:
+                commit_log("task_c commit", BASE_DIR / "task_c",
+                          "results/prediction_log_1600.csv", today_iso, args.push)
 
     except StepError as e:
         print(f"\n!! {e}")

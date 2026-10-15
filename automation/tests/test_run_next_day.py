@@ -77,21 +77,58 @@ def test_yahoo_ready_blocks_nan_missing_and_errors():
     assert not ok and "ดึงข้อมูลไม่ได้" in why[0]
 
 
+class _Patched:
+    """แทน run/commit_log/yahoo_ready/already_logged ชั่วคราว -- เก็บชื่อขั้นที่ถูกเรียกไว้ใน .calls
+
+    ต้องแทน already_logged ด้วย ไม่งั้น test อ่าน prediction log จริงในเรโป แล้วผลเปลี่ยนไปตาม
+    ว่าวันที่รัน test มี log ของ target แล้วหรือยัง (เจอจริง 2026-10-15)
+    """
+
+    def __init__(self, yahoo_ok=True, logged=()):
+        self.calls, self.yahoo_ok, self.logged = [], yahoo_ok, set(logged)
+
+    def __enter__(self):
+        self._orig = (R.run, R.commit_log, R.yahoo_ready, R.already_logged)
+        R.run = lambda step, args, cwd: self.calls.append(step)
+        R.commit_log = lambda step, cwd, *a, **k: self.calls.append(f"commit:{cwd.name}")
+        R.yahoo_ready = lambda cutoff, *a, **k: (
+            (True, []) if self.yahoo_ok else (False, ["KBANK.BK: Close ของ x ยังเป็น NaN"]))
+        R.already_logged = lambda path, target, ptype=None: Path(path).parts[-3] in self.logged
+        return self
+
+    def __exit__(self, *exc):
+        R.run, R.commit_log, R.yahoo_ready, R.already_logged = self._orig
+
+
 def test_commit_run_stops_before_any_task_when_yahoo_not_ready():
     """--commit + ข้อมูลไม่พร้อม -> หยุดก่อนเรียก task ใด ๆ (ไม่มี log ครึ่งเดียว) · --dry-run ไม่หยุด"""
-    calls = []
-    orig = (R.run, R.commit_log, R.yahoo_ready)
-    R.run = lambda step, args, cwd: calls.append(step)
-    R.commit_log = lambda *a, **k: calls.append("commit")
-    R.yahoo_ready = lambda cutoff, *a, **k: (False, ["KBANK.BK: Close ของ x ยังเป็น NaN"])
-    try:
-        assert R.main(["--commit"]) == 1 and calls == []                   # หยุดก่อนรันอะไร
-        calls.clear()
-        assert R.main(["--commit", "--no-preflight"]) == 0 and "task_a" in calls   # ข้ามได้ตั้งใจเท่านั้น
-        calls.clear()
-        assert R.main(["--dry-run"]) == 0 and "task_a" in calls            # dry-run เดินต่อ
-    finally:
-        R.run, R.commit_log, R.yahoo_ready = orig
+    with _Patched(yahoo_ok=False) as p:
+        assert R.main(["--commit"]) == 1 and p.calls == []                 # หยุดก่อนรันอะไร
+        p.calls.clear()
+        assert R.main(["--commit", "--no-preflight"]) == 0 and "task_a" in p.calls   # ข้ามได้ตั้งใจเท่านั้น
+        p.calls.clear()
+        assert R.main(["--dry-run"]) == 0 and "task_a" in p.calls          # dry-run เดินต่อ
+
+
+def test_resume_skips_tasks_that_already_have_log():
+    """รอบก่อนถูกฆ่ากลางทาง (ได้ log task_a/task_c แล้ว) -> รอบถัดไปต้องข้ามสองตัวนั้น
+    แล้วเดินไป task_b ให้ครบ ไม่ใช่ไปชน guard กันทำนายซ้ำแล้วหยุด (เหตุจริง 2026-10-15)"""
+    with _Patched(logged={"task_a", "task_c"}) as p:
+        assert R.main(["--commit"]) == 0
+        assert p.calls == ["task_b"], p.calls
+
+
+def test_fresh_day_runs_every_task_in_order():
+    with _Patched() as p:
+        assert R.main(["--commit"]) == 0
+        assert p.calls == ["task_a", "commit:task_a", "task_c", "commit:task_c", "task_b"], p.calls
+
+
+def test_dry_run_never_skips_even_when_official_log_exists():
+    """dry-run เขียนคนละไฟล์ -- ต้องรันได้ซ้ำไม่จำกัด แม้ log official ของ target มีแล้ว"""
+    with _Patched(logged={"task_a", "task_c"}) as p:
+        assert R.main(["--dry-run"]) == 0
+        assert p.calls == ["task_a", "task_c", "task_b"], p.calls
 
 
 if __name__ == "__main__":

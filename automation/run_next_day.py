@@ -74,6 +74,28 @@ def git(step, args, cwd):
     return r
 
 
+def already_logged(log_path, target_iso, prediction_type=None):
+    """มีแถว official (ไม่ใช่ dry-run) ของ target_date ใน log นี้แล้วหรือยัง
+
+    ใช้ "ข้าม task ที่ทำไปแล้ว" ตอนรันซ้ำ -- รอบก่อนอาจถูกฆ่ากลางทาง (เช่น Railway deploy
+    ทับ deployment ที่กำลังรันอยู่ พบจริง 2026-10-15: ได้ log แค่ task_a/task_c ส่วน task_b
+    ไม่ถูกรัน) ถ้าไม่ข้าม task ที่มี log แล้ว predict_live.py จะชน check_no_duplicate แล้ว
+    ตัวคุมหยุดทันที -- task ที่ยังขาดก็ไม่ถูกรันตลอดไป
+    deploy/precheck.py ใช้ฟังก์ชันตัวเดียวกัน เพื่อให้ "ทำไปแล้วหรือยัง" ตรงกันเสมอ
+    """
+    p = Path(log_path)
+    if not p.exists():
+        return False
+    d = pd.read_csv(p, usecols=lambda c: c in {"target_date", "is_dry_run", "prediction_type"})
+    if "target_date" not in d.columns:
+        return False
+    if "is_dry_run" in d.columns:
+        d = d[~d["is_dry_run"].astype(str).str.lower().isin(["true", "1"])]
+    if prediction_type is not None and "prediction_type" in d.columns:
+        d = d[d["prediction_type"] == prediction_type]
+    return bool((d["target_date"].astype(str) == str(target_iso)).any())
+
+
 def commit_log(step, cwd, log_rel_path, target, push):
     """commit log ของ task ที่ไม่ commit ให้ตัวเอง (task_a, task_c) — no-op ถ้าไม่มีอะไรใหม่ให้ commit"""
     git(step, ["add", log_rel_path], cwd)
@@ -221,21 +243,34 @@ def main(argv=None):
                                     "(ข้ามได้ด้วย --no-preflight แต่จะได้ log ที่ใช้ข้อมูลเก่ากว่า 1 วันทำการ)")
                 print(msg + "\n   (dry-run: ไม่หยุด)")
 
+        # ข้าม task ที่มี log ของ target แล้ว (รันซ้ำหลังรอบก่อนถูกฆ่ากลางทาง -- ดู already_logged)
+        # เฉพาะรอบ official: dry-run เขียนคนละไฟล์อยู่แล้ว จึงรันซ้ำได้ไม่จำกัด
+        def done(rel, ptype=None):
+            return args.commit and already_logged(BASE_DIR / rel, target_iso, ptype)
+
         # 1) task_a
-        cmd = [PY, "predict_live.py", "--target-date", target_iso]
-        run("task_a", cmd + (["--dry-run"] if args.dry_run else []), BASE_DIR / "task_a")
-        if args.commit:
-            commit_log("task_a commit", BASE_DIR / "task_a",
-                      "results/prediction_log.csv", target_iso, args.push)
+        if done("task_a/results/prediction_log.csv"):
+            print("\n[task_a] มี log official ของ {} แล้ว -- ข้าม".format(target_iso))
+        else:
+            cmd = [PY, "predict_live.py", "--target-date", target_iso]
+            run("task_a", cmd + (["--dry-run"] if args.dry_run else []), BASE_DIR / "task_a")
+            if args.commit:
+                commit_log("task_a commit", BASE_DIR / "task_a",
+                          "results/prediction_log.csv", target_iso, args.push)
 
         # 2) task_c
-        cmd = [PY, "predict_live.py", "--target-date", target_iso]
-        run("task_c", cmd + (["--dry-run"] if args.dry_run else []), BASE_DIR / "task_c")
-        if args.commit:
-            commit_log("task_c commit", BASE_DIR / "task_c",
-                      "results/prediction_log.csv", target_iso, args.push)
+        if done("task_c/results/prediction_log.csv"):
+            print("\n[task_c] มี log official ของ {} แล้ว -- ข้าม".format(target_iso))
+        else:
+            cmd = [PY, "predict_live.py", "--target-date", target_iso]
+            run("task_c", cmd + (["--dry-run"] if args.dry_run else []), BASE_DIR / "task_c")
+            if args.commit:
+                commit_log("task_c commit", BASE_DIR / "task_c",
+                          "results/prediction_log.csv", target_iso, args.push)
 
         # 3) task_b -- มี orchestration ของตัวเองครบอยู่แล้ว (fetch/append/regression/commit)
+        #    ข้ามขั้นทำนายเองถ้ามี log แล้ว (already_predicted ใน daily_next_day.py) และยัง
+        #    เดินขั้น fetch/outcomes/report ต่อได้ -- จึงเรียกตรง ๆ ไม่ต้องเช็คซ้ำตรงนี้
         cmd = [PY, "daily_next_day.py"]
         cmd += ["--dry-run"] if args.dry_run else ["--commit"] + (["--push"] if args.push else [])
         run("task_b", cmd, BASE_DIR / "task_b")

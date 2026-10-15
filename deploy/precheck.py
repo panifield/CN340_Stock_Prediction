@@ -12,7 +12,7 @@ deploy/precheck.py -- ตรวจก่อนรันงานจริง (�
   2) cron ถี่หลายรอบ/วัน -> รอบหลังต้องรู้ว่า "วันนี้ทำเสร็จแล้ว" และไม่รันซ้ำ
 
 exit code:  0 = พร้อม รันต่อได้ · 10 = วันนี้ทำเสร็จครบทุก task แล้ว · 11 = ข้อมูลยังไม่พร้อม
-            12 = ทำไปแล้วบางส่วน (ต้องมีคนดู ห้ามรันซ้ำอัตโนมัติ) · 13 = ตรวจไม่ได้ (error)
+            12 = ทำไปแล้วบางส่วน -- รันต่อเก็บ task ที่ขาดได้ (ตัวคุมข้าม task ที่มี log แล้ว) · 13 = ตรวจไม่ได้
 ใช้ฟังก์ชันคำนวณวันของ automation/run_next_day.py ตัวเดียวกัน (ไม่เขียนซ้ำ) เพื่อให้ target ตรงกับที่ตัวคุมใช้เสมอ
 """
 
@@ -28,7 +28,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "automation"))
 import run_next_day as RND  # noqa: E402  (read_holidays / next_trading_day / MARKET_OPEN_HOUR)
 
-EXIT_READY, EXIT_DONE, EXIT_NOT_READY, EXIT_PARTIAL, EXIT_ERROR = 0, 10, 11, 12, 13
+EXIT_READY, EXIT_DONE, EXIT_NOT_READY, EXIT_RESUME, EXIT_ERROR = 0, 10, 11, 12, 13
+EXIT_PARTIAL = EXIT_RESUME          # ชื่อเดิมก่อน 2026-10-15 (ตอนนั้นแปลว่า "ต้องมีคนมาดู")
 
 # โหมด -> [(ไฟล์ log จริง, prediction_type ที่กรอง หรือ None)] ของทุก task ที่ตัวคุมต้องเขียน
 LOGS = {
@@ -54,15 +55,10 @@ def target_and_cutoff(mode, now, holidays, through):
 def log_status(root, mode, target):
     """คืน (จำนวน task ที่มีแถว official ของ target แล้ว, จำนวน task ทั้งหมด, รายชื่อที่มีแล้ว)"""
     have = []
+    target_iso = target.date().isoformat()
     for rel, ptype in LOGS[mode]:
-        p = Path(root) / rel
-        if not p.exists():
-            continue
-        d = pd.read_csv(p, usecols=lambda c: c in {"target_date", "is_dry_run", "prediction_type"})
-        d = d[~d["is_dry_run"].astype(str).str.lower().isin(["true", "1"])]
-        if ptype is not None:
-            d = d[d["prediction_type"] == ptype]
-        if (d["target_date"].astype(str) == target.date().isoformat()).any():
+        # ฟังก์ชันตัวเดียวกับที่ตัวคุมใช้ข้าม task -- "ทำไปแล้วหรือยัง" ต้องตรงกันเสมอ
+        if RND.already_logged(Path(root) / rel, target_iso, ptype):
             have.append(rel.split("/")[0] + ("" if ptype is None else f"[{ptype}]"))
     return len(have), len(LOGS[mode]), have
 
@@ -94,11 +90,8 @@ def main(argv=None, root=ROOT, downloader=download_daily):
     if n_have == n_all:
         print("[precheck] วันนี้ทำเสร็จครบทุก task แล้ว -- ไม่รันซ้ำ")
         return EXIT_DONE
-    if n_have > 0:
-        print(f"[precheck] !! ทำไปแล้วบางส่วน ({have}) -- รันซ้ำอัตโนมัติไม่ได้ (task แรกจะชน guard กันทำนายซ้ำ "
-              "แล้ว task ที่เหลือไม่ถูกรัน) ต้องมีคนดูและรัน task ที่เหลือเอง")
-        return EXIT_PARTIAL
 
+    # ข้อมูลต้องพร้อมก่อนเสมอ แม้เป็นรอบเก็บตก (task ที่ยังขาดก็ต้องใช้ข้อมูลวัน cutoff เหมือนกัน)
     if a.mode == "next_day" and not a.no_yahoo:
         ok, problems = yahoo_ready(cutoff, downloader)
         if not ok:
@@ -107,6 +100,13 @@ def main(argv=None, root=ROOT, downloader=download_daily):
                 print(f"           - {p}")
             return EXIT_NOT_READY
         print(f"[precheck] Yahoo มี Close ของ {cutoff.date()} ครบทั้ง 2 หุ้น")
+
+    if n_have > 0:
+        # รอบก่อนถูกฆ่ากลางทาง (เช่น Railway deploy ทับ) -- ตั้งแต่ 2026-10-15 ตัวคุมข้าม task ที่มี log
+        # แล้ว (automation/run_*.py: already_logged) จึงรันต่อให้ครบได้เอง ไม่ต้องรอคนมากด
+        print(f"[precheck] ทำไปแล้วบางส่วน ({have}) -- รันต่อเพื่อเก็บ task ที่ยังขาด "
+              f"({n_all - n_have} task) ตัวคุมจะข้าม task ที่มี log แล้ว")
+        return EXIT_RESUME
     return EXIT_READY
 
 
