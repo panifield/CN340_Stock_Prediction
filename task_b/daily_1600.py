@@ -6,6 +6,10 @@ daily_1600.py — ขั้นตอนประจำวันของโม�
     python daily_1600.py --phase outcome --official --commit --push   # หลัง 17:00: ผลจริง + ตรวจแท่ง 15:00
     python daily_1600.py --phase predict                              # dry-run (ทดสอบ ไม่เขียน production log)
 
+รอบที่ 2 (ค่าเริ่มต้น --round r2 · PHASE1D_PLAN_R2.md): target = ราคาปิดทางการ · prediction_type = same_day_close
+  predict : fetch_yahoo_intraday.py -> fetch_yahoo_daily_close.py -> predict_close.py -> check_snapshot_1600.py
+--round r1 = โมเดลรอบ 1 เดิม (predict_1600.py · same_day_1600) เก็บไว้เป็นประวัติ ไม่ถูกเรียกโดยตัวคุมแล้ว
+
 ขั้นตอน:
   predict : tools/fetch_yahoo_intraday.py -> predict_1600.py --latest-snapshot (--dry-run | --official)
             -> tools/check_snapshot_1600.py
@@ -48,7 +52,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="ขั้นตอนประจำวันของโมเดล 16:00")
     ap.add_argument("--phase", choices=["predict", "outcome"], required=True)
     ap.add_argument("--official", action="store_true",
-                    help="ทำนายแบบ official (predict_1600.py ตรวจเวลา/commit/snapshot เอง)")
+                    help="ทำนายแบบ official (predict_close.py / predict_1600.py ตรวจเวลา/commit/snapshot เอง)")
+    ap.add_argument("--round", choices=["r1", "r2"], default="r2",
+                    help="r2 = ราคาปิดทางการ (same_day_close · ค่าเริ่มต้น) · r1 = close_bar16 เดิม (same_day_1600)")
     ap.add_argument("--commit", action="store_true")
     ap.add_argument("--push", action="store_true")
     ap.add_argument("--holidays", type=Path, default=HOLIDAYS_PATH)
@@ -71,16 +77,19 @@ def main(argv=None):
             raise StepError(f"phase outcome ต้องรันหลัง 17:00 (ตอนนี้ {now:%H:%M})")
 
         run("1 fetch", [PY, TOOLS / "fetch_yahoo_intraday.py"])
+        if args.phase == "predict" and args.round == "r2":
+            run("1b fetch daily close", [PY, TOOLS / "fetch_yahoo_daily_close.py"])
         if args.phase == "predict":
             mode = "--official" if args.official else "--dry-run"
-            run("2 predict", [PY, "predict_1600.py", "--target-date", today.date().isoformat(),
+            script = "predict_close.py" if args.round == "r2" else "predict_1600.py"
+            run("2 predict", [PY, script, "--target-date", today.date().isoformat(),
                               mode, "--latest-snapshot"])
         run("3 availability", [PY, TOOLS / "check_snapshot_1600.py", "--date", today.date().isoformat()])
         if args.phase == "outcome" and args.official:
             run("4 outcomes", [PY, "record_outcomes.py"])
 
         if args.commit:
-            paths = ["raw_data_intraday_live", "results"]
+            paths = ["raw_data_intraday_live", "raw_data_daily_live", "results"]
             git("add", *paths)
             if git("diff", "--cached", "--quiet", check=False).returncode != 0:
                 git("commit", "-m", f"1600 {args.phase}{' official' if args.official else ' dry-run'}: {today.date()}")

@@ -138,8 +138,8 @@ def main(argv=None):
         # daily_1600.py ไม่มีตัวข้ามของตัวเองแบบ daily_next_day.py (predict_1600.py จะชน guard
         # กันทำนายซ้ำแล้ว fail) -- ตัวคุมจึงต้องเช็คให้ · log ของ task_b ใช้ไฟล์เดียวกับ next_day
         # ต้องกรอง prediction_type ด้วย
-        if done("task_b/results/prediction_log.csv", "same_day_1600"):
-            print(f"\n[task_b] มี log official (same_day_1600) ของ {today_iso} แล้ว -- ข้าม")
+        if done("task_b/results/prediction_log.csv", "same_day_close"):
+            print(f"\n[task_b] มี log official (same_day_close) ของ {today_iso} แล้ว -- ข้าม")
         else:
             cmd = [PY, "daily_1600.py", "--phase", "predict"]
             if args.commit:

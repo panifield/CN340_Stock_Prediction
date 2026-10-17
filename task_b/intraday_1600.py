@@ -93,23 +93,34 @@ def prepare_bars(df):
     return df.sort_values("ts").reset_index(drop=True)
 
 
-def _day_table(bars):
+def _day_table(bars, hours=LABELED_HOURS, daily=None):
     """
-    ตาราง 1 แถวต่อวัน: O/H/L/C/V ของแท่งที่ใช้เท่านั้น (10, 11, 12, 14, 15, 16)
+    ตาราง 1 แถวต่อวัน: O/H/L/C/V ของแท่งที่ใช้เท่านั้น (hours · รอบ 1 = 10, 11, 12, 14, 15, 16)
     แท่ง 13 ไม่ถูกหยิบเข้ามาเลย · V10 ไม่ถูกหยิบ
+    รอบ 2 (daily != None): hours = FEATURE_HOURS (ไม่อ่านแท่ง 16 เลย) + คอลัมน์
+        CD     = ราคาปิดทางการของวันนั้น (ไม่มี = NaN)
+        CDprev = ราคาปิดทางการของแถวก่อนหน้าใน daily ที่วันที่ < วันนั้น (= วันทำการก่อนหน้า)
     """
-    use = bars[bars["hour"].isin(LABELED_HOURS)]
+    use = bars[bars["hour"].isin(hours)]
     out = {}
     for field, short in (("Open", "O"), ("High", "H"), ("Low", "L"), ("Close", "C"),
                          ("Volume", "V")):
         p = use.pivot(index="date", columns="hour", values=field)
-        for h in LABELED_HOURS:
+        for h in hours:
             if short == "V" and h == 10:
                 continue                         # ห้ามอ่าน Volume แท่ง 10:00
             if short in ("O", "H", "L") and h == TARGET_HOUR:
                 continue                         # ไม่มีใครต้องใช้ O/H/L ของแท่ง 16
             out[f"{short}{h}"] = p[h] if h in p.columns else np.nan
-    return pd.DataFrame(out).sort_index()
+    table = pd.DataFrame(out).sort_index()
+    if daily is not None:
+        daily = daily.sort_index()
+        table["CD"] = daily.reindex(table.index).to_numpy()
+        pos = daily.index.searchsorted(table.index, side="left")      # แถวแรกที่ >= วันนั้น
+        vals = daily.to_numpy(dtype=float)
+        table["CDprev"] = (np.where(pos > 0, vals[np.maximum(pos - 1, 0)], np.nan)
+                           if len(vals) else np.nan)
+    return table
 
 
 # ---------------------------------------------------------------
@@ -118,7 +129,8 @@ def _day_table(bars):
 def _features(seq):
     """
     seq = ตาราง day_table ของ "ลำดับวัน" ที่ใช้คำนวณ lag / rolling / t_prev
-          = eligible labeled days (เรียงตามเวลา) + วัน live ต่อท้าย (ถ้ามี, C16 = NaN)
+          = eligible labeled days (เรียงตามเวลา) + วัน live ต่อท้าย (ถ้ามี, C16 / CD = NaN)
+          มีคอลัมน์ CD = รอบ 2 (target = ราคาปิดทางการ · gap ใช้ CDprev) · ไม่มี = รอบ 1
     lag / rolling / t_prev นับตามลำดับแถวนี้ (ข้ามวันที่ไม่ eligible)
     ค่าของแถว i ใช้ข้อมูลแถว i (ไม่รวม C16) และแถวก่อนหน้าเท่านั้น
     """
@@ -135,7 +147,10 @@ def _features(seq):
     width = hi - lo
     f["range"] = width / C15
     f["pos"] = np.where(width == 0, 0.5, (C15 - lo) / width.where(width != 0, 1.0))
-    f["gap"] = seq["O10"] / seq["C16"].shift(1) - 1           # C16 ของ t_prev
+    if "CD" in seq.columns:                                    # รอบ 2: ราคาปิดทางการของวันทำการก่อนหน้า
+        f["gap"] = seq["O10"] / seq["CDprev"] - 1
+    else:                                                      # รอบ 1
+        f["gap"] = seq["O10"] / seq["C16"].shift(1) - 1       # C16 ของ t_prev
 
     vcum = seq["V11"] + seq["V12"] + seq["V14"] + seq["V15"]
     zero = seq.index[vcum == 0]
@@ -146,7 +161,7 @@ def _features(seq):
     prev_mean = vcum.shift(1).rolling(RELVOL_WINDOW, min_periods=RELVOL_WINDOW).mean()
     f["relvol"] = np.log(vcum / prev_mean)
 
-    y = seq["C16"] / C15 - 1                                    # target ของแต่ละแถว
+    y = (seq["CD"] if "CD" in seq.columns else seq["C16"]) / C15 - 1   # target ของแต่ละแถว
     for k in TARGET_LAGS:
         f[f"y_lag{k}"] = y.shift(k)
 
@@ -163,22 +178,32 @@ def _business_gap_dates(index):
     return [str(index[i + 1].date()) for i in np.where(gaps > 1)[0]]
 
 
-def build_dataset(bars):
+def build_dataset(bars, daily_close=None):
     """
     historical labeled dataset ของหุ้นหนึ่งตัว
+    daily_close = None   : รอบ 1 (target = C16/C15 − 1 · ต้องมีแท่ง 16)
+    daily_close = Series : รอบ 2 (target = ราคาปิดทางการ/C15 − 1 · ไม่อ่านแท่ง 16 · index = วันที่ ราคาปิดที่ใช้ได้เท่านั้น)
     คืน (X, y, info, report)
         X      : 21 features · index = วันที่ (หลังตัด warm-up และแถว NaN/Inf)
-        y      : target y(t) = C16/C15 − 1
+        y      : target y(t)
         info   : C15 (ใช้แปลงเป็นบาท / เทียบ tick)
         report : eligible days, วันที่ถูกตัด + เหตุผล, warm-up, t_prev gaps, NaN rows
     """
-    table = _day_table(bars)
+    r2 = daily_close is not None
+    hours = FEATURE_HOURS if r2 else LABELED_HOURS
+    table = _day_table(bars, hours, daily_close)
     all_days = sorted(bars["date"].unique())
-    needed = [f"C{h}" for h in LABELED_HOURS]
+    needed = [f"C{h}" for h in hours] + (["CD"] if r2 else [])
     eligible = table[needed].notna().all(axis=1)
     present = bars.groupby("date")["hour"].apply(set)
-    dropped = {str(pd.Timestamp(d).date()): sorted(set(LABELED_HOURS) - present[d])
-               for d in all_days if not eligible.get(d, False)}
+    dropped = {}
+    for d in all_days:
+        if eligible.get(d, False):
+            continue
+        miss = sorted(set(hours) - present[d])
+        if r2 and not miss:
+            miss = ["daily_close"]
+        dropped[str(pd.Timestamp(d).date())] = miss
     seq = table[eligible]
 
     X, y = _features(seq)
@@ -230,7 +255,7 @@ def check_causal(feature_bar_starts, tf):
 # ---------------------------------------------------------------
 # live
 # ---------------------------------------------------------------
-def build_1600_live_feature(bars, target_date):
+def build_1600_live_feature(bars, target_date, daily_close=None):
     """
     สร้าง X ของวัน target_date ณ 16:00 + ชุดเทรน (dry-run เท่านั้นจนกว่า human freeze)
 
@@ -239,8 +264,16 @@ def build_1600_live_feature(bars, target_date):
     3. ต้องมีแท่ง 10, 11, 12, 14, 15 ของ target_date ไม่งั้น raise
     4. features ด้วยนิยามเดียวกับ historical (ลำดับ = eligible labeled days ก่อนหน้า + วันนี้)
     5. ชุดเทรน = labeled rows หลังตัด warm-up / invalid ที่วันที่ < target_date
+
+    รอบ 2 (daily_close = Series ราคาปิดทางการ): ตัดราคาปิดของวัน target และวันหลังจากนั้นทิ้งเสมอ (index < target)
+    ก่อนสร้าง feature / label · gap ใช้ราคาปิดของวันก่อนหน้า target · ไม่อ่านแท่ง 16 ของวันใดเลย
     """
     target = pd.Timestamp(target_date).normalize()
+    r2 = daily_close is not None
+    hours = FEATURE_HOURS if r2 else LABELED_HOURS
+    daily_hist = daily_close[daily_close.index < target] if r2 else None
+    if r2 and daily_hist.empty:
+        raise ValueError(f"{target.date()}: ไม่มีราคาปิดทางการก่อน target เลย -- สร้าง live feature ไม่ได้")
     tf = time_fields(target)
     b = bars[bars["date"] <= target]
     b = b[~((b["date"] == target) & (b["ts"] >= tf["feature_window_end"]))]
@@ -253,10 +286,10 @@ def build_1600_live_feature(bars, target_date):
     check_causal(today.loc[today["hour"].isin(FEATURE_HOURS), "ts"], tf)
 
     hist = b[b["date"] < target]
-    X_hist, y_hist, info_hist, report = build_dataset(hist)
+    X_hist, y_hist, info_hist, report = build_dataset(hist, daily_hist)
 
-    table = _day_table(b)
-    needed = [f"C{h}" for h in LABELED_HOURS]
+    table = _day_table(b, hours, daily_hist)
+    needed = [f"C{h}" for h in hours] + (["CD"] if r2 else [])
     labeled = table[(table.index < target) & table[needed].notna().all(axis=1)]
     seq = pd.concat([labeled, table.loc[[target]]])
     X_all, _ = _features(seq)
@@ -264,7 +297,7 @@ def build_1600_live_feature(bars, target_date):
     if not np.isfinite(X_live.to_numpy()).all():
         raise ValueError(f"{target.date()}: live feature มี NaN/Inf "
                          f"{X_live.columns[~np.isfinite(X_live.to_numpy()[0])].tolist()}")
-    return {
+    out = {
         "X_live": X_live,
         "close_bar15": float(table.loc[target, "C15"]),
         **tf,
@@ -274,3 +307,6 @@ def build_1600_live_feature(bars, target_date):
         "train_days": len(X_hist),
         "report": report,
     }
+    if r2:
+        out["daily_prev_close"] = float(table.loc[target, "CDprev"])
+    return out

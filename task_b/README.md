@@ -142,6 +142,32 @@ guard ของ `--official`: เวอร์ชัน library ตรง pin · 
 
 ---
 
+## Phase 1D รอบ 2 — 16:00 ทำนาย "ราคาปิดทางการ" (branch `task_b/target_close`)
+
+รอบ 1 (ด้านบน) ทำนาย `close_bar16` ซึ่งตรงราคาปิดทางการเพียง ~39–42% ของวัน → รอบ 2 เปลี่ยน target เป็น
+`ราคาปิดทางการ(t) / C15(t) − 1` เหมือน task_a / task_a2 / task_c · แผน (pre-registration): `PHASE1D_PLAN_R2.md`
+· feature อีก 16 ตัว · grid 24 config · walk-forward · metric · guard **เหมือนรอบ 1 ทุกตัวอักษร** (ต่างแค่ target และ `gap`)
+
+| รายการ | รอบ 1 | รอบ 2 |
+|---|---|---|
+| target | `C16/C15 − 1` | `ราคาปิดทางการ/C15 − 1` |
+| `gap` | `O10 / C16(eligible day ก่อนหน้า) − 1` | `O10 / ราคาปิดทางการ(วันทำการก่อนหน้า) − 1` |
+| prediction_type · config_tag | `same_day_1600` · `phase1d-modeA` | `same_day_close` · `phase1d-r2-close` |
+| ผลค้นหา | `results/phase1d/` | `results/phase1d_r2/` |
+| live | `predict_1600.py` | `predict_close.py` (ค่าเริ่มต้นของ `daily_1600.py --round r2`) |
+| sidecar | `prediction_log_1600_meta.csv` | `prediction_log_close_meta.csv` |
+
+แหล่งราคาปิดรายวัน (`daily_close.py`): ประวัติ ≤ 2026-09-25 = `raw_data_daily/` (ล็อก SHA · ที่มาและเหตุผลใน README ในโฟลเดอร์นั้น) ·
+live = snapshot Yahoo 1d ที่ `raw_data_daily_live/<วัน>/` (ดึงด้วย `tools/fetch_yahoo_daily_close.py` · แถว Volume<=0 ไม่ถูกใช้) ·
+ผลจริง (`record_outcomes.py`) = `raw_data/` เหมือน next_day · ถ้าไม่มีราคาปิดของวันทำการก่อนหน้า `predict_close.py` จะไม่ทำนาย
+
+```bash
+python tests/test_phase1d_r2.py      # 18 tests (builder/daily_close · smoke ~3 นาที)
+python tests/test_close_r2.py        # 9 tests (predict_close / outcome / daily_1600 · ~2 นาที)
+python tune_1600.py --run --round r2 # ค้นหา 24 config (ต้อง commit แผน R2 + โค้ดก่อน) -> results/phase1d_r2/
+python predict_close.py --target-date 2026-09-24 --dry-run   # replay จากไฟล์ล็อก
+```
+
 ## อ่านผลยังไง
 
 - ตัดสินด้วย **`MAE_return` เทียบกับ `Baseline: Naive (RW)`**

@@ -91,6 +91,16 @@ def test_log_status_filters_prediction_type():
     assert P.log_status(d, "next_day", pd.Timestamp("2026-10-14"))[0] == 1
 
 
+def test_t1600_task_b_counts_same_day_close_not_old_type():
+    t1 = ["task_a2/results/prediction_log.csv", "task_b/results/prediction_log.csv",
+          "task_c/results/prediction_log_1600.csv"]
+    d = _fake_root({t1[1]: [("2026-10-14", "same_day_close")]})
+    n, total, have = P.log_status(d, "t1600", pd.Timestamp("2026-10-14"))
+    assert (n, total) == (1, 3) and have == ["task_b[same_day_close]"], (n, have)
+    d = _fake_root({t1[1]: [("2026-10-14", "same_day_1600")]})              # แถวรอบ 1 ไม่นับว่าทำรอบ 2 แล้ว
+    assert P.log_status(d, "t1600", pd.Timestamp("2026-10-14"))[0] == 0
+
+
 def test_main_exit_codes():
     dl_ok, dl_nan = _daily(231.0), _daily(float("nan"))
     args = ["next_day", "--now", "2026-10-14 08:30"]
