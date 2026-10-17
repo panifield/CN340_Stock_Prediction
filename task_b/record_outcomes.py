@@ -16,6 +16,10 @@ record_outcomes.py — จับคู่คำทำนายใน prediction 
       same_day_1600 : close_bar16 จาก Yahoo (live snapshot ที่ดาวน์โหลดหลัง 17:00 ของวันนั้น
                       ใน raw_data_intraday_live/ หรือไฟล์ล็อก raw_data_intraday/)
                       · actual_return = close_bar16 / close_bar15 − 1 (prev_close = close_bar15)
+      same_day_close: (รอบ 2 · PHASE1D_PLAN_R2.md) ราคาปิดทางการของวัน t จาก raw_data/ (เหมือน next_day · ผู้ใช้เลือก 2026-10-17)
+                      · actual_return = ราคาปิดทางการ / close_bar15 − 1 (prev_close = close_bar15 ที่ log ไว้ตอนทำนาย)
+                      · prev_close_match = close_bar15 ที่ใช้ทำนาย เทียบ snapshot หลัง 17:00 ของวัน t (วัดดีเลย์ Yahoo)
+                        จึงบันทึกเมื่อมีทั้งราคาปิดใน raw_data/ และ snapshot รายชั่วโมงหลังปิดตลาดแล้วเท่านั้น
   - ค่าเริ่มต้นนับเฉพาะแถว official (is_dry_run = False) · dry-run ต้องสั่ง --include-dry-run
   - key เดิมที่บันทึกแล้วจะไม่ถูกเขียนซ้ำหรือเขียนทับ
   - prev_close ใน log ต้องตรงกับค่าในแหล่งผลจริง (next_day: ราคาปิดวัน data_cutoff ·
@@ -37,7 +41,7 @@ BANGKOK = timezone(timedelta(hours=7))
 LOG_PATH = OUTPUT_DIR / "prediction_log.csv"
 OUTCOMES_PATH = OUTPUT_DIR / "outcomes.csv"
 KEY = ["prediction_type", "ticker", "target_date", "model"]
-SUPPORTED_TYPES = ["next_day", "same_day_1600"]
+SUPPORTED_TYPES = ["next_day", "same_day_1600", "same_day_close"]
 
 OUTCOME_COLUMNS = [
     "recorded_at", "prediction_type", "ticker", "target_date", "data_cutoff", "model",
@@ -61,9 +65,11 @@ def normalize_log(log):
         raise ValueError("ไม่รู้จัก schema ของ log")
     log = log.copy()
     log["prev_close"] = log["close_bar15"]
-    log["predicted_close"] = log["predicted_close_bar16"]
+    if "predicted_close_bar16" in log.columns:                 # dry-run ของ predict_1600 (รอบ 1)
+        log["predicted_close"] = log["predicted_close_bar16"]
     log["data_cutoff"] = log["feature_window_end"]
-    log["config_tag"] = "phase1d-modeA"
+    log["config_tag"] = np.where(log["prediction_type"] == "same_day_close",
+                                 "phase1d-r2-close", "phase1d-modeA")
     return log
 
 
@@ -72,8 +78,8 @@ def compute_outcomes(log, closes, source, sha, recorded_at, include_dry_run=Fals
     """
     log      : DataFrame ของ prediction log
     closes   : {ticker: Series ราคาปิดจริง index = วันที่}   (next_day)
-    intraday : callable(ticker, target) -> (C16, C15, source, sha) หรือ None   (same_day_1600)
-               ถ้าไม่ให้มา แถว same_day_1600 จะถูกข้าม
+    intraday : callable(ticker, target) -> (C16, C15, source, sha) หรือ None   (same_day_1600 / same_day_close)
+               ถ้าไม่ให้มา แถว same_day_1600 และ same_day_close จะถูกข้าม
     คืน DataFrame ผลจริงของแถวที่ target_date มีราคาปิดแล้ว (คอลัมน์ OUTCOME_COLUMNS)
 
     error_return    = predicted_return − actual_return
@@ -94,6 +100,17 @@ def compute_outcomes(log, closes, source, sha, recorded_at, include_dry_run=Fals
                 continue                      # ยังไม่มี snapshot หลังตลาดปิด
             actual_close, c15, src, dsha = got
             prev_match = bool(np.isclose(c15, prev, rtol=0, atol=1e-9))
+        elif r["prediction_type"] == "same_day_close":
+            c = closes.get(r["ticker"])
+            if c is None or t not in c.index:
+                continue                      # ราคาปิดทางการยังไม่ออก / raw_data ยังไม่อัปเดต
+            got = intraday(r["ticker"], t) if intraday is not None else None
+            if got is None:
+                continue                      # ยังไม่มี snapshot หลังตลาดปิดไว้ตรวจ close_bar15
+            _, c15, _, _ = got
+            actual_close = float(c.loc[t])
+            prev_match = bool(np.isclose(c15, prev, rtol=0, atol=1e-9))
+            src, dsha = source.get(r["ticker"], ""), sha.get(r["ticker"], "")
         else:
             c = closes.get(r["ticker"])
             if c is None:

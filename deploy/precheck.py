@@ -37,7 +37,7 @@ LOGS = {
                  ("task_c/results/prediction_log.csv", None),
                  ("task_b/results/prediction_log.csv", "next_day")],
     "t1600": [("task_a2/results/prediction_log.csv", None),
-              ("task_b/results/prediction_log.csv", "same_day_1600"),
+              ("task_b/results/prediction_log.csv", "same_day_close"),     # รอบ 2 (2026-10-17) -- เดิม same_day_1600
               ("task_c/results/prediction_log_1600.csv", None)],
 }
 

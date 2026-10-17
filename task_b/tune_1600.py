@@ -8,6 +8,9 @@ tune_1600.py — Phase 1D (Mode A) model search ตาม PHASE1D_PLAN.md
 *** --run ต้องรันหลัง human commit PHASE1D_PLAN.md + โค้ดทั้งหมดแล้วเท่านั้น ***
 commit นั้นคือหลักฐานว่าแผนถูกเขียน "ก่อน" เห็นผล · สคริปต์ปฏิเสธถ้าไฟล์ที่ล็อกยังไม่ commit
 
+    python tune_1600.py --smoke --round r2   # รอบที่ 2 (PHASE1D_PLAN_R2.md): target = ราคาปิดทางการ · ข้อมูลสังเคราะห์
+    python tune_1600.py --run --round r2     # รอบที่ 2 ข้อมูลจริง -> results/phase1d_r2/ (ต้อง commit แผน R2 + โค้ดก่อน)
+
 ไม่มี historical test: ข้อมูลทั้งหมดเป็น development ที่เคย probe แล้ว
 ตัวเลขที่ได้ = walk-forward บน development data ห้ามเรียกว่า test
 ห้ามวางตัวเลข Phase 1D ในตารางเดียวกับ daily model
@@ -31,6 +34,7 @@ from xgboost import XGBRegressor
 from models import SeedAveragedRegressor, _scaled, _unscaled
 from splits import walk_forward_splits
 from intraday_1600 import build_dataset, load_ticker_bars, BASE_DIR, BANGKOK
+from daily_close import DAILY_DIR, load_locked, locked_path
 import metrics_1600 as M
 
 TICKERS = ["KBANK.BK", "ADVANC.BK"]
@@ -61,6 +65,11 @@ assert sum(len(g) for g in GRIDS.values()) == 24
 # ไฟล์ที่ต้อง commit ก่อน --run (pre-registration)
 LOCKED_FILES = ["PHASE1D_PLAN.md", "intraday_1600.py", "tune_1600.py", "metrics_1600.py",
                 "models.py", "splits.py", "trading_costs.py", "config.py", "weighting.py"]
+# รอบที่ 2: เพิ่มแผน R2 + โมดูลราคาปิดรายวัน + ไฟล์ล็อก (grid / rule / metric เหมือนรอบ 1 ทุกตัวอักษร)
+# (path ของไฟล์ล็อกราคาปิดคำนวณจาก daily_close -- ไม่เขียนเป็น string ตรงนี้ เพราะ test_16 ของรอบ 1 ห้ามมีคำว่า raw_data ใน tune_1600.py)
+LOCKED_FILES_R2 = LOCKED_FILES + ["PHASE1D_PLAN_R2.md", "daily_close.py", "tools/make_locked_daily.py"] + [
+    p.relative_to(BASE_DIR).as_posix()
+    for p in [locked_path(t) for t in ("KBANK.BK", "ADVANC.BK")] + [DAILY_DIR / "README.md"]]
 
 
 # ---------------------------------------------------------------
@@ -216,7 +225,7 @@ def econ_rows(family, cid, cfg, data, ann_seeds=SEARCH_ANN_SEEDS):
     return rows
 
 
-def run_search(data, out_dir):
+def run_search(data, out_dir, round_name="r1"):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     folds = fold_table(data)
@@ -249,7 +258,10 @@ def run_search(data, out_dir):
             econ += econ_rows(fam, cid, GRIDS[fam][cid], data)
     pd.DataFrame(econ).to_csv(out_dir / "phase1d_econ.csv", index=False)
 
-    lines = ["# Phase 1D search summary (development / walk-forward — ไม่ใช่ test)", ""]
+    title = ("# Phase 1D รอบ 2 (target = ราคาปิดทางการ) search summary (development / walk-forward — ไม่ใช่ test)"
+             if round_name == "r2" else
+             "# Phase 1D search summary (development / walk-forward — ไม่ใช่ test)")
+    lines = [title, ""]
     for fam, cid in winners.items():
         if cid is None:
             lines.append(f"- {fam}: **ไม่มี valid config** (ทุก config ไม่ผ่าน guard/invalid)")
@@ -258,8 +270,14 @@ def run_search(data, out_dir):
             lines.append(f"- {fam}: `{GRIDS[fam][cid]}` primary_score (mean relMAE) = "
                          f"{s.primary_score!r} · mean MAE_return = {s.mean_MAE_return!r} · "
                          f"min StdRatio = {s.min_StdRatio!r}")
-    lines += ["", "~43–49% ของวันราคาไม่ขยับเลย ⇒ MAE เอื้อ prediction ที่ใกล้ 0 · "
-              "StdRatio ต่ำของผู้ชนะเป็นสิ่งที่คาดได้ ไม่ใช่หลักฐานของ skill", ""]
+    if round_name == "r2":
+        zero = pd.concat([d["y"] for d in data.values()])
+        lines += ["", f"ราคาปิดทางการ = C15 ใน {100 * float((zero == 0).mean()):.1f}% ของวัน (ทุกแถวหลังตัด warm-up) "
+                  "⇒ MAE เอื้อ prediction ที่ใกล้ 0 · StdRatio ต่ำของผู้ชนะเป็นสิ่งที่คาดได้ ไม่ใช่หลักฐานของ skill · "
+                  "ห้ามวางตัวเลขรอบ 2 ในตารางเดียวกับรอบ 1 หรือ daily model (คนละ target)", ""]
+    else:
+        lines += ["", "~43–49% ของวันราคาไม่ขยับเลย ⇒ MAE เอื้อ prediction ที่ใกล้ 0 · "
+                  "StdRatio ต่ำของผู้ชนะเป็นสิ่งที่คาดได้ ไม่ใช่หลักฐานของ skill", ""]
     (out_dir / "phase1d_summary.md").write_text("\n".join(lines), encoding="utf-8")
     print(f"[tune_1600] เขียนผลที่ {out_dir}")
     return scores, winners
@@ -287,6 +305,13 @@ def synthetic_bars(n_days=420, seed=0, start_price=250.0, start="2023-01-02"):
     return pd.DataFrame(rows)
 
 
+def synthetic_daily(bars, seed=0):
+    """ราคาปิดทางการสังเคราะห์ = close แท่ง 16 ± 0-2 tick (สำหรับ --smoke --round r2 และ tests เท่านั้น)"""
+    rng = np.random.default_rng(1000 + seed)
+    c16 = bars[bars["hour"] == 16].set_index("date")["Close"].sort_index()
+    return c16 + rng.choice([-0.5, -0.25, 0.0, 0.0, 0.25, 0.5], size=len(c16))
+
+
 def _git(*args):
     r = subprocess.run(["git", *args], capture_output=True, text=True, cwd=BASE_DIR)
     if r.returncode != 0:
@@ -294,11 +319,11 @@ def _git(*args):
     return r.stdout.strip()
 
 
-def check_preregistered():
+def check_preregistered(files=LOCKED_FILES):
     """--run: แผน + โค้ดทุกไฟล์ที่ล็อกต้อง tracked และไม่มีการแก้ค้าง"""
-    for f in LOCKED_FILES:
+    for f in files:
         _git("ls-files", "--error-unmatch", f)
-    dirty = _git("status", "--porcelain", "--", *LOCKED_FILES)
+    dirty = _git("status", "--porcelain", "--", *files)
     if dirty:
         raise SystemExit("ปฏิเสธ --run: ไฟล์ที่ล็อกยังไม่ commit\n" + dirty)
 
@@ -308,22 +333,30 @@ def main():
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--smoke", action="store_true", help="ข้อมูลสังเคราะห์ · เขียนลง temp dir")
     g.add_argument("--run", action="store_true", help="ข้อมูลจริง (ต้อง commit แผนก่อน)")
+    p.add_argument("--round", choices=["r1", "r2"], default="r1",
+                   help="r1 = target close_bar16 (เดิม) · r2 = target ราคาปิดทางการ (PHASE1D_PLAN_R2.md)")
     p.add_argument("--out", default=None, help="โฟลเดอร์ผล (default: temp ตอน smoke)")
     args = p.parse_args()
+    r2 = args.round == "r2"
 
     if args.smoke:
         datasets = {}
         for i, t in enumerate(TICKERS):
             from intraday_1600 import prepare_bars
-            datasets[t] = build_dataset(prepare_bars(synthetic_bars(seed=i,
-                                                                    start_price=250 + 100 * i)))
+            bars = prepare_bars(synthetic_bars(seed=i, start_price=250 + 100 * i))
+            datasets[t] = build_dataset(bars, synthetic_daily(bars, seed=i) if r2 else None)
         out = Path(args.out) if args.out else Path(tempfile.mkdtemp(prefix="phase1d_smoke_"))
-        run_search(prepare(datasets), out)
+        run_search(prepare(datasets), out, args.round)
         print("[smoke] จบ -- ข้อมูลสังเคราะห์ ตัวเลขไม่มีความหมาย")
         return
-    check_preregistered()
-    datasets = {t: build_dataset(load_ticker_bars(t)) for t in TICKERS}
-    run_search(prepare(datasets), Path(args.out) if args.out else BASE_DIR / "results" / "phase1d")
+    check_preregistered(LOCKED_FILES_R2 if r2 else LOCKED_FILES)
+    if r2:
+        datasets = {t: build_dataset(load_ticker_bars(t), load_locked(t)["Close"]) for t in TICKERS}
+        default_out = BASE_DIR / "results" / "phase1d_r2"
+    else:
+        datasets = {t: build_dataset(load_ticker_bars(t)) for t in TICKERS}
+        default_out = BASE_DIR / "results" / "phase1d"
+    run_search(prepare(datasets), Path(args.out) if args.out else default_out, args.round)
 
 
 if __name__ == "__main__":

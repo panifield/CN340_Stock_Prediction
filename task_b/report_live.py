@@ -9,7 +9,7 @@ report_live.py — รายงานผล live test จาก outcomes.csv (+ 
 
 เขียน: <out-dir>/live_summary.csv · live_report.md · live_cumulative.png (ถ้ามี matplotlib)
 
-แยกตาม prediction_type × ticker × model เสมอ -- ห้ามรวมแบบ next_day กับ same_day_1600
+แยกตาม prediction_type × ticker × model เสมอ -- ห้ามรวมแบบ next_day กับ same_day_1600 / same_day_close
 ห้ามรวมกับผล validation / walk-forward เดิม · n < 20 วัน = ผลยังแกว่งมาก ห้ามสรุป
 """
 
@@ -29,8 +29,10 @@ MIN_N = 20
 # ช่วงเวลาที่คำทำนายต้องออก (นับจากเที่ยงคืนของ target_date · เวลาไทย)
 #   next_day      : ก่อน 09:00 ของวัน t (ไม่มีขอบล่าง -- ทำได้ตั้งแต่หลังตลาดปิดวัน t−1)
 #   same_day_1600 : ระหว่าง 16:00 ถึงก่อน 16:30 ของวัน t (ก่อน 16:00 แท่ง 15:00 ยังไม่จบ)
+#   same_day_close: เหมือน same_day_1600 (รอบ 2 · target = ราคาปิดทางการ)
 WINDOW = {"next_day": (None, pd.Timedelta(hours=9)),
-          "same_day_1600": (pd.Timedelta(hours=16), pd.Timedelta(hours=16, minutes=30))}
+          "same_day_1600": (pd.Timedelta(hours=16), pd.Timedelta(hours=16, minutes=30)),
+          "same_day_close": (pd.Timedelta(hours=16), pd.Timedelta(hours=16, minutes=30))}
 GROUP = ["prediction_type", "ticker", "model"]
 
 
