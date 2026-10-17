@@ -225,13 +225,13 @@ def test_10_daily_close_files_are_byte_for_byte_in_git():
     for f in files:
         if not f.endswith(".csv"):
             continue
-        blob = git("show", f"HEAD:{f}")
+        blob = git("show", f"HEAD:./{f}")           # ./ = path สัมพันธ์กับ cwd (task_b) ไม่ใช่ราก repo
         sha = hashlib.sha256(blob).hexdigest()
         if f.startswith("raw_data_daily/"):
             ticker = Path(f).name.split("_1d_")[0].replace("_", ".")
             assert sha == DC.EXPECTED_SHA256[ticker], f"{f}: blob ใน git SHA ไม่ตรงค่าที่ล็อก"
         else:
-            meta = json.loads(git("show", f"HEAD:{f}.meta.json"))
+            meta = json.loads(git("show", f"HEAD:./{f}.meta.json"))
             assert sha == meta["sha256"], f"{f}: blob ใน git SHA ไม่ตรง meta (Railway จะ raise ตอนโหลด snapshot)"
 
 
