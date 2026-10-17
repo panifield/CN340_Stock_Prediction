@@ -198,6 +198,43 @@ def test_09_dryrun_historical_end_to_end():
     assert out["target_time"].str.endswith("16:35:00+07:00").all()
 
 
+def test_10_daily_close_files_are_byte_for_byte_in_git():
+    """กันบั๊ก CRLF/LF: ไฟล์ล็อก + snapshot ราคาปิดรายวันมี SHA-256 กำกับ ต้องไม่ถูก git แปลงบรรทัด (เจอจริง 2026-10-18)
+    - attribute `text` ต้องเป็น unset (-text) ทุกไฟล์ใน raw_data_daily/ และ raw_data_daily_live/
+    - ถ้า commit แล้ว (tree สะอาด) blob ใน HEAD ต้องมี SHA ตรงค่าที่ล็อก/ใน meta -- นี่คือสิ่งที่ Railway (Linux) จะได้หลัง clone"""
+    import hashlib
+    import json
+    import subprocess
+    import daily_close as DC
+
+    def git(*a):
+        r = subprocess.run(["git", *a], cwd=ROOT, capture_output=True)
+        assert r.returncode == 0, r.stderr.decode(errors="replace")
+        return r.stdout
+
+    files = [f for d in ("raw_data_daily", "raw_data_daily_live")
+             for f in git("ls-files", d).decode().splitlines()]
+    if not files:
+        return                                                    # ไม่ได้อยู่ใน git repo (เช่น export zip)
+    attrs = git("check-attr", "text", "--", *files).decode()
+    bad = [l for l in attrs.splitlines() if not l.endswith("text: unset")]
+    assert not bad, f"ต้องตั้ง -text ใน .gitattributes: {bad[:3]}"
+    clean = not git("status", "--porcelain", "--", "raw_data_daily", "raw_data_daily_live", ".gitattributes").strip()
+    if not clean:
+        return                                                    # ยังไม่ commit -- ตรวจ blob ไม่ได้ (ตรวจ attribute แล้ว)
+    for f in files:
+        if not f.endswith(".csv"):
+            continue
+        blob = git("show", f"HEAD:./{f}")           # ./ = path สัมพันธ์กับ cwd (task_b) ไม่ใช่ราก repo
+        sha = hashlib.sha256(blob).hexdigest()
+        if f.startswith("raw_data_daily/"):
+            ticker = Path(f).name.split("_1d_")[0].replace("_", ".")
+            assert sha == DC.EXPECTED_SHA256[ticker], f"{f}: blob ใน git SHA ไม่ตรงค่าที่ล็อก"
+        else:
+            meta = json.loads(git("show", f"HEAD:./{f}.meta.json"))
+            assert sha == meta["sha256"], f"{f}: blob ใน git SHA ไม่ตรง meta (Railway จะ raise ตอนโหลด snapshot)"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     failed = 0
