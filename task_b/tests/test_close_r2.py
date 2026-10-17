@@ -143,15 +143,24 @@ def test_07_report_window_same_day_close():
     assert c["early_predictions"] == 1 and c["late_predictions"] == 1
 
 
+class _FrozenDatetime:
+    """ตรึงเวลาเป็นวันจันทร์ 17:30 (+07:00) -- phase outcome ปฏิเสธการรันก่อน 17:00 จึงห้ามพึ่งนาฬิกาเครื่อง"""
+    @staticmethod
+    def now(tz=None):
+        from datetime import datetime
+        return datetime(2026, 10, 19, 17, 30, tzinfo=tz)
+
+
 def _run_daily(argv):
     calls = []
-    orig_run, orig_trading = DD.run, DD.is_trading_day
+    orig = (DD.run, DD.is_trading_day, DD.datetime)
     DD.run = lambda step, args, ok_codes=(0,): calls.append((step, [Path(str(a)).name for a in args])) or 0
     DD.is_trading_day = lambda *a, **k: (True, None)
+    DD.datetime = _FrozenDatetime
     try:
         assert DD.main(argv) == 0
     finally:
-        DD.run, DD.is_trading_day = orig_run, orig_trading
+        DD.run, DD.is_trading_day, DD.datetime = orig
     return calls
 
 

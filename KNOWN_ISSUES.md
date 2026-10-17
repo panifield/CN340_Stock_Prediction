@@ -416,3 +416,17 @@ task_c×2) — ไม่มีตัวไหนเลือก "โมเดล
 - แหล่งราคาปิด: ประวัติ = `raw_data_daily/` (ล็อก SHA) · live = snapshot Yahoo 1d (`raw_data_daily_live/` + SHA) · ผลจริง = `raw_data/`
 - ไม่แก้ `models.py` / `config.py` / `splits.py` / `weighting.py` / `trading_costs.py` และไม่แตะ next_day หรือ task อื่น
 - สถานะ: เขียนโค้ด + tests แล้ว (ยังไม่ commit) → รอ commit lock → ค้นหา 24 config → backfill 28 ก.ย.–15 ต.ค. → merge เข้า `main`
+
+## อัปเดต 2026-10-18 — Phase 1D รอบ 2: ค้นหา + dry-run + backfill เสร็จ (branch `task_b/target_close`)
+
+- **ค้นหา 24 config (commit `84adbb6`)**: ผู้ชนะ ANN alpha 20 (8,4) / RF depth 3 leaf 15 / XGB depth 2 lr 0.01 ss 0.8 · mean relMAE 1.036 / 1.045 / 1.053
+  — ไม่มี config ชนะ Naive บนข้อมูล dev (≤ 2026-09-25) · ราคาปิดทางการ = C15 ใน 39.2% ของวัน
+- **dry-run ย้อนหลัง** (23–25 ก.ย.): `historical_x_match` = True ทุกแถว
+- **backfill 28 ก.ย. – 15 ต.ค.** (`results/phase1d_r2/backfill_same_day_close.csv` · ไม่ใช่ผลสด · `is_backfill = True`): 13 วัน × 2 หุ้น × 3 โมเดล = 78 แถว · ผลจริง 12 วัน (15 ต.ค. raw_data ยังไม่มี)
+  · pooled relMAE 0.927 (ANN 0.971 / RF 0.918 / XGB 0.892) · **ไม่นับเป็นหลักฐานว่าชนะ Naive**: 12 วัน, paired t p = 0.02–0.18 ก่อนปรับหลายการทดสอบ,
+  ช่วงตลาดขาลง, ตรงข้ามกับผล dev (1.036–1.053) → สอดคล้องกับความผันผวนของตัวอย่างเล็ก · ห้ามนำไปเลือก config
+- **leak test ของ backfill** (`backfill_leak_test.csv`): วางยาข้อมูลหลังเวลาตัดแล้วผลต้องไม่เปลี่ยน · ผ่าน 26/26 · ต่างสูงสุด 5.7e-14 **เท่ากับ noise ของระบบ**
+  ที่วัดจากการรันซ้ำโดยไม่วางยา (RF/XGB รวมผลแบบขนาน n_jobs=-1) · control (วางยาข้อมูลที่ควรเห็น) ต่ำสุด 11.4 → การทดสอบไวพอ
+  - บันทึกความผิดพลาดของผมเอง: เกณฑ์แรก "ต่าง = 0 เป๊ะ" เข้มเกินจริง → FAIL 26/26 ที่ระดับ ≤ 5.7e-14 (รายงานเดิมไม่ถูก commit) จึงเพิ่มโหมดรันซ้ำวัด noise
+    แล้วแยกคอลัมน์ที่ต้องเท่าเป๊ะ (C15, train_days, n_features) ออกจากคอลัมน์ทศนิยม (เกณฑ์ ≤ 1e-9) ก่อนสรุป
+- แหล่งข้อมูล backfill: snapshot ราคาปิดรายวันที่ดึงครั้งเดียว 2026-10-18 (`raw_data_daily_live/20261018/`) · ทับไฟล์ล็อก 19 วัน ต่าง 0 · แถวผี 0

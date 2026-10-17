@@ -166,6 +166,9 @@ python tests/test_phase1d_r2.py      # 18 tests (builder/daily_close · smoke ~3
 python tests/test_close_r2.py        # 9 tests (predict_close / outcome / daily_1600 · ~2 นาที)
 python tune_1600.py --run --round r2 # ค้นหา 24 config (ต้อง commit แผน R2 + โค้ดก่อน) -> results/phase1d_r2/
 python predict_close.py --target-date 2026-09-24 --dry-run   # replay จากไฟล์ล็อก
+python tools/backfill_close_r2.py --run         # backfill 28 ก.ย.–15 ต.ค. (ไม่ใช่ผลสด) -> results/phase1d_r2/backfill_same_day_close.csv
+python tools/backfill_close_r2.py --leak-test   # วางยาข้อมูลหลังเวลาตัด ผลต้องไม่เปลี่ยน (เกินกว่า noise ของระบบไม่ได้)
+python tests/test_backfill_close_r2.py          # 6 tests ของเครื่องมือ backfill
 ```
 
 ## อ่านผลยังไง
