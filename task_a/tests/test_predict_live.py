@@ -109,6 +109,64 @@ def test_get_code_commit_returns_nonempty_hash_in_this_repo():
     assert len(commit) >= 7, f"คาดว่าได้ commit hash แต่ได้ {commit!r}"
 
 
+def _ohlcv(dates, closes, volumes):
+    return pd.DataFrame({"Open": closes, "High": closes, "Low": closes,
+                         "Close": closes, "Volume": volumes},
+                        index=pd.DatetimeIndex(dates, name="Date"))
+
+
+def test_fetch_live_keeps_raw_data_history_and_appends_only_new_yahoo_rows():
+    """regression 2026-10-19: Yahoo 1d ปี 2024 มีแถวเสีย (Volume=0 ราคาปิดค้าง)
+    -> ประวัติต้องมาจาก task_b/raw_data เสมอ Yahoo ใช้แค่ต่อวันใหม่ และแถวใหม่ที่
+    Volume=0 ต้องถูกตัดทิ้ง"""
+    from unittest import mock
+    hist = _ohlcv(["2026-10-13", "2026-10-14"], [230.0, 231.0], [1e6, 1e6])
+    yahoo = _ohlcv(["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"],
+                   [999.0, 999.0, 235.0, 235.0],    # วันซ้อนทับราคาผิด · 10-16 Volume=0
+                   [1e6, 0.0, 1e6, 0.0])
+    with mock.patch.object(PL, "load_verified_history", return_value=hist), \
+         mock.patch.object(PL.yf, "download", return_value=yahoo):
+        df = PL.fetch_live("KBANK.BK")
+    assert list(df.index.strftime("%Y-%m-%d")) == ["2026-10-13", "2026-10-14", "2026-10-15"]
+    assert list(df["Close"]) == [230.0, 231.0, 235.0]   # raw_data ชนะ Yahoo ในช่วงซ้อนทับ
+
+
+def test_fetch_live_raises_when_yahoo_returns_nothing():
+    """ดึงย้อนทับไฟล์ไว้เสมอ -> ผลว่าง = ดึงไม่ได้จริง ห้ามเงียบแล้วทำนายด้วยข้อมูลเก่า"""
+    from unittest import mock
+    hist = _ohlcv(["2026-10-14"], [231.0], [1e6])
+    with mock.patch.object(PL, "load_verified_history", return_value=hist), \
+         mock.patch.object(PL.yf, "download", return_value=pd.DataFrame()):
+        _raises(PL.fetch_live, "KBANK.BK", match="ดึงข้อมูลสด")
+
+
+def test_load_verified_history_reads_real_raw_data_without_bad_2024_rows():
+    df = PL.load_verified_history("KBANK.BK")
+    assert df.index[0] >= pd.Timestamp("2016-08-26")
+    assert int((df.loc["2024", "Volume"] <= 0).sum()) == 0
+
+
+def test_evaluate_live_scores_against_official_close_and_skips_dry_run():
+    import evaluate_live as EV
+    from unittest import mock
+    close = pd.Series([231.0, 232.0], index=pd.DatetimeIndex(["2026-10-14", "2026-10-15"]))
+    log = pd.DataFrame({
+        "ticker": ["KBANK.BK"] * 4,
+        "target_date": ["2026-10-14", "2026-10-15", "2026-10-19", "2026-10-14"],
+        "model": ["ANN (MLP)"] * 4,
+        "prev_parity": [0.0, 1.0, 0.0, 0.0],
+        "predicted_parity": [1.0, 1.0, 0.0, 0.0],
+        "is_dry_run": [False, False, False, True],
+    })
+    with mock.patch.object(EV, "official_close", return_value=close):
+        out = EV.score(log, "prev_parity")
+    assert len(out) == 3                                  # แถว dry-run ไม่นับ
+    assert list(out["status"]) == ["scored", "scored", "pending"]
+    assert list(out["actual_parity"].iloc[:2]) == [1.0, 0.0]   # 231 คี่ · 232 คู่
+    assert list(out["correct"].iloc[:2]) == [1.0, 0.0]
+    assert list(out["baseline_correct"].iloc[:2]) == [0.0, 0.0]
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     for t in tests:
