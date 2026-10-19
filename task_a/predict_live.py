@@ -53,6 +53,7 @@ DRYRUN_LOG_PATH = OUTPUT_DIR / "dryrun" / "prediction_log_dryrun.csv"
 BANGKOK = timezone(timedelta(hours=7))
 
 KEY = ["ticker", "target_date", "model"]   # ต้องมี model ด้วย เพราะตอนนี้ทำนาย 3 โมเดล/หุ้น (2026-09-30)
+BASELINE_MODEL = "Baseline: Persistence"   # ชื่อเดียวกับตารางผลของ main.py
 LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "data_cutoff", "train_rows",
     "model", "prev_parity", "predicted_flip_proba", "predicted_parity",
@@ -250,6 +251,24 @@ def predict_one_ticker(ticker, target_date, verbose=True):
             "predicted_parity": float(parity_pred[0]),
             "predicted_label": label,
         })
+
+    # baseline เป็น "โมเดล" แถวที่ 4: ทายว่าไม่พลิก (คู่/คี่เหมือนวันนี้) -- ทั้ง test set
+    # ของ main.py และ log จริง (56% vs โมเดล 27% ณ 19 ต.ค.) baseline นี้ชนะหรือเสมอทุก
+    # โมเดล จึง log ไว้ทุกวันให้เทียบได้ตรงๆ (2026-10-19)
+    label = "คี่" if prev_parity == 1 else "คู่"
+    print(f"    {BASELINE_MODEL:20s} ไม่พลิก -> ทำนาย "
+          f"{pd.Timestamp(target_date).date()}: parity = {label}")
+    rows.append({
+        "ticker": ticker,
+        "target_date": pd.Timestamp(target_date).date().isoformat(),
+        "data_cutoff": data_cutoff.date().isoformat(),
+        "train_rows": len(X_all),
+        "model": BASELINE_MODEL,
+        "prev_parity": prev_parity,
+        "predicted_flip_proba": 0.0,
+        "predicted_parity": prev_parity,
+        "predicted_label": label,
+    })
     return rows
 
 

@@ -75,6 +75,7 @@ BANGKOK = timezone(timedelta(hours=7))
 TICKERS = {"KBANK.BK": "KBANK", "ADVANC.BK": "ADVANC"}
 
 KEY = ["ticker", "target_date", "model"]   # ต้องมี model ด้วย เพราะตอนนี้ทำนาย 3 โมเดล/หุ้น (2026-09-30)
+BASELINE_MODEL = "Baseline: Persistence-1600"   # ชื่อเดียวกับตารางผลของ main_a2.py
 LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "bar_1600_time", "train_rows",
     "model", "price_1600", "parity_1600", "predicted_flip_proba",
@@ -264,6 +265,24 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
             "predicted_parity": float(parity_pred[0]),
             "predicted_label": label,
         })
+
+    # baseline เป็น "โมเดล" แถวที่ 4: ทายว่าไม่พลิก (คู่/คี่เหมือนราคา 16:00) -- walk-forward
+    # CV ของ main_a2.py baseline นี้ชนะหรือเสมอทุกโมเดลทั้ง 2 หุ้น และใน log จริงก็ชนะ
+    # (50% vs 39% ณ 19 ต.ค.) จึง log ไว้ทุกวันให้เทียบได้ตรงๆ (2026-10-19)
+    label = "คี่" if parity_1600 == 1 else "คู่"
+    print(f"    {BASELINE_MODEL:20s} ไม่พลิก -> parity = {label}")
+    rows.append({
+        "ticker": yf_ticker,
+        "target_date": today.isoformat(),
+        "bar_1600_time": bar_time,
+        "train_rows": len(hist_dates),
+        "model": BASELINE_MODEL,
+        "price_1600": price_1600,
+        "parity_1600": parity_1600,
+        "predicted_flip_proba": 0.0,
+        "predicted_parity": parity_1600,
+        "predicted_label": label,
+    })
     return rows
 
 

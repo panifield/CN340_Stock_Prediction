@@ -87,9 +87,10 @@ def summarize(name, out, baseline_label, split_col=None):
 
     for model, g in s.groupby("model"):
         line(model, g)
-    line("รวมทุกโมเดล", s)
+    ml = s[~s["model"].str.startswith("Baseline")]
+    line("รวม ML ทุกโมเดล", ml)
     if split_col:
-        for flag, g in s.groupby(s[split_col].astype(str)):
+        for flag, g in ml.groupby(ml[split_col].astype(str)):
             line(f"{split_col}={flag}", g)
 
 
