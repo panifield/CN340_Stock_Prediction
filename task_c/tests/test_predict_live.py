@@ -3,7 +3,7 @@ tests/test_predict_live.py — predict_live.py, predict_live_1600.py, intraday_t
 
     python tests/test_predict_live.py
 
-ไม่ใช้อินเทอร์เน็ต (mock yfinance ตรง load_daily_close) ไม่เขียนไฟล์นอก temp dir
+ไม่ใช้อินเทอร์เน็ต (mock yfinance ใน task_a/verified_daily.py) ไม่เขียนไฟล์นอก temp dir
 
 *** เหตุผลที่มีไฟล์นี้ ***
 task_c ไม่มี test เลยมาก่อน (2026-09-29) ระหว่างแก้บั๊ก target ของ Task 2
@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 import predict_live as PL                    # noqa: E402
 import predict_live_1600 as PL16              # noqa: E402
 import intraday_task2 as T2                   # noqa: E402
+from verified_source import verified_daily as VD  # noqa: E402
 
 T = pd.Timestamp
 BANGKOK = timezone(timedelta(hours=7))
@@ -162,25 +163,28 @@ def test_build_task2_dataset_skips_days_missing_from_daily_close():
     assert pd.Timestamp("2024-01-03", tz=BANGKOK) not in details.index
 
 
-def test_load_daily_close_uses_cache_without_hitting_network():
-    ticker = "FAKE.BK"
-    with tempfile.TemporaryDirectory() as d, mock.patch(
-            "os.getcwd", return_value=d):
-        import os
-        cwd = os.getcwd()
-        cache_dir = Path(cwd) / "data_cache"
-        cache_dir.mkdir()
-        cached = pd.DataFrame(
-            {"Close": [100.0, 101.0]},
-            index=pd.to_datetime(["2024-01-02", "2024-01-03"]))
-        cached.to_csv(cache_dir / f"{ticker.replace('.', '_')}_daily_close.csv")
+def test_load_daily_close_uses_raw_data_without_network_for_past_range():
+    """regression 2026-10-20: เดิมดึง Yahoo 1d + cache ซึ่งปี 2024 มีแถวเสีย -> ตอนนี้ต้องมาจาก
+    task_b/raw_data และช่วงที่ raw_data ครอบคลุมแล้วต้องไม่เรียก Yahoo เลย"""
+    with mock.patch.object(VD.yf, "download", side_effect=AssertionError(
+            "ไม่ควรเรียก yfinance ถ้า raw_data ครอบคลุมช่วงที่ต้องการแล้ว")):
+        s = T2.load_daily_close("KBANK.BK", T("2024-01-02", tz=BANGKOK), "2024-12-30")
+    assert s.index.min() >= T("2024-01-02") and s.index.max() <= T("2024-12-30")
+    raw = VD.load_verified_history("KBANK.BK")["Close"]
+    assert s.equals(raw.loc["2024-01-02":"2024-12-30"].rename(s.name))   # ตรง raw_data ทุกวัน
 
-        real_path = str(cache_dir / f"{ticker.replace('.', '_')}_daily_close.csv")
-        with mock.patch.object(T2, "_daily_close_path", return_value=real_path), \
-             mock.patch("yfinance.download", side_effect=AssertionError(
-                 "ไม่ควรเรียก yfinance ถ้า cache ครอบคลุมช่วงที่ต้องการแล้ว")):
-            s = T2.load_daily_close(ticker, "2024-01-02", "2024-01-03")
-    assert list(s.values) == [100.0, 101.0]
+
+def test_fetch_live_appends_only_new_yahoo_rows_after_raw_data():
+    hist = pd.DataFrame({c: [230.0, 231.0] for c in ["Open", "High", "Low", "Close"]}
+                        | {"Volume": [1e6, 1e6]},
+                        index=pd.DatetimeIndex(["2026-10-13", "2026-10-14"], name="Date"))
+    yahoo = pd.DataFrame({c: [999.0, 235.0, 235.0] for c in ["Open", "High", "Low", "Close"]}
+                         | {"Volume": [1e6, 1e6, 0.0]},       # 10-14 ราคาผิด · 10-16 Volume=0
+                         index=pd.DatetimeIndex(["2026-10-14", "2026-10-15", "2026-10-16"]))
+    with mock.patch.object(VD, "load_verified_history", return_value=hist), \
+         mock.patch.object(VD.yf, "download", return_value=yahoo):
+        df = PL.fetch_live("KBANK.BK")
+    assert list(df["Close"]) == [230.0, 231.0, 235.0]
 
 
 # ---------------------------------------------------------------

@@ -412,6 +412,11 @@ task_c×2) — ไม่มีตัวไหนเลือก "โมเดล
   `task_b/raw_data/` แล้วต่อเฉพาะแถวที่ใหม่กว่าไฟล์จาก Yahoo (ดึงย้อนทับ 10 วันไว้ตรวจว่าตรงกัน · ตัดแถวใหม่ที่ Volume=0)
   วัดผลกระทบแล้ว: ป้าย "พลิก/ไม่พลิก" ที่ใช้เทรนผิด **66 วัน (KBANK) และ 56 วัน (ADVANC)** จาก ~2,460 วัน ·
   **task_c (`predict_live.py`, `predict_live_1600.py`) ยังไม่ได้แก้** ยังดึงประวัติเต็มจาก Yahoo อยู่
+- **อัปเดต 2026-10-20: ✅ แก้ task_c แล้ว** — ย้าย logic ไปไว้ไฟล์กลาง `task_a/verified_daily.py` ให้ A / A2 / C ใช้ตัวเดียวกัน
+  (task_c โหลดผ่าน `task_c/verified_source.py` ด้วย importlib เพราะชื่อ config/features ซ้ำกับ task_a) ·
+  `task_c/predict_live.py::fetch_live` และ `task_c/intraday_task2.py::load_daily_close` (ใช้ทั้ง 16:00 และ backtest) ใช้ไฟล์กลางนี้ ·
+  **cache เดิม `task_c/data_cache/*_daily_close.csv` ต่างจาก raw_data 68 วัน (KBANK) / 49 วัน (ADVANC) จาก 725 วัน** = ป้ายขึ้น/ลงของ
+  รอบ 16:00 ผิด ~7–9% → ลบ cache ทิ้ง ไม่ cache อีก · ยังเหลือ: `backfill/run_one.py` (`daily_close_nowrite`) ยังดึงจาก Yahoo ตรง
 
 ## อัปเดต 2026-10-19 — สคริปต์วัดผล log จริงของ task_a / task_a2 (`task_a/evaluate_live.py`)
 

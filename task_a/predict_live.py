@@ -32,21 +32,18 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
 warnings.filterwarnings("ignore")
 
 from config import TICKERS, START_DATE, RANDOM_STATE
-from data_adapter import load_investing_csv
 from data_loader import clean
 from features import build_features, build_raw_features
 from targets import build_targets
 from models import get_classifiers
 from main import _prepare, _walk_forward_eval, _reconstruct_parity
+import verified_daily
 
 BASE_DIR = Path(__file__).resolve().parent
-RAW_DATA_DIR = BASE_DIR.parent / "task_b" / "raw_data"
-YAHOO_OVERLAP_DAYS = 10
 OUTPUT_DIR = BASE_DIR / "results"
 LOG_PATH = OUTPUT_DIR / "prediction_log.csv"
 DRYRUN_LOG_PATH = OUTPUT_DIR / "dryrun" / "prediction_log_dryrun.csv"
@@ -81,74 +78,14 @@ def worktree_dirty(cwd=BASE_DIR):
 
 # ---------------------------------------------------------------
 # ดึงข้อมูลสด — แยกจาก data_loader.load_stock() / data_cache/ เดิม
-# โดยตั้งใจ (ดู docstring ด้านบน)
-#
-# ประวัติมาจาก task_b/raw_data/ (Investing + Yahoo ที่ task_b ตรวจ OHLC ทุกวัน)
-# ส่วน Yahoo ใช้แค่ต่อวันที่ใหม่กว่าไฟล์ -- เดิมดึงประวัติเต็มจาก Yahoo ตั้งแต่
-# 2016 ทุกรอบ แต่ Yahoo 1d ปี 2024 มีแถวเสีย (Volume=0 ราคาปิดค้าง 47-65 วัน
-# ต่อหุ้น ดู KNOWN_ISSUES.md 2026-10-17) ทำให้ป้ายคู่/คี่ของวันเหล่านั้นผิด
-# ตอนเทรน ทั้ง task_a และ task_a2 (ใช้ fetch_live ตัวนี้) (แก้ 2026-10-19)
+# โดยตั้งใจ (ดู docstring ด้านบน) · ประวัติจาก task_b/raw_data + ต่อวันใหม่
+# จาก Yahoo ผ่าน verified_daily.py (ใช้ร่วมกับ task_a2 / task_c)
 # ---------------------------------------------------------------
 
-def load_verified_history(ticker):
-    path = RAW_DATA_DIR / f"{ticker.replace('.BK', '')}_10Y_Cleaned.csv"
-    df = load_investing_csv(str(path), verbose=False)
-    return df.loc[df.index >= pd.Timestamp(START_DATE)]
-
-
 def fetch_live(ticker):
-    hist = load_verified_history(ticker)
-    last = hist.index[-1]
-
-    # ดึงย้อนทับไฟล์ไว้ YAHOO_OVERLAP_DAYS วัน: ผลว่างจึงแปลว่าดึงไม่ได้จริง
-    # (ไม่ใช่แค่ไม่มีวันใหม่) และใช้ตรวจว่า Yahoo ตรงกับ raw_data
-    start = (last - pd.Timedelta(days=YAHOO_OVERLAP_DAYS)).strftime("%Y-%m-%d")
-    end_exclusive = (pd.Timestamp.now(tz=BANGKOK).normalize()
-                     + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    df = yf.download(ticker, start=start, end=end_exclusive,
-                     auto_adjust=False, progress=False)
-    if df is None or len(df) == 0:
-        raise RuntimeError(f"ดึงข้อมูลสดของ {ticker} ไม่ได้")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-    df.index = pd.to_datetime(df.index)
-    df.index.name = "Date"
-
-    overlap = df.index.intersection(hist.index)
-    diff = (df.loc[overlap, "Close"] - hist.loc[overlap, "Close"]).abs()
-    if (diff > 1e-6).any():
-        bad = diff[diff > 1e-6]
-        print(f"[live] !! Yahoo ราคาปิดไม่ตรง raw_data {len(bad)} วันในช่วงซ้อนทับ "
-              f"({', '.join(str(d.date()) for d in bad.index)}) -- ใช้ค่าจาก raw_data")
-
-    new = df.loc[df.index > last]
-
-    # yfinance บางครั้งคืนแถวของวันล่าสุดมาแล้ว แต่ Close ยังเป็น NaN (ยังไม่
-    # backfill แม้ตลาดปิดไปแล้ว) -- clean() ด้านล่างเรียกด้วย verbose=False จะ
-    # ตัดแถวนี้ทิ้งเงียบๆ ทำให้ data_cutoff ถอยไปหลายวันโดยไม่มีใครรู้ตัว เตือน
-    # ให้ชัดตรงนี้ก่อน
-    n_trailing_nan = 0
-    for v in new["Close"].iloc[::-1]:
-        if pd.isna(v):
-            n_trailing_nan += 1
-        else:
-            break
-    if n_trailing_nan:
-        dropped = new.index[-n_trailing_nan:]
-        print(f"[live] !! yfinance ยังไม่มีราคาปิดของ {n_trailing_nan} วันล่าสุด "
-              f"({dropped[0].date()} -> {dropped[-1].date()}, Close=NaN แถวเหล่านี้ "
-              f"มักเกิดจาก backfill ช้าหลังตลาดปิด) -> data_cutoff จะถอยไปใช้วันก่อนหน้า"
-              f"ที่มีราคาปิดจริง")
-
-    # อาการเดียวกับแถวเสียปี 2024: Volume=0 + ราคาปิดค้าง -- ไม่เอามาต่อ
-    zero_vol = new.index[new["Close"].notna() & (new["Volume"].fillna(0) <= 0)]
-    if len(zero_vol):
-        print(f"[live] !! Yahoo มีแถว Volume=0 {len(zero_vol)} วัน "
-              f"({', '.join(str(d.date()) for d in zero_vol)}) -- ตัดทิ้ง ไม่ใช้")
-        new = new.drop(zero_vol)
-
-    return clean(pd.concat([hist, new]), verbose=False)
+    end_exclusive = (pd.Timestamp.now(tz=BANGKOK).normalize() + pd.Timedelta(days=1))
+    return clean(verified_daily.fetch_verified_daily(ticker, START_DATE, end_exclusive),
+                 verbose=False)
 
 
 def build_live_feature(df):

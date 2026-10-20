@@ -45,7 +45,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from sklearn.base import clone
 
 warnings.filterwarnings("ignore")
@@ -57,6 +56,7 @@ from targets import build_targets
 from models import get_classifiers
 from splits import walk_forward_splits
 from main import _prepare
+from verified_source import verified_daily
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "results"
@@ -89,40 +89,15 @@ def worktree_dirty(cwd=BASE_DIR):
 
 # ---------------------------------------------------------------
 # ดึงข้อมูลสด — แยกจาก data_loader.load_stock() / data_cache/ เดิม
-# โดยตั้งใจ (ดู docstring ด้านบน)
+# โดยตั้งใจ (ดู docstring ด้านบน) · ประวัติจาก task_b/raw_data + ต่อวันใหม่
+# จาก Yahoo ผ่าน task_a/verified_daily.py -- เดิมดึงประวัติเต็มจาก Yahoo เอง
+# ซึ่งปี 2024 มีแถวเสีย (ป้ายขึ้น/ลงผิด · KNOWN_ISSUES.md) (แก้ 2026-10-20)
 # ---------------------------------------------------------------
 
 def fetch_live(ticker):
-    end_exclusive = (pd.Timestamp.now(tz=BANGKOK).normalize()
-                     + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    df = yf.download(ticker, start=START_DATE, end=end_exclusive,
-                     auto_adjust=False, progress=False)
-    if df is None or len(df) == 0:
-        raise RuntimeError(f"ดึงข้อมูลสดของ {ticker} ไม่ได้")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-    df.index = pd.to_datetime(df.index)
-    df.index.name = "Date"
-
-    # yfinance บางครั้งคืนแถวของวันล่าสุดมาแล้ว แต่ Close ยังเป็น NaN (ยังไม่
-    # backfill แม้ตลาดปิดไปแล้ว) -- clean() ด้านล่างเรียกด้วย verbose=False จะ
-    # ตัดแถวนี้ทิ้งเงียบๆ ทำให้ data_cutoff ถอยไปหลายวันโดยไม่มีใครรู้ตัว เตือน
-    # ให้ชัดตรงนี้ก่อน
-    n_trailing_nan = 0
-    for v in df["Close"].iloc[::-1]:
-        if pd.isna(v):
-            n_trailing_nan += 1
-        else:
-            break
-    if n_trailing_nan:
-        dropped = df.index[-n_trailing_nan:]
-        print(f"[live] !! yfinance ยังไม่มีราคาปิดของ {n_trailing_nan} วันล่าสุด "
-              f"({dropped[0].date()} -> {dropped[-1].date()}, Close=NaN แถวเหล่านี้ "
-              f"มักเกิดจาก backfill ช้าหลังตลาดปิด) -> data_cutoff จะถอยไปใช้วันก่อนหน้า"
-              f"ที่มีราคาปิดจริง")
-
-    return clean(df, verbose=False)
+    end_exclusive = (pd.Timestamp.now(tz=BANGKOK).normalize() + pd.Timedelta(days=1))
+    return clean(verified_daily.fetch_verified_daily(ticker, START_DATE, end_exclusive),
+                 verbose=False)
 
 
 def build_live_feature(df):

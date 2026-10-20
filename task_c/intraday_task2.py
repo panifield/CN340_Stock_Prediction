@@ -19,11 +19,16 @@ Task นี้แยกจาก main.py / Task 1 โดยสมบูรณ์
 ADVANC 40.2% จาก 721 วัน) เพราะแท่ง 1h คือราคาซื้อขายต่อเนื่องช่วง
 15:00-16:00 ไม่ใช่ราคาจากรอบ ATC (call auction) ตอนปิดตลาดจริง
 
-ตอนนี้เปลี่ยนไปใช้ yfinance **daily-interval** close แทน (ดึงแยกจาก 1h,
-cache ไว้ที่ data_cache/{ticker}_daily_close.csv) ซึ่งยืนยันแล้วว่าตรงกับ
-ราคาปิดทางการ 100% (ดู task_b/tools/fetch_yahoo_daily.py ที่เทียบกับ
-investing.com) -- INTRADAY_CLOSE_HOUR ใน config.py ยังใช้เป็นคำอธิบาย
-เจตนา ("ราคาปิดคือ ~16:00 ตามเวลาตลาด") แต่ไม่ได้ใช้เลือกแท่งอีกต่อไป
+ตอนนี้เปลี่ยนไปใช้ราคาปิดรายวัน (daily) แทน -- INTRADAY_CLOSE_HOUR ใน config.py
+ยังใช้เป็นคำอธิบายเจตนา ("ราคาปิดคือ ~16:00 ตามเวลาตลาด") แต่ไม่ได้ใช้เลือกแท่ง
+อีกต่อไป
+
+*** แก้ 2026-10-20: ราคาปิดรายวันมาจาก task_b/raw_data แทน Yahoo ***
+เดิมดึง yfinance interval=1d แล้ว cache ไว้ที่ data_cache/{ticker}_daily_close.csv
+แต่ Yahoo 1d มีแถวเสีย (Volume=0 ราคาปิดค้าง) -- cache ที่ commit ไว้ต่างจาก
+raw_data 68 วัน (KBANK) / 49 วัน (ADVANC) จาก 725 วัน ป้ายขึ้น/ลงของวันเหล่านั้น
+จึงผิด ตอนนี้ใช้ task_a/verified_daily.py (raw_data + ต่อวันใหม่จาก Yahoo) และ
+ไม่ cache แล้ว (ลบไฟล์ cache เดิมทิ้ง)
 
 รันจากโฟลเดอร์ task_c:
     python intraday_task2.py --dev  # train/validation; ไม่แตะ test
@@ -43,6 +48,7 @@ from config import (
 from evaluate import classification_metrics, print_confusion, print_table, results_table
 from models import get_classifiers
 from splits import chronological_split
+from verified_source import verified_daily
 
 
 REQUIRED_HOURLY_COLUMNS = {"Datetime", "Open", "High", "Low", "Close", "Volume"}
@@ -51,11 +57,6 @@ REQUIRED_HOURLY_COLUMNS = {"Datetime", "Open", "High", "Low", "Close", "Volume"}
 def _hourly_path(ticker):
     safe = ticker.replace("^", "").replace(".", "_")
     return os.path.join("data_cache", f"{safe}_1h_730d.csv")
-
-
-def _daily_close_path(ticker):
-    safe = ticker.replace("^", "").replace(".", "_")
-    return os.path.join("data_cache", f"{safe}_daily_close.csv")
 
 
 def load_hourly(ticker):
@@ -76,45 +77,21 @@ def load_hourly(ticker):
     return df
 
 
-def load_daily_close(ticker, start, end, use_cache=True):
+def load_daily_close(ticker, start, end):
     """
-    ราคาปิดทางการรายวันจริงจาก yfinance (interval=1d) -- ใช้เป็น target ของ
-    Task 2 แทนแท่ง 1h ที่ Hour==close_hour (ดูเหตุผลใน docstring หัวไฟล์)
-
-    cache ไว้แยกจาก data_cache/{ticker}_1h_730d.csv เพราะคนละ query กัน
-    (interval ต่างกัน) ห้ามใช้ปนกับ cache ของ task_a/task_c เดิมที่แช่แข็ง
-    ไว้ที่ END_DATE ของ config.py -- ไฟล์นี้ต้องครอบคลุมช่วงเดียวกับข้อมูล
-    1h ซึ่งขยับตามวันที่ดึงแต่ละครั้ง ไม่ใช่ค่าคงที่
+    ราคาปิดทางการรายวัน ช่วง [start, end] -- ใช้เป็น target ของ Task 2 แทนแท่ง 1h
+    ที่ Hour==close_hour (ดูเหตุผลใน docstring หัวไฟล์) · ประวัติจาก task_b/raw_data
+    ต่อวันที่ใหม่กว่าไฟล์จาก Yahoo (task_a/verified_daily.py)
     """
-    # yfinance daily index ไม่มี tz -- ตัด tz ของ start/end ทิ้งก่อนเทียบ/query
-    # เสมอ (ผู้เรียกอาจส่ง tz-aware Timestamp มาจาก hourly["Date"] ที่เป็น
-    # Asia/Bangkok)
+    # index รายวันไม่มี tz -- ตัด tz ของ start/end ทิ้งก่อนเทียบเสมอ (ผู้เรียกอาจส่ง
+    # tz-aware Timestamp มาจาก hourly["Date"] ที่เป็น Asia/Bangkok)
     start = pd.Timestamp(start).tz_localize(None) if pd.Timestamp(start).tz else pd.Timestamp(start)
     end = pd.Timestamp(end).tz_localize(None) if pd.Timestamp(end).tz else pd.Timestamp(end)
 
-    path = _daily_close_path(ticker)
-    if use_cache and os.path.exists(path):
-        s = pd.read_csv(path, index_col=0, parse_dates=True)["Close"]
-        s.index = s.index.normalize()
-        s_start, s_end = s.index.min(), s.index.max()
-        if s_start <= pd.Timestamp(start) and s_end >= pd.Timestamp(end) - pd.Timedelta(days=3):
-            return s
-        # cache ไม่ครอบคลุมช่วงที่ต้องการ (เช่นข้อมูล 1h ใหม่กว่า) -> ดึงใหม่
-
-    import yfinance as yf
-    end_exclusive = (pd.Timestamp(end) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    df = yf.download(ticker, start=pd.Timestamp(start).strftime("%Y-%m-%d"),
-                     end=end_exclusive, interval="1d",
-                     auto_adjust=False, progress=False)
-    if df is None or len(df) == 0:
-        raise RuntimeError(f"ดึงราคาปิดรายวันของ {ticker} ไม่ได้")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+    df = verified_daily.fetch_verified_daily(ticker, start, end + pd.Timedelta(days=1))
     s = df["Close"].dropna().copy()
-    s.index = pd.to_datetime(s.index).normalize()
-    os.makedirs("data_cache", exist_ok=True)
-    s.to_frame("Close").to_csv(path)
-    return s
+    s.index = s.index.normalize()
+    return s[(s.index >= start) & (s.index <= end)]
 
 
 def build_task2_dataset(hourly, cutoff_hour=INTRADAY_CUTOFF_HOUR,

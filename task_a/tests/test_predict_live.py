@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import predict_live as PL   # noqa: E402
+import verified_daily as VD  # noqa: E402
 
 T = pd.Timestamp
 BANGKOK = timezone(timedelta(hours=7))
@@ -124,8 +125,8 @@ def test_fetch_live_keeps_raw_data_history_and_appends_only_new_yahoo_rows():
     yahoo = _ohlcv(["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"],
                    [999.0, 999.0, 235.0, 235.0],    # วันซ้อนทับราคาผิด · 10-16 Volume=0
                    [1e6, 0.0, 1e6, 0.0])
-    with mock.patch.object(PL, "load_verified_history", return_value=hist), \
-         mock.patch.object(PL.yf, "download", return_value=yahoo):
+    with mock.patch.object(VD, "load_verified_history", return_value=hist), \
+         mock.patch.object(VD.yf, "download", return_value=yahoo):
         df = PL.fetch_live("KBANK.BK")
     assert list(df.index.strftime("%Y-%m-%d")) == ["2026-10-13", "2026-10-14", "2026-10-15"]
     assert list(df["Close"]) == [230.0, 231.0, 235.0]   # raw_data ชนะ Yahoo ในช่วงซ้อนทับ
@@ -135,15 +136,17 @@ def test_fetch_live_raises_when_yahoo_returns_nothing():
     """ดึงย้อนทับไฟล์ไว้เสมอ -> ผลว่าง = ดึงไม่ได้จริง ห้ามเงียบแล้วทำนายด้วยข้อมูลเก่า"""
     from unittest import mock
     hist = _ohlcv(["2026-10-14"], [231.0], [1e6])
-    with mock.patch.object(PL, "load_verified_history", return_value=hist), \
-         mock.patch.object(PL.yf, "download", return_value=pd.DataFrame()):
+    with mock.patch.object(VD, "load_verified_history", return_value=hist), \
+         mock.patch.object(VD.yf, "download", return_value=pd.DataFrame()):
         _raises(PL.fetch_live, "KBANK.BK", match="ดึงข้อมูลสด")
 
 
 def test_load_verified_history_reads_real_raw_data_without_bad_2024_rows():
-    df = PL.load_verified_history("KBANK.BK")
+    df = VD.load_verified_history("KBANK.BK", "2016-08-26")
     assert df.index[0] >= pd.Timestamp("2016-08-26")
     assert int((df.loc["2024", "Volume"] <= 0).sum()) == 0
+    assert df.loc["2026-10-15", "Close"] == 235.0           # Price ของ Investing = Close
+    assert df.loc["2026-10-15", "Volume"] == 11400.7 * 1000  # ไฟล์เก็บเป็นพันหุ้น
 
 
 def test_evaluate_live_scores_against_official_close_and_skips_dry_run():
