@@ -12,6 +12,7 @@ verified_daily.py — ราคารายวันที่ตรวจแล�
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -23,8 +24,13 @@ COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
 
 def load_verified_history(ticker, start=None):
-    """OHLCV จาก task_b/raw_data/ (Volume เป็นหุ้น เหมือน Yahoo -- ไฟล์เก็บเป็นพันหุ้น)"""
-    raw = pd.read_csv(RAW_DATA_DIR / f"{ticker.replace('.BK', '')}_10Y_Cleaned.csv")
+    """OHLCV จาก task_b/raw_data/ (Volume เป็นหุ้น เหมือน Yahoo -- ไฟล์เก็บเป็นพันหุ้น)
+
+    VERIFIED_RAW_DATA_DIR ชี้ไปโฟลเดอร์รูปแบบเดียวกันแทนได้ -- backfill ใช้สำเนาของตัวเอง
+    (backfill/data/task_b_raw_data) เพื่อให้ leak_test.py วางยาข้อมูลชุดนี้ได้
+    """
+    raw_dir = Path(os.environ.get("VERIFIED_RAW_DATA_DIR") or RAW_DATA_DIR)
+    raw = pd.read_csv(raw_dir / f"{ticker.replace('.BK', '')}_10Y_Cleaned.csv")
     df = pd.DataFrame({
         "Open": pd.to_numeric(raw["Open"]),
         "High": pd.to_numeric(raw["High"]),

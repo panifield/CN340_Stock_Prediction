@@ -417,6 +417,9 @@ task_c×2) — ไม่มีตัวไหนเลือก "โมเดล
   `task_c/predict_live.py::fetch_live` และ `task_c/intraday_task2.py::load_daily_close` (ใช้ทั้ง 16:00 และ backtest) ใช้ไฟล์กลางนี้ ·
   **cache เดิม `task_c/data_cache/*_daily_close.csv` ต่างจาก raw_data 68 วัน (KBANK) / 49 วัน (ADVANC) จาก 725 วัน** = ป้ายขึ้น/ลงของ
   รอบ 16:00 ผิด ~7–9% → ลบ cache ทิ้ง ไม่ cache อีก · ยังเหลือ: `backfill/run_one.py` (`daily_close_nowrite`) ยังดึงจาก Yahoo ตรง
+- **อัปเดต 2026-10-20: ✅ แก้ backfill แล้ว** — `run_one.py` ตั้ง `VERIFIED_RAW_DATA_DIR` ให้ task_a/a2/c อ่านสำเนา raw_data ของ backfill
+  (ชุดเดียวกับ task_b · leak test วางยาได้) และเลิกใช้ `daily_close_nowrite` · สร้างผล backfill 4 ชุดใหม่ 26/26 สำเร็จ ·
+  leak test ผ่านครบ 24/24 · รายละเอียดใน `backfill/README.md`
 
 ## อัปเดต 2026-10-19 — สคริปต์วัดผล log จริงของ task_a / task_a2 (`task_a/evaluate_live.py`)
 

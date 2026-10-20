@@ -66,6 +66,9 @@ def _enter(task):
     os.chdir(d)
     sys.path.insert(0, str(d))
     common.install_yf_cache()
+    # ประวัติราคารายวันของ task_a/a2/c (task_a/verified_daily.py) อ่านจากสำเนา raw_data ของ backfill
+    # ชุดเดียวกับที่ task_b ใช้ -- leak_test.py วางยาสำเนานี้ได้ (Yahoo ใช้แค่ต่อวันหลังสำเนา)
+    os.environ["VERIFIED_RAW_DATA_DIR"] = str(B_RAW_DIR)
     return d
 
 
@@ -164,24 +167,9 @@ def run_t1600_c(task, target, reason):
         d = df["Date"].dt.tz_localize(None) if df["Date"].dt.tz is not None else df["Date"]
         return df[(d < tgt) | ((d == tgt) & (df["Hour"] <= 15))]
 
-    def daily_close_nowrite(ticker, start, end, use_cache=True):
-        # เหมือน intraday_task2.load_daily_close แต่ (1) ไม่อ่าน/เขียน data_cache/ ของ production
-        # (cache อาจมีวันหลัง target -> prev_close ผิด) (2) ตัดให้ไม่เกิน end
-        import yfinance as yf
-        s0 = pd.Timestamp(start).tz_localize(None) if pd.Timestamp(start).tz else pd.Timestamp(start)
-        e0 = pd.Timestamp(end).tz_localize(None) if pd.Timestamp(end).tz else pd.Timestamp(end)
-        df = yf.download(ticker, start=s0.strftime("%Y-%m-%d"),
-                         end=(e0 + pd.Timedelta(days=1)).strftime("%Y-%m-%d"), interval="1d",
-                         auto_adjust=False, progress=False)
-        if df is None or len(df) == 0:
-            raise RuntimeError(f"ดึงราคาปิดรายวันของ {ticker} ไม่ได้")
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        s = df["Close"].dropna().copy()
-        s.index = pd.to_datetime(s.index).normalize()
-        return s[s.index <= e0]
-
-    pl.fetch_live_1h, pl.load_daily_close = trim_1h, daily_close_nowrite
+    # load_daily_close ใช้ของจริงได้เลย: ไม่มี cache แล้ว และตัดผลให้ไม่เกิน end เอง (end = วันก่อน
+    # target) -- เดิมแทนด้วยตัวที่ดึง Yahoo 1d ตรง ซึ่งปี 2024 มีแถวเสีย (แก้ 2026-10-20)
+    pl.fetch_live_1h = trim_1h
     if TRAIN_START:
         orig_b = pl.build_task2_dataset
 
