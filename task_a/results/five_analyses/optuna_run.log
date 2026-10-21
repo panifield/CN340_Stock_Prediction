@@ -1,0 +1,33 @@
+
+[5] Optuna 60 trials ต่อชุด (เลือกบน dev pool OOF เท่านั้น)
+  [data] A KBANK.BK label=round: n=2431 pool=2066 holdout=365 (4s)
+  A KBANK.BK: best OOF=0.5218 vs persistence 0.4887 | holdout 0.5260 vs 0.5205 p=0.947 (40s)
+  [data] A ADVANC.BK label=round: n=2431 pool=2066 holdout=365 (4s)
+  A ADVANC.BK: best OOF=0.5388 vs persistence 0.5085 | holdout 0.5479 vs 0.5041 p=0.233 (16s)
+  [data] A2 KBANK.BK label=round: n=720 pool=576 holdout=144 (3s)
+  A2 KBANK.BK: best OOF=0.6682 vs persistence 0.6635 | holdout 0.4931 vs 0.4931 p=1.000 (18s)
+  [data] A2 ADVANC.BK label=round: n=720 pool=576 holdout=144 (3s)
+  A2 ADVANC.BK: best OOF=0.5576 vs persistence 0.5294 | holdout 0.4792 vs 0.5139 p=0.302 (12s)
+                                                  0                          1                                                   2                                                                                  3
+task                                              A                          A                                                  A2                                                                                 A2
+ticker                                     KBANK.BK                  ADVANC.BK                                            KBANK.BK                                                                          ADVANC.BK
+n_trials                                         59                         59                                                  59                                                                                 59
+trials_beating_persistence_oof                   50                         48                                                   3                                                                                  3
+persistence_oof                              0.4887                     0.5085                                              0.6635                                                                             0.5294
+default_best_model              Logistic Regression                  ANN (MLP)                                            LightGBM                                                                           LightGBM
+default_best_oof                             0.5019                     0.5229                                              0.6612                                                                             0.5082
+best_trial_oof                               0.5218                     0.5388                                              0.6682                                                                             0.5576
+best_model                                      mlp                     logreg                                                 mlp                                                                             logreg
+best_groups                           daily_history  daily_state+daily_history  intraday_state+intraday_move+daily_volume_calendar  intraday_state+intraday_move+daily_history+daily_volatility+daily_volume_calendar
+oof_mcnemar_p                                0.1444                     0.0511                                                 0.5                                                                             0.0428
+oof_p_bonferroni_x_trials                       1.0                        1.0                                                 1.0                                                                                1.0
+n_holdout                                       365                        365                                                 144                                                                                144
+persistence_holdout                          0.5205                     0.5041                                              0.4931                                                                             0.5139
+default_best_holdout                         0.5014                     0.5726                                              0.4931                                                                             0.4653
+best_trial_holdout                            0.526                     0.5479                                              0.4931                                                                             0.4792
+holdout_ci                              0.475-0.577                0.497-0.598                                         0.413-0.574                                                                        0.399-0.560
+holdout_mcnemar_p                            0.9467                     0.2326                                                 1.0                                                                             0.3018
+holdout_p_bonferroni                            1.0                     0.9305                                                 1.0                                                                                1.0
+passes_bonferroni                             False                      False                                               False                                                                              False
+
+เสร็จ (87s) ผลอยู่ที่ C:\StudyUniversity\CN340\forLog\now\task_a\results\five_analyses
