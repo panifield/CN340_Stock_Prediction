@@ -1,0 +1,14 @@
+    KBANK.BK ANN (MLP)       ŷ = +0.000010 -> ราคาปิด 242.0024 (C15 242.0, ปิดวันก่อน 238.0, train_days 716)
+    KBANK.BK Random Forest   ŷ = +0.000954 -> ราคาปิด 242.2308 (C15 242.0, ปิดวันก่อน 238.0, train_days 716)
+    KBANK.BK XGBoost         ŷ = +0.000582 -> ราคาปิด 242.1408 (C15 242.0, ปิดวันก่อน 238.0, train_days 716)
+    ADVANC.BK ANN (MLP)       ŷ = +0.000121 -> ราคาปิด 336.0405 (C15 336.0, ปิดวันก่อน 335.0, train_days 715)
+    ADVANC.BK Random Forest   ŷ = -0.000038 -> ราคาปิด 335.9873 (C15 336.0, ปิดวันก่อน 335.0, train_days 715)
+    ADVANC.BK XGBoost         ŷ = +0.000200 -> ราคาปิด 336.0671 (C15 336.0, ปิดวันก่อน 335.0, train_days 715)
+[backfill] เขียน 6 แถว -> C:\UNi\thirdyer\CN340\StockPrediction2\backfill\validation\task_b_close_t1600.csv
+   ticker target_date         model  predicted_return  predicted_close
+ KBANK.BK  2026-10-22     ANN (MLP)          0.000010       242.002431
+ KBANK.BK  2026-10-22 Random Forest          0.000954       242.230848
+ KBANK.BK  2026-10-22       XGBoost          0.000582       242.140783
+ADVANC.BK  2026-10-22     ANN (MLP)          0.000121       336.040518
+ADVANC.BK  2026-10-22 Random Forest         -0.000038       335.987310
+ADVANC.BK  2026-10-22       XGBoost          0.000200       336.067056

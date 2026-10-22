@@ -41,3 +41,9 @@ generated_at,ticker,target_date,cutoff_hour_used,cutoff_price,train_rows,model,p
 2026-10-20T18:09:46+07:00,ADVANC.BK,2026-10-09,15,333.0,722,ANN (MLP),0.343223,0.0,ลง/นิ่ง,0f3fe839f3762c6ec5687106b8d38116735d3e33,False,False,True,missing
 2026-10-20T18:09:46+07:00,ADVANC.BK,2026-10-09,15,333.0,722,Logistic Regression,0.50289,1.0,ขึ้น,0f3fe839f3762c6ec5687106b8d38116735d3e33,False,False,True,missing
 2026-10-20T18:09:46+07:00,ADVANC.BK,2026-10-09,15,333.0,722,XGBoost,0.522889,1.0,ขึ้น,0f3fe839f3762c6ec5687106b8d38116735d3e33,False,False,True,missing
+2026-10-23T02:36:00+07:00,KBANK.BK,2026-10-21,15,239.0,726,ANN (MLP),0.187404,0.0,ลง/นิ่ง,5583ab23903f49f28eff14a1293eebcec4c37ff8,False,False,True,missing
+2026-10-23T02:36:00+07:00,KBANK.BK,2026-10-21,15,239.0,726,Logistic Regression,0.264265,0.0,ลง/นิ่ง,5583ab23903f49f28eff14a1293eebcec4c37ff8,False,False,True,missing
+2026-10-23T02:36:00+07:00,KBANK.BK,2026-10-21,15,239.0,726,XGBoost,0.056432,0.0,ลง/นิ่ง,5583ab23903f49f28eff14a1293eebcec4c37ff8,False,False,True,missing
+2026-10-23T02:36:00+07:00,ADVANC.BK,2026-10-21,15,333.0,726,ANN (MLP),0.272279,0.0,ลง/นิ่ง,5583ab23903f49f28eff14a1293eebcec4c37ff8,False,False,True,missing
+2026-10-23T02:36:00+07:00,ADVANC.BK,2026-10-21,15,333.0,726,Logistic Regression,0.462552,0.0,ลง/นิ่ง,5583ab23903f49f28eff14a1293eebcec4c37ff8,False,False,True,missing
+2026-10-23T02:36:00+07:00,ADVANC.BK,2026-10-21,15,333.0,726,XGBoost,0.350336,0.0,ลง/นิ่ง,5583ab23903f49f28eff14a1293eebcec4c37ff8,False,False,True,missing

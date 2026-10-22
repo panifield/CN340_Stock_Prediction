@@ -15,9 +15,12 @@ for d in days:
     iso = d.date().isoformat()
     r = {"target_date": iso, "weekday": d.strftime("%a")}
     for task in TASKS:
+        if d not in common.task_days(task, days):
+            r[task] = "n/a"          # ชุดนั้นยังไม่เริ่ม / เลิกรันไปแล้ว -> ไม่ใช่ช่องที่ขาด
+            continue
         l = common.live_counts(task).get(iso, 0)
         b = common.backfill_counts(task).get(iso, 0)
-        if l >= ROWS_PER_DATE:
+        if l >= common.expected_rows(task, d):
             s = "L"
         elif l and b:
             s = "L+B"      # log จริงมีไม่ครบโมเดล + backfill เติมครบ 3 โมเดล
@@ -35,11 +38,15 @@ df.to_csv(common.BACKFILL_DIR / "coverage.csv", index=False)
 cols = list(TASKS)
 head = ["วันที่", "วัน"] + [f"{t}<br>({TASKS[t]['mode']})" for t in cols]
 md = ["# Coverage ของ log ตั้งแต่ 2026-09-28", "",
-      "L = log จริงครบ (6 แถว: 2 หุ้น × 3 โมเดล) · B = มีเฉพาะ backfill · L+B = log จริงมีไม่ครบโมเดล backfill เติมให้ครบ · -- = ยังขาด", "",
+      "L = log จริงครบ (6 แถว: 2 หุ้น × 3 โมเดล -- task_a/task_a2 เป็น 8 แถวตั้งแต่ 2026-10-20 ที่เพิ่ม baseline) · "
+      "B = มีเฉพาะ backfill · L+B = log จริงมีไม่ครบโมเดล backfill เติมให้ครบ · -- = ยังขาด · "
+      "n/a = ชุดนั้นยังไม่เริ่ม/เลิกรันแล้ว (รอบ 16:00 ของ task_b เปลี่ยนจาก task_b_1600 เป็น task_b_close วันที่ 2026-10-19)", "",
       "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
 for _, r in df.iterrows():
     md.append("| " + " | ".join([r["target_date"], r["weekday"]] + [r[c] for c in cols]) + " |")
 n_missing = int((df[cols] == "--").sum().sum())
-md += ["", f"ช่องที่ยังขาด: **{n_missing}** จาก {len(df) * len(cols)} ช่อง (วันทำการ {len(df)} วัน × {len(cols)} ชุด)"]
+n_cells = int((df[cols] != "n/a").sum().sum())
+md += ["", f"ช่องที่ยังขาด: **{n_missing}** จาก {n_cells} ช่องที่ต้องมี "
+           f"(วันทำการ {len(df)} วัน × {len(cols)} ชุด = {len(df) * len(cols)} ช่อง หัก n/a แล้ว)"]
 (common.BACKFILL_DIR / "COVERAGE.md").write_text("\n".join(md) + "\n", encoding="utf-8")
 print(df.to_string(index=False)); print("missing cells:", n_missing)

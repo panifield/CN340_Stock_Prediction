@@ -35,15 +35,43 @@ START = pd.Timestamp("2026-09-28")          # วันแรกที่ต้�
 
 N_TICKERS = 2
 N_MODELS = 3
-ROWS_PER_DATE = N_TICKERS * N_MODELS
+ROWS_PER_DATE = N_TICKERS * N_MODELS       # ค่าเริ่มต้น: 2 หุ้น × 3 โมเดล
+
+# จำนวนแถวที่ถือว่า "ครบ" ของแต่ละชุด แยกตามช่วงวัน -- [(วันที่เริ่มใช้, แถว/วัน)] เรียงเก่า -> ใหม่
+# task_a / task_a2 เพิ่มแถว "Baseline: Persistence" เป็นแถวที่ 4 ต่อหุ้น ตั้งแต่ 2026-10-20 (commit dd20373)
+# -- ไม่ใช่โมเดล ML ตัวใหม่ (ยังเป็น ANN/LightGBM/Logistic 3 ตัวเดิม) แต่เป็นกฎตายตัว "ทายว่าไม่พลิก"
+# ที่ log ไว้ทุกวันเพื่อเทียบ · evaluate_live.py ไม่นับแถวนี้ในยอด "รวม ML ทุกโมเดล" · ถ้าใช้เกณฑ์ 6 แถว
+# เหมือนเดิมจะจับไม่ได้เวลาขาดไป 1 โมเดลจาก 4 (เหลือ 6 แถว) แต่ถ้าใช้ 8 ทั้งช่วงก็จะหาว่าวันยุค 3 โมเดลขาดหมด
+EXPECTED_ROWS = {
+    "task_a":  [("2026-09-28", 6), ("2026-10-20", 8)],
+    "task_a2": [("2026-09-28", 6), ("2026-10-20", 8)],
+}
+
+
+def expected_rows(task, day):
+    """แถว/วันที่ชุดนี้ควรมี ณ วันที่ day (ชุดที่ไม่ได้ระบุใน EXPECTED_ROWS = ROWS_PER_DATE ตลอด)"""
+    sched = EXPECTED_ROWS.get(task) or [(str(START.date()), ROWS_PER_DATE)]
+    day = pd.Timestamp(day)
+    n = sched[0][1]
+    for start, k in sched:
+        if day >= pd.Timestamp(start):
+            n = k
+    return n
 
 # ชื่อ task ภายในงาน backfill -> (โฟลเดอร์ task, โหมด, ไฟล์ log จริง, filter prediction_type)
+# start / end = ช่วงวันที่ชุดนั้น "ควรมี" log (ไม่ใส่ = START ถึงวันนี้) -- ใช้กับชุดที่เลิกรันหรือเริ่มกลางทาง
+# รอบ 16:00 ของ task_b เปลี่ยนจากรอบ 1 (same_day_1600 · predict_1600.py · target = close ของแท่ง 16:00)
+# เป็นรอบ 2 (same_day_close · predict_close.py · target = ราคาปิดทางการ) ตั้งแต่ 2026-10-19
+# (PHASE1D_PLAN_R2.md) -- target/โมเดลคนละอย่าง จึงเป็นสองชุดแยกกัน ไม่ใช่ชุดเดียวที่ต่อกัน
 TASKS = {
     "task_a":  dict(dir="task_a",  mode="next_day", live="task_a/results/prediction_log.csv", ptype=None),
     "task_c":  dict(dir="task_c",  mode="next_day", live="task_c/results/prediction_log.csv", ptype=None),
     "task_b":  dict(dir="task_b",  mode="next_day", live="task_b/results/prediction_log.csv", ptype="next_day"),
     "task_a2": dict(dir="task_a2", mode="t1600",    live="task_a2/results/prediction_log.csv", ptype=None),
-    "task_b_1600": dict(dir="task_b", mode="t1600", live="task_b/results/prediction_log.csv", ptype="same_day_1600"),
+    "task_b_1600": dict(dir="task_b", mode="t1600", live="task_b/results/prediction_log.csv",
+                        ptype="same_day_1600", end="2026-10-15"),
+    "task_b_close": dict(dir="task_b", mode="t1600", live="task_b/results/prediction_log.csv",
+                         ptype="same_day_close", start="2026-10-19"),
     "task_c_1600": dict(dir="task_c", mode="t1600", live="task_c/results/prediction_log_1600.csv", ptype=None),
 }
 EXTRA_COLUMNS = ["is_backfill", "backfill_reason"]
@@ -94,16 +122,24 @@ def backfill_counts(task):
     return d.groupby("target_date").size().to_dict()
 
 
+def task_days(task, days):
+    """วันที่ชุดนี้ควรมี log (ตัดช่วงก่อน start / หลัง end ของชุดที่เลิกรันหรือเริ่มกลางทางออก)"""
+    t = TASKS[task]
+    start = pd.Timestamp(t.get("start") or START)
+    end = pd.Timestamp(t["end"]) if t.get("end") else None
+    return [d for d in days if d >= start and (end is None or d <= end)]
+
+
 def find_gaps(task, days):
-    """[(target_date_iso, reason)] -- reason = missing (ไม่มีเลย) | partial_models (มีไม่ครบ 6 แถว)"""
+    """[(target_date_iso, reason)] -- reason = missing (ไม่มีเลย) | partial_models (มีไม่ครบตาม expected_rows)"""
     live = live_counts(task)
     gaps = []
-    for d in days:
+    for d in task_days(task, days):
         iso = d.date().isoformat()
         n = live.get(iso, 0)
         if n == 0:
             gaps.append((iso, "missing"))
-        elif n < ROWS_PER_DATE:
+        elif n < expected_rows(task, d):
             gaps.append((iso, "partial_models"))
     return gaps
 
@@ -112,7 +148,28 @@ def find_gaps(task, days):
 # แคชการดาวน์โหลดจาก yfinance -- ให้ทุก run ใช้ข้อมูลชุดเดียวกัน + เก็บเป็นหลักฐานว่าใช้ข้อมูลอะไร
 # ---------------------------------------------------------------
 
+def last_local_date(df):
+    """วันสุดท้ายที่มีข้อมูลใน df (index เป็นเวลา -> แปลงเป็นวันที่ตามเวลากรุงเทพก่อน)"""
+    idx = pd.DatetimeIndex(df.index)
+    if idx.tz is not None:
+        idx = idx.tz_convert(BANGKOK)
+    return idx.max().date()
+
+
+def covers(df, through):
+    return df is not None and len(df) and last_local_date(df) >= pd.Timestamp(through).date()
+
+
 def install_yf_cache():
+    """
+    ครอบ yf.download ด้วยแคชไฟล์ เพื่อให้ทุก run ใช้ข้อมูลชุดเดียวกัน + เก็บเป็นหลักฐานว่าใช้ข้อมูลอะไร
+
+    BACKFILL_CACHE_THROUGH (ตั้งโดย run_one.py = target_date) แก้ปัญหาแคชค้าง: คำขอที่ใช้หน้าต่าง
+    *สัมพัทธ์* (period="60d"/"730d" ของแท่ง 1h) มี cache key เดิมตลอด ถ้าไม่ตรวจอะไรเลย การ backfill
+    วันใหม่จะได้ไฟล์เก่าที่ยังไม่มีวันนั้นแบบเงียบ ๆ (อาการ: "ไม่มีแท่ง 15:00") แคชจึงถือว่าใช้ได้เฉพาะ
+    เมื่อข้อมูลครอบคลุมถึงวัน target · ถ้าไม่ครอบคลุม จะดาวน์โหลดใหม่เก็บเป็นไฟล์แยก `_thru<วันที่>`
+    (ไม่ทับไฟล์เดิม -> ผล backfill ที่ทำไว้แล้วรันซ้ำได้ค่าเดิม) และเลือกไฟล์เก่าที่สุดที่ครอบคลุมพอ
+    """
     import yfinance as yf
     if getattr(yf.download, "_backfill_cached", False):
         return
@@ -123,18 +180,31 @@ def install_yf_cache():
         key = json.dumps([[str(a) for a in args], sorted((k, str(v)) for k, v in kw.items())])
         h = hashlib.sha1(key.encode()).hexdigest()[:16]
         tk = str(args[0] if args else kw.get("tickers", "x")).replace(".", "_")
-        path = YF_CACHE_DIR / f"{tk}_{kw.get('interval', '1d')}_{h}.pkl"
-        if path.exists():
-            return pd.read_pickle(path)
+        stem = f"{tk}_{kw.get('interval', '1d')}_{h}"
+        path = YF_CACHE_DIR / f"{stem}.pkl"
+        # เช็คความครอบคลุมเฉพาะคำขอที่ใช้หน้าต่าง *สัมพัทธ์* (ไม่ระบุ end) เพราะคำขอที่ระบุ end
+        # มี cache key ต่างกันตามวันอยู่แล้ว และโดยนิยามคืนข้อมูลถึงก่อน end (เวลาตัดของ next_day)
+        through = os.environ.get("BACKFILL_CACHE_THROUGH") if "end" not in kw else None
+        for p in [path] + sorted(YF_CACHE_DIR.glob(f"{stem}_thru*.pkl")):
+            if not p.exists():
+                continue
+            df = pd.read_pickle(p)
+            if not through or covers(df, through):
+                return df
         if os.environ.get("BACKFILL_OFFLINE"):
             raise RuntimeError(f"BACKFILL_OFFLINE: ไม่พบแคชสำหรับ {key} -- ห้ามดาวน์โหลดใหม่ตอนทดสอบ")
         df = orig(*args, **kw)
         if df is not None and len(df):
-            pd.to_pickle(df, path)
+            if through and not covers(df, through):
+                raise RuntimeError(f"Yahoo คืนข้อมูลถึง {last_local_date(df)} ไม่ถึง {through} "
+                                   f"ที่ต้องใช้ -- ทำ backfill วันนี้ไม่ได้ ({key})")
+            out = path if not path.exists() else YF_CACHE_DIR / f"{stem}_thru{through}.pkl"
+            pd.to_pickle(df, out)
             (YF_CACHE_DIR / "index.jsonl").open("a", encoding="utf-8").write(
-                json.dumps({"file": path.name, "args": key,
+                json.dumps({"file": out.name, "args": key,
                             "fetched_at": datetime.now(BANGKOK).isoformat(timespec="seconds"),
-                            "rows": len(df)}, ensure_ascii=False) + "\n")
+                            "rows": len(df), "last_date": str(last_local_date(df)),
+                            "needed_through": through or ""}, ensure_ascii=False) + "\n")
         return df
 
     cached._backfill_cached = True

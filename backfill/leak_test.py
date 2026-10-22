@@ -6,8 +6,10 @@ backfill/leak_test.py — พิสูจน์ว่า backfill ไม่แ�
 หลักการ: คัดลอกข้อมูลที่แคชไว้ (backfill/data/) แล้วทำให้ข้อมูล "หลังเวลาตัด" ผิดเพี้ยนมาก (ราคา x1.5, volume x5)
 รัน backfill ใหม่ด้วยข้อมูลที่วางยาแล้ว (ออฟไลน์ -- ห้ามดาวน์โหลดใหม่) ถ้าไม่มี leak คำทำนายต้อง "เหมือนเดิมเป๊ะ"
 
+  rerun   = ไม่วางยาเลย -- วัด "noise ของระบบเอง" (XGBoost/RF ของบาง task ตั้ง n_jobs=-1 + subsample<1
+            ผลจึงขึ้นกับจำนวน thread ที่ได้ตอนรัน) ใช้เป็นเกณฑ์เทียบของ future
   future  = วางยาเฉพาะข้อมูลที่ไม่ควรเห็น: next_day -> ตั้งแต่วัน target เป็นต้นไป ·
-            t1600 -> แท่ง 16:00 ของวัน target และทุกอย่างหลังจากนั้น   => คาดหวัง: ผลเหมือนเดิมเป๊ะ
+            t1600 -> แท่ง 16:00 ของวัน target และทุกอย่างหลังจากนั้น   => คาดหวัง: ต่างไม่เกิน noise ของ rerun
   control = วางยาข้อมูลที่ "ควรเห็น" (วันทำการก่อน target / แท่ง 15:00 ของ target) => คาดหวัง: ผลต้องเปลี่ยน
             (ยืนยันว่าการวางยาไวพอ ถ้า control ไม่เปลี่ยน แปลว่าการทดสอบนี้ใช้ไม่ได้)
 """
@@ -78,6 +80,32 @@ def _poison_b_raw(path, target, mode):
     return n
 
 
+def _poison_daily_snapshot(path, target, mode):
+    """snapshot ราคาปิดรายวันของ task_b (raw_data_daily_live/) -- วางยาแล้วเขียน sha256 ใน meta ใหม่
+    (DC.load_snapshot ตรวจ sha ของไฟล์กับ meta) · แถวที่ทับไฟล์ล็อก (<= 2026-09-25) ไม่มีผล
+    เพราะ merge_daily ใช้ค่าจากไฟล์ล็อกอยู่แล้ว"""
+    import hashlib
+    import json
+    path = Path(path)
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    d = pd.to_datetime(df["Date"]).dt.normalize()
+    if mode == "future":
+        mask = (d >= target).to_numpy()
+    else:
+        mask = (d == d[d < target].max()).to_numpy()
+    for c in df.columns:
+        if c in ("Open", "High", "Low", "Close", "Adj Close"):
+            df.loc[mask, c] = df.loc[mask, c] * PRICE
+        elif c == "Volume":
+            df.loc[mask, c] = df.loc[mask, c] * VOL
+    df.to_csv(path, index=False)
+    mp = Path(str(path) + ".meta.json")
+    meta = json.loads(mp.read_text(encoding="utf-8"))
+    meta["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    mp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return int(mask.sum())
+
+
 def build_poisoned(mode, target):
     root = LEAK_DIR / f"{mode}_{target}"
     if root.exists():
@@ -85,8 +113,11 @@ def build_poisoned(mode, target):
     data = root / "data"
     shutil.copytree(common.DATA_DIR / "yf_cache", data / "yf_cache")
     shutil.copytree(common.DATA_DIR / "task_b_raw_data", data / "task_b_raw_data")
+    shutil.copytree(ROOT / "task_b" / "raw_data_daily_live", root / "daily_live")
     t = pd.Timestamp(target)
     n = 0
+    if mode == "rerun":
+        return root, 0                       # ไม่วางยา -- ใช้วัด noise ของระบบเอง (ดู main)
     for p in (data / "yf_cache").glob("*.pkl"):
         kind = "1h" if "_1h_" in p.name else "1d"
         df, k = _poison_frame(pd.read_pickle(p), kind, t, mode)
@@ -94,11 +125,14 @@ def build_poisoned(mode, target):
         n += k
     for p in (data / "task_b_raw_data").glob("*.csv"):
         n += _poison_b_raw(p, t, mode)
+    for p in (root / "daily_live").glob("*/*_1d_*.csv"):
+        n += _poison_daily_snapshot(p, t, mode)
     return root, n
 
 
 def run(task, target, root):
     env = {**os.environ, "BACKFILL_DATA_DIR": str(root / "data"), "BACKFILL_RESULTS_DIR": str(root / "results"),
+           "BACKFILL_DAILY_LIVE_DIR": str(root / "daily_live"),
            "BACKFILL_OFFLINE": "1", "PYTHONUTF8": "1"}
     log = root / f"{task}.log"
     with open(log, "w", encoding="utf-8") as f:
@@ -121,27 +155,58 @@ def compare(task, target, root):
     return len(m), diff
 
 
+def tasks_with_backfill(target):
+    """ทดสอบได้เฉพาะชุดที่ "มีผล backfill ของวันนั้น" ไว้เทียบ -- ชุดที่วันนั้นมี log จริงครบ (หรือยังไม่เริ่ม/
+    เลิกรันไปแล้ว) ไม่มีอะไรให้เทียบ ถ้าเอามารวมจะได้ผลลวงว่าผลไม่เปลี่ยน"""
+    out = []
+    for t in TASKS:
+        p = common.out_path(t)
+        if p.exists() and (pd.read_csv(p)["target_date"].astype(str) == target).any():
+            out.append(t)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dates", nargs="+", default=["2026-09-29", "2026-10-07"])
+    ap.add_argument("--dates", nargs="+", default=["2026-09-29", "2026-10-07", "2026-10-21"])
     a = ap.parse_args()
     rows = []
     for target in a.dates:
-        for mode in ("future", "control"):
+        tasks = tasks_with_backfill(target)
+        skipped = [t for t in TASKS if t not in tasks]
+        if skipped:
+            print(f"[{target}] ข้าม (ไม่มีผล backfill ของวันนี้ให้เทียบ): {', '.join(skipped)}", flush=True)
+        for mode in ("rerun", "future", "control"):
             root, n = build_poisoned(mode, target)
             print(f"[{mode} {target}] วางยา {n} แถว/บรรทัดในข้อมูลที่แคชไว้", flush=True)
-            with ThreadPoolExecutor(len(TASKS)) as ex:
-                res = list(ex.map(lambda t: run(t, target, root), TASKS))
+            with ThreadPoolExecutor(len(tasks)) as ex:
+                res = list(ex.map(lambda t: run(t, target, root), tasks))
             for task, rc in res:
                 c = compare(task, target, root) if rc == 0 else None
                 rows.append({"target_date": target, "mode": mode, "task": task, "exit": rc,
                              "rows": c[0] if c else None, "max_abs_diff_vs_backfill": c[1] if c else None})
                 print(rows[-1], flush=True)
     rep = pd.DataFrame(rows)
-    rep["result"] = rep.apply(lambda r: ("ERROR" if r["exit"] != 0 else
-                                         (("PASS (ไม่มี leak)" if r.max_abs_diff_vs_backfill == 0 else "FAIL (พบ leak)")
-                                          if r["mode"] == "future" else
-                                          ("OK (ผลเปลี่ยนตามที่คาด)" if r.max_abs_diff_vs_backfill > 0 else "ใช้ไม่ได้ (ไม่เปลี่ยน)"))), axis=1)
+    # noise ของระบบเอง = ผลต่างของโหมด rerun (ข้อมูลเดิม ไม่วางยา) ของ date+task นั้น
+    # XGBoost/RF ของบาง task ตั้ง n_jobs=-1 + subsample<1 -> ผลขึ้นกับจำนวน thread ที่ได้ตอนรัน
+    # จึงต้องเทียบ future กับ noise นี้ ไม่ใช่กับ 0 ไม่งั้นจะอ่านว่า "พบ leak" ทั้งที่ไม่ใช่
+    noise = {(r.target_date, r.task): r.max_abs_diff_vs_backfill
+             for r in rep[rep["mode"] == "rerun"].itertuples()}
+    rep["rerun_noise"] = [noise.get((r.target_date, r.task)) for r in rep.itertuples()]
+
+    def verdict(r):
+        if r["exit"] != 0:
+            return "ERROR"
+        nz = r["rerun_noise"]
+        if r["mode"] == "rerun":
+            return "noise = 0 (รันซ้ำได้ผลเดิม)" if r.max_abs_diff_vs_backfill == 0 else "noise > 0 (ผลไม่คงที่)"
+        if r["mode"] == "future":
+            if nz is None:
+                return "ไม่มี noise ไว้เทียบ"
+            return ("PASS (ไม่มี leak)" if r.max_abs_diff_vs_backfill <= nz else "FAIL (พบ leak)")
+        return ("OK (ผลเปลี่ยนตามที่คาด)"
+                if r.max_abs_diff_vs_backfill > max(nz or 0, 0) else "ใช้ไม่ได้ (ไม่เปลี่ยน)")
+    rep["result"] = rep.apply(verdict, axis=1)
     rep.to_csv(LEAK_DIR / "leak_test_report.csv", index=False)
     print(rep.to_string(index=False))
 

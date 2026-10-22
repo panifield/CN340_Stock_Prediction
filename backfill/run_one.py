@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import pathlib
 import sys
 from pathlib import Path
 
@@ -28,6 +29,16 @@ import common  # noqa: E402
 from common import ROOT, TASKS, DATA_DIR  # noqa: E402
 
 B_RAW_DIR = DATA_DIR / "task_b_raw_data"
+
+
+def _rel(path):
+    """path เทียบ ROOT ถ้าอยู่ใต้ repo (อ่านง่าย) ไม่งั้นคืน path เต็ม
+    -- BACKFILL_DATA_DIR ชี้ออกนอก repo ได้ (leak_test / การทดลอง)"""
+    path = pathlib.Path(path).resolve()
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _finish(task, rows, cols, reason, extra_cols=None):
@@ -311,9 +322,88 @@ def run_t1600_b(task, target, reason):
             extra_cols=["snapshot_path", "locked_mismatch_bars", "historical_x_match"])
 
 
+# ---------------------------------------------------------------
+# task_b รอบ 16:00 ฉบับรอบ 2 (same_day_close · predict_close.py · PHASE1D_PLAN_R2.md)
+# target = ราคาปิดทางการของวันเดียวกัน ไม่ใช่ close ของแท่ง 16:00 แบบรอบ 1 (run_t1600_b)
+# วิธีเดียวกับ task_b/tools/backfill_close_r2.py แต่เขียนผลลง backfill/results/ เหมือนชุดอื่น:
+#   - แท่ง 1h: ไม่มี snapshot ของวันนั้นเลย (railway ล่ม) -> ใช้ Yahoo 1h ที่ดึงตอนนี้ (bar_source = yahoo_final)
+#     เก็บไฟล์ไว้ในโฟลเดอร์แยก ไม่ปนกับ task_b_1h_snapshots/ ซึ่ง backfill_close_r2.py บังคับว่าต้องมีไฟล์เดียว
+#   - ราคาปิดรายวัน: snapshot จริงที่ล่าสุด (raw_data_daily_live/) -- build_1600_live_feature ตัด index >= target เสมอ
+# ข้าม validate_for_prediction ของทั้งสองแหล่ง (บังคับว่าต้องดาวน์โหลดวันเดียวกับ target ซึ่ง backfill ทำไม่ได้)
+# ---------------------------------------------------------------
+
+def run_close_b(task, target, reason):
+    _enter(task)
+    import daily_close as DC
+    import live_1600
+    import predict_close as PC
+    from tools import fetch_yahoo_intraday as fy
+    if TRAIN_START:
+        # ชุดนี้ยังไม่ได้ทำการทดลองตัดหน้าต่างเทรน -- ไม่เงียบ ๆ แล้วให้ผลเหมือนไม่ได้ตั้งค่า
+        raise SystemExit("task_b_close ยังไม่รองรับ BACKFILL_TRAIN_START")
+    tgt = pd.Timestamp(target).normalize()
+    snap_dir = DATA_DIR / "task_b_1h_snapshots_r2"
+    snap_dir.mkdir(parents=True, exist_ok=True)
+    holidays = DC.read_holidays()
+
+    winners = PC.load_winners(PC.SCORES_PATH)
+    commit = PC._git("rev-parse", "HEAD")
+    dirty = bool(PC._git("status", "--porcelain", "--", ".", ":!results"))
+    rows = []
+    for t in PC.TICKERS:
+        raw = fy.to_locked_format(fy.download_hourly(t))            # yfinance ผ่านแคช -> ข้อมูลชุดเดียวกันทุก run
+        csv = snap_dir / f"{t.replace('.', '_')}_1h_{hashlib.sha1(raw.to_csv().encode()).hexdigest()[:10]}.csv"
+        if not csv.exists():
+            raw.to_csv(csv)
+        snap_bars = live_1600.prepare_bars(pd.read_csv(csv, encoding="utf-8-sig"))
+        bars, mism = live_1600.merge_with_locked(live_1600.load_ticker_bars(t), snap_bars)
+        info = {"sha256": hashlib.sha256(csv.read_bytes()).hexdigest(), "downloaded_at": "",
+                "source": "yahoo", "path": _rel(csv), "mismatches": len(mism)}
+
+        # leak_test.py ชี้มาที่สำเนาที่วางยาแล้วผ่าน BACKFILL_DAILY_LIVE_DIR (ปกติใช้ของจริงใน task_b/)
+        dsnaps = DC.find_snapshots(t, root=os.environ.get("BACKFILL_DAILY_LIVE_DIR") or DC.LIVE_DAILY_DIR)
+        if not dsnaps:
+            raise RuntimeError(f"ไม่มี snapshot ราคาปิดรายวันของ {t} ใน raw_data_daily_live/")
+        dsnap_df, dmeta = dsnaps[-1]
+        close, dmism, dropped = DC.merge_daily(DC.load_locked(t), dsnap_df)
+        DC.require_previous_close(close, tgt, holidays)              # ไม่มีราคาปิดวันทำการก่อนหน้า = หยุด
+        prior = close[close.index < tgt]
+        dinfo = {"sha256": dmeta["sha256"], "source": dmeta["source"],
+                 "path": _rel(dmeta["path"]),
+                 "mismatches": len(dmism), "dropped_rows": dropped,
+                 "last_date": str(prior.index.max().date())}
+        rows += PC.predict_ticker(t, tgt, winners, bars, info, close, dinfo)
+
+    gen = common.now_iso()
+    out = pd.DataFrame([{
+        "generated_at": gen, "prediction_type": PC.PREDICTION_TYPE, "ticker": r["ticker"],
+        "target_date": str(tgt.date()), "data_cutoff": r["feature_window_end"],
+        "train_rows": r["train_days"], "half_life": "", "model": r["model"],
+        "predicted_return": r["predicted_return"], "prev_close": r["close_bar15"],
+        "predicted_close": r["predicted_close"], "n_features": r["n_features"],
+        "dataset_sha256": r["dataset_sha256"], "code_commit": commit,
+        "config_tag": PC.CONFIG_TAG_CLOSE, "is_dry_run": False,
+        "bar_source": "yahoo_final", "snapshot_path": r["snapshot_path"],
+        "locked_mismatch_bars": r["locked_mismatch_bars"],
+        "historical_x_match": r["historical_x_match"], "worktree_dirty": dirty,
+        "config_id": r["config_id"], "params": r["params"],
+        "target_time": r["target_time"], "daily_close_path": r["daily_close_path"],
+        "daily_close_source": r["daily_close_source"], "daily_close_sha256": r["daily_close_sha256"],
+        "daily_close_last_date": r["daily_close_last_date"],
+        "daily_close_mismatch_rows": r["daily_close_mismatch_rows"],
+        "daily_close_dropped_rows": r["daily_close_dropped_rows"],
+    } for r in rows])
+    _finish(task, out.to_dict("records"), PC.LOG_COLUMNS, reason,
+            extra_cols=["bar_source", "snapshot_path", "locked_mismatch_bars", "historical_x_match",
+                        "worktree_dirty", "config_id", "params", "target_time",
+                        "daily_close_path", "daily_close_source", "daily_close_sha256",
+                        "daily_close_last_date", "daily_close_mismatch_rows", "daily_close_dropped_rows"])
+
+
 RUNNERS = {
     "task_a": run_next_day_ac, "task_c": run_next_day_ac, "task_b": run_next_day_b,
-    "task_a2": run_t1600_a2, "task_b_1600": run_t1600_b, "task_c_1600": run_t1600_c,
+    "task_a2": run_t1600_a2, "task_b_1600": run_t1600_b, "task_b_close": run_close_b,
+    "task_c_1600": run_t1600_c,
 }
 
 
@@ -330,6 +420,9 @@ def main():
         return
     if not (a.task and a.target_date):
         ap.error("ต้องระบุ --task และ --target-date")
+    # แคช yfinance ต้องมีข้อมูลถึงวัน target (คำขอแบบ period="60d" มี cache key เดิมตลอด
+    # ถ้าไม่ตรวจ จะได้ไฟล์เก่าที่ยังไม่มีวันนั้น -- ดู common.install_yf_cache)
+    os.environ["BACKFILL_CACHE_THROUGH"] = a.target_date
     RUNNERS[a.task](a.task, a.target_date, a.reason)
 
 

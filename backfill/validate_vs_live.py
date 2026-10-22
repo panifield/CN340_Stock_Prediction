@@ -11,7 +11,8 @@ from common import ROOT, TASKS
 
 VAL = ROOT / "backfill" / "validation"
 VALCOL = {"task_a": "predicted_flip_proba", "task_a2": "predicted_flip_proba", "task_c": "predicted_up_proba",
-          "task_c_1600": "predicted_up_proba", "task_b": "predicted_return", "task_b_1600": "predicted_return"}
+          "task_c_1600": "predicted_up_proba", "task_b": "predicted_return", "task_b_1600": "predicted_return",
+          "task_b_close": "predicted_return"}
 LABEL = {"task_a": "predicted_label", "task_a2": "predicted_label", "task_c": "predicted_label",
          "task_c_1600": "predicted_label"}
 
