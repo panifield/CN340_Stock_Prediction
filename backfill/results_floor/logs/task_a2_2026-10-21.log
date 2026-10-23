@@ -1,0 +1,44 @@
+
+##############################################################################
+#  หุ้น: KBANK.BK  ->  ทำนาย 2026-10-21
+##############################################################################
+[live] ประวัติสำหรับเทรน: 725 วัน (2023-10-17 -> 2026-10-20)
+    fold 1/5 (2024-06-04~2024-11-18, n=115): ANN (MLP)=0.513, LightGBM=0.609, Logistic Regression=0.522
+    fold 2/5 (2024-11-19~2025-05-14, n=115): ANN (MLP)=0.443, LightGBM=0.522, Logistic Regression=0.504
+    fold 3/5 (2025-05-15~2025-11-03, n=115): ANN (MLP)=0.539, LightGBM=0.600, Logistic Regression=0.539
+    fold 4/5 (2025-11-04~2026-04-29, n=115): ANN (MLP)=0.443, LightGBM=0.539, Logistic Regression=0.452
+    fold 5/5 (2026-04-30~2026-10-20, n=115): ANN (MLP)=0.522, LightGBM=0.487, Logistic Regression=0.539
+    walk-forward OOF (n=575): ANN (MLP)=0.4922, LightGBM=0.5513, Logistic Regression=0.5113
+    ราคา ณ 16:00 = 239.00  (parity = คี่)
+    ANN (MLP)            P(พลิก parity ตอนปิด)=0.1506 -> parity = คี่
+    LightGBM             P(พลิก parity ตอนปิด)=0.4640 -> parity = คี่
+    Logistic Regression  P(พลิก parity ตอนปิด)=0.4068 -> parity = คี่
+    Baseline: Persistence-1600 ไม่พลิก -> parity = คี่
+    H1 (tick 1.00): abstain
+
+##############################################################################
+#  หุ้น: ADVANC.BK  ->  ทำนาย 2026-10-21
+##############################################################################
+[live] ประวัติสำหรับเทรน: 725 วัน (2023-10-17 -> 2026-10-20)
+    fold 1/5 (2024-06-04~2024-11-18, n=115): ANN (MLP)=0.461, LightGBM=0.591, Logistic Regression=0.461
+    fold 2/5 (2024-11-19~2025-05-14, n=115): ANN (MLP)=0.435, LightGBM=0.461, Logistic Regression=0.504
+    fold 3/5 (2025-05-15~2025-11-03, n=115): ANN (MLP)=0.522, LightGBM=0.470, Logistic Regression=0.478
+    fold 4/5 (2025-11-04~2026-04-29, n=115): ANN (MLP)=0.470, LightGBM=0.496, Logistic Regression=0.496
+    fold 5/5 (2026-04-30~2026-10-20, n=115): ANN (MLP)=0.443, LightGBM=0.513, Logistic Regression=0.452
+    walk-forward OOF (n=575): ANN (MLP)=0.4661, LightGBM=0.5061, Logistic Regression=0.4783
+    ราคา ณ 16:00 = 333.00  (parity = คี่)
+    ANN (MLP)            P(พลิก parity ตอนปิด)=0.4738 -> parity = คี่
+    LightGBM             P(พลิก parity ตอนปิด)=0.4293 -> parity = คี่
+    Logistic Regression  P(พลิก parity ตอนปิด)=0.4180 -> parity = คี่
+    Baseline: Persistence-1600 ไม่พลิก -> parity = คี่
+    H1 (tick 1.00): abstain
+[backfill] เขียน 8 แถว -> C:\StudyUniversity\CN340\forLog\now\backfill\results_floor\results\task_a2_t1600.csv
+   ticker target_date                      model predicted_label
+ KBANK.BK  2026-10-21                  ANN (MLP)             คี่
+ KBANK.BK  2026-10-21                   LightGBM             คี่
+ KBANK.BK  2026-10-21        Logistic Regression             คี่
+ KBANK.BK  2026-10-21 Baseline: Persistence-1600             คี่
+ADVANC.BK  2026-10-21                  ANN (MLP)             คี่
+ADVANC.BK  2026-10-21                   LightGBM             คี่
+ADVANC.BK  2026-10-21        Logistic Regression             คี่
+ADVANC.BK  2026-10-21 Baseline: Persistence-1600             คี่

@@ -1,0 +1,78 @@
+﻿task,ticker,model,score,price_range,n,AUC,ci_low,ci_high
+A,KBANK.BK,ANN (MLP),P(odd) vs parity,all,1815,0.4851,0.4583,0.5122
+A,KBANK.BK,ANN (MLP),P(odd) vs parity,<100 (tick 0.25),158,0.5112,0.4229,0.6082
+A,KBANK.BK,ANN (MLP),P(odd) vs parity,100-200 (tick 0.5),1423,0.4805,0.4512,0.5112
+A,KBANK.BK,ANN (MLP),P(odd) vs parity,200-400 (tick 1),234,0.4848,0.4129,0.559
+A,KBANK.BK,ANN (MLP),P(flip) vs flip,all,1815,0.4854,0.459,0.5134
+A,KBANK.BK,ANN (MLP),P(flip) vs flip,<100 (tick 0.25),158,0.5188,0.4228,0.6177
+A,KBANK.BK,ANN (MLP),P(flip) vs flip,100-200 (tick 0.5),1423,0.4796,0.4496,0.5094
+A,KBANK.BK,ANN (MLP),P(flip) vs flip,200-400 (tick 1),234,0.4553,0.3846,0.533
+A,KBANK.BK,LightGBM,P(odd) vs parity,all,1815,0.489,0.4624,0.5169
+A,KBANK.BK,LightGBM,P(odd) vs parity,<100 (tick 0.25),158,0.4653,0.374,0.5537
+A,KBANK.BK,LightGBM,P(odd) vs parity,100-200 (tick 0.5),1423,0.4944,0.4648,0.5231
+A,KBANK.BK,LightGBM,P(odd) vs parity,200-400 (tick 1),234,0.4693,0.4007,0.5456
+A,KBANK.BK,LightGBM,P(flip) vs flip,all,1815,0.4884,0.462,0.516
+A,KBANK.BK,LightGBM,P(flip) vs flip,<100 (tick 0.25),158,0.475,0.3789,0.5696
+A,KBANK.BK,LightGBM,P(flip) vs flip,100-200 (tick 0.5),1423,0.494,0.464,0.5228
+A,KBANK.BK,LightGBM,P(flip) vs flip,200-400 (tick 1),234,0.4299,0.3599,0.5027
+A,KBANK.BK,Logistic Regression,P(odd) vs parity,all,1815,0.4851,0.458,0.5151
+A,KBANK.BK,Logistic Regression,P(odd) vs parity,<100 (tick 0.25),158,0.478,0.3833,0.5606
+A,KBANK.BK,Logistic Regression,P(odd) vs parity,100-200 (tick 0.5),1423,0.484,0.4549,0.5125
+A,KBANK.BK,Logistic Regression,P(odd) vs parity,200-400 (tick 1),234,0.4949,0.421,0.5703
+A,KBANK.BK,Logistic Regression,P(flip) vs flip,all,1815,0.4842,0.4564,0.5135
+A,KBANK.BK,Logistic Regression,P(flip) vs flip,<100 (tick 0.25),158,0.4671,0.3795,0.5573
+A,KBANK.BK,Logistic Regression,P(flip) vs flip,100-200 (tick 0.5),1423,0.4827,0.4539,0.5114
+A,KBANK.BK,Logistic Regression,P(flip) vs flip,200-400 (tick 1),234,0.4726,0.4069,0.5442
+A,KBANK.BK,Baseline: Persistence,P(odd) vs parity,all,1815,0.5008,0.4801,0.5246
+A,KBANK.BK,Baseline: Persistence,P(odd) vs parity,<100 (tick 0.25),158,0.5051,0.427,0.5809
+A,KBANK.BK,Baseline: Persistence,P(odd) vs parity,100-200 (tick 0.5),1423,0.5021,0.4798,0.5294
+A,KBANK.BK,Baseline: Persistence,P(odd) vs parity,200-400 (tick 1),234,0.4866,0.4235,0.5541
+A,ADVANC.BK,ANN (MLP),P(odd) vs parity,all,1815,0.5009,0.4732,0.5273
+A,ADVANC.BK,ANN (MLP),P(odd) vs parity,100-200 (tick 0.5),904,0.4887,0.4536,0.5294
+A,ADVANC.BK,ANN (MLP),P(odd) vs parity,200-400 (tick 1),911,0.4968,0.4559,0.5356
+A,ADVANC.BK,ANN (MLP),P(flip) vs flip,all,1815,0.4987,0.4713,0.5251
+A,ADVANC.BK,ANN (MLP),P(flip) vs flip,100-200 (tick 0.5),904,0.4824,0.4457,0.5219
+A,ADVANC.BK,ANN (MLP),P(flip) vs flip,200-400 (tick 1),911,0.5154,0.4774,0.5534
+A,ADVANC.BK,LightGBM,P(odd) vs parity,all,1815,0.5111,0.4862,0.5374
+A,ADVANC.BK,LightGBM,P(odd) vs parity,100-200 (tick 0.5),904,0.5079,0.4717,0.5454
+A,ADVANC.BK,LightGBM,P(odd) vs parity,200-400 (tick 1),911,0.5006,0.4609,0.5362
+A,ADVANC.BK,LightGBM,P(flip) vs flip,all,1815,0.5103,0.4838,0.5353
+A,ADVANC.BK,LightGBM,P(flip) vs flip,100-200 (tick 0.5),904,0.5071,0.4707,0.5478
+A,ADVANC.BK,LightGBM,P(flip) vs flip,200-400 (tick 1),911,0.5159,0.4803,0.5529
+A,ADVANC.BK,Logistic Regression,P(odd) vs parity,all,1815,0.5033,0.4772,0.5301
+A,ADVANC.BK,Logistic Regression,P(odd) vs parity,100-200 (tick 0.5),904,0.4907,0.4557,0.5274
+A,ADVANC.BK,Logistic Regression,P(odd) vs parity,200-400 (tick 1),911,0.4847,0.45,0.5188
+A,ADVANC.BK,Logistic Regression,P(flip) vs flip,all,1815,0.5047,0.4783,0.5331
+A,ADVANC.BK,Logistic Regression,P(flip) vs flip,100-200 (tick 0.5),904,0.485,0.4464,0.5219
+A,ADVANC.BK,Logistic Regression,P(flip) vs flip,200-400 (tick 1),911,0.5234,0.4908,0.5594
+A,ADVANC.BK,Baseline: Persistence,P(odd) vs parity,all,1815,0.5086,0.4854,0.5309
+A,ADVANC.BK,Baseline: Persistence,P(odd) vs parity,100-200 (tick 0.5),904,0.5045,0.4723,0.5355
+A,ADVANC.BK,Baseline: Persistence,P(odd) vs parity,200-400 (tick 1),911,0.5064,0.4729,0.5366
+A2,KBANK.BK,ANN (MLP),P(odd) vs parity,all,425,0.5183,0.4667,0.5703
+A2,KBANK.BK,ANN (MLP),P(odd) vs parity,100-200 (tick 0.5),424,0.5201,0.461,0.5771
+A2,KBANK.BK,ANN (MLP),P(flip) vs flip,all,425,0.4856,0.4305,0.5428
+A2,KBANK.BK,ANN (MLP),P(flip) vs flip,100-200 (tick 0.5),424,0.4871,0.4267,0.5463
+A2,KBANK.BK,LightGBM,P(odd) vs parity,all,425,0.6036,0.5482,0.6592
+A2,KBANK.BK,LightGBM,P(odd) vs parity,100-200 (tick 0.5),424,0.6037,0.5493,0.6541
+A2,KBANK.BK,LightGBM,P(flip) vs flip,all,425,0.4878,0.4339,0.5471
+A2,KBANK.BK,LightGBM,P(flip) vs flip,100-200 (tick 0.5),424,0.4891,0.4331,0.5491
+A2,KBANK.BK,Logistic Regression,P(odd) vs parity,all,425,0.5339,0.4776,0.5907
+A2,KBANK.BK,Logistic Regression,P(odd) vs parity,100-200 (tick 0.5),424,0.5358,0.4754,0.5879
+A2,KBANK.BK,Logistic Regression,P(flip) vs flip,all,425,0.4943,0.4374,0.5484
+A2,KBANK.BK,Logistic Regression,P(flip) vs flip,100-200 (tick 0.5),424,0.496,0.4356,0.5515
+A2,KBANK.BK,Baseline: Persistence,P(odd) vs parity,all,425,0.6242,0.5808,0.6696
+A2,KBANK.BK,Baseline: Persistence,P(odd) vs parity,100-200 (tick 0.5),424,0.6234,0.5785,0.6673
+A2,ADVANC.BK,ANN (MLP),P(odd) vs parity,all,425,0.4725,0.4205,0.5275
+A2,ADVANC.BK,ANN (MLP),P(odd) vs parity,200-400 (tick 1),425,0.4725,0.4205,0.5275
+A2,ADVANC.BK,ANN (MLP),P(flip) vs flip,all,425,0.4782,0.4264,0.5304
+A2,ADVANC.BK,ANN (MLP),P(flip) vs flip,200-400 (tick 1),425,0.4782,0.4264,0.5304
+A2,ADVANC.BK,LightGBM,P(odd) vs parity,all,425,0.5196,0.4654,0.5781
+A2,ADVANC.BK,LightGBM,P(odd) vs parity,200-400 (tick 1),425,0.5196,0.4654,0.5781
+A2,ADVANC.BK,LightGBM,P(flip) vs flip,all,425,0.5261,0.4785,0.5851
+A2,ADVANC.BK,LightGBM,P(flip) vs flip,200-400 (tick 1),425,0.5261,0.4785,0.5851
+A2,ADVANC.BK,Logistic Regression,P(odd) vs parity,all,425,0.4708,0.4182,0.5279
+A2,ADVANC.BK,Logistic Regression,P(odd) vs parity,200-400 (tick 1),425,0.4708,0.4182,0.5279
+A2,ADVANC.BK,Logistic Regression,P(flip) vs flip,all,425,0.4713,0.419,0.5251
+A2,ADVANC.BK,Logistic Regression,P(flip) vs flip,200-400 (tick 1),425,0.4713,0.419,0.5251
+A2,ADVANC.BK,Baseline: Persistence,P(odd) vs parity,all,425,0.529,0.4799,0.5808
+A2,ADVANC.BK,Baseline: Persistence,P(odd) vs parity,200-400 (tick 1),425,0.529,0.4799,0.5808

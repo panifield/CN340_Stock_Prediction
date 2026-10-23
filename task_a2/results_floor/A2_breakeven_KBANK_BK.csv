@@ -1,0 +1,4 @@
+﻿ticker,model,oof_accuracy,breakeven_accuracy,beats_breakeven
+KBANK.BK,ANN (MLP),0.5171,0.6988,no
+KBANK.BK,LightGBM,0.5902,0.6988,no
+KBANK.BK,Logistic Regression,0.5293,0.6988,no

@@ -1,0 +1,18 @@
+task_a        6 วัน: 09-28, 09-29, 09-30*, 10-07, 10-08, 10-09
+task_a2       7 วัน: 09-28, 09-29, 09-30*, 10-07, 10-08, 10-09, 10-21
+(* = log จริงมีไม่ครบ 3 โมเดล)
+[task_a2] 2026-09-28 (missing) -> OK  (log: task_a2_2026-09-28.log)
+[task_a] 2026-09-28 (missing) -> OK  (log: task_a_2026-09-28.log)
+[task_a2] 2026-09-29 (missing) -> OK  (log: task_a2_2026-09-29.log)
+[task_a] 2026-09-29 (missing) -> OK  (log: task_a_2026-09-29.log)
+[task_a2] 2026-09-30 (partial_models) -> OK  (log: task_a2_2026-09-30.log)
+[task_a] 2026-09-30 (partial_models) -> OK  (log: task_a_2026-09-30.log)
+[task_a2] 2026-10-07 (missing) -> OK  (log: task_a2_2026-10-07.log)
+[task_a] 2026-10-07 (missing) -> OK  (log: task_a_2026-10-07.log)
+[task_a2] 2026-10-08 (missing) -> OK  (log: task_a2_2026-10-08.log)
+[task_a] 2026-10-08 (missing) -> OK  (log: task_a_2026-10-08.log)
+[task_a2] 2026-10-09 (missing) -> OK  (log: task_a2_2026-10-09.log)
+[task_a] 2026-10-09 (missing) -> OK  (log: task_a_2026-10-09.log)
+[task_a2] 2026-10-21 (missing) -> OK  (log: task_a2_2026-10-21.log)
+
+เสร็จ: สำเร็จ 13/13

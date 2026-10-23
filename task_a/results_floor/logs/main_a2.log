@@ -1,0 +1,222 @@
+==============================================================================
+  Task A2 — ทำนายคู่/คี่ ณ เวลา 16:00
+==============================================================================
+
+##############################################################################
+#  Task A2 — KBANK.BK
+##############################################################################
+  ทั้งหมด n=700  dev_pool=560 (2023-10-02 -> 2026-01-26)  test=140 (2026-01-27 -> 2026-08-28)
+
+  --- Walk-forward CV บน dev pool (ไม่แตะ test) ---
+    fold 1/5 (2024-05-17~2024-09-16, n=82): ANN (MLP)=0.561, LightGBM=0.634, Logistic Regression=0.549
+    fold 2/5 (2024-09-17~2025-01-16, n=82): ANN (MLP)=0.561, LightGBM=0.610, Logistic Regression=0.610
+    fold 3/5 (2025-01-17~2025-05-22, n=82): ANN (MLP)=0.451, LightGBM=0.500, Logistic Regression=0.476
+    fold 4/5 (2025-05-23~2025-09-23, n=82): ANN (MLP)=0.512, LightGBM=0.622, Logistic Regression=0.573
+    fold 5/5 (2025-09-24~2026-01-26, n=82): ANN (MLP)=0.500, LightGBM=0.585, Logistic Regression=0.439
+
+  --- Controls (oracle + negative) ---
+    Oracle (leak y_flip): accuracy=0.8488
+    Negative control (random): accuracy=0.6049
+
+==============================================================================
+  Task A2 — KBANK.BK: Walk-forward OOF (n=410)
+==============================================================================
+                            Accuracy  Precision  Recall      F1  ROC-AUC  Pred_1_Rate
+Baseline: Persistence-1600    0.6293     0.5873  0.6000  0.5936      NaN       0.4610
+Baseline: Majority            0.6293     0.5873  0.6000  0.5936      NaN       0.4610
+Baseline: Rule                0.6293     0.5873  0.6000  0.5936      NaN       0.4610
+LightGBM                      0.5902     0.5436  0.5730  0.5579   0.6200       0.4756
+Logistic Regression           0.5293     0.4794  0.5027  0.4908   0.5488       0.4732
+ANN (MLP)                     0.5171     0.4670  0.4973  0.4817   0.5116       0.4805
+
+  ผลสรุป (Accuracy) : ไม่ชนะ baseline (ต่ำกว่า 0.0391)
+  เกณฑ์นัยสำคัญ (n=410, 95%) = 4.84 percentage point
+  (เกณฑ์หลักที่ต้องชนะคือ Baseline: Persistence-1600 = 0.6293)
+
+==============================================================================
+  รายงานสถิติ (n = 410, baseline อ้างอิง = Baseline: Persistence-1600)
+==============================================================================
+                     Model  Accuracy  CI_low  CI_high  p_vs_0.50  McNemar_p    b/c  Brier  LogLoss    ECE   Skill
+Baseline: Persistence-1600    0.6293  0.5815   0.6746     0.0000        NaN      -    NaN      NaN    NaN     NaN
+        Baseline: Majority    0.6293  0.5815   0.6746     0.0000     1.0000    0/0    NaN      NaN    NaN     NaN
+            Baseline: Rule    0.6293  0.5815   0.6746     0.0000     1.0000    0/0    NaN      NaN    NaN     NaN
+                  LightGBM    0.5902  0.5420   0.6368     0.0003     0.0328  17/33 0.2406   0.6743 0.0614  0.0378
+       Logistic Regression    0.5293  0.4809   0.5771     0.2560     0.0008  51/92 0.2716   0.7543 0.1309 -0.0863
+                 ANN (MLP)    0.5171  0.4688   0.5651     0.5209     0.0004 60/106 0.3286   1.0202 0.2494 -0.3146
+
+  วิธีอ่าน:
+    CI_low/CI_high : ถ้าช่วงคร่อม 0.50 = ไม่ต่างจากการเดา
+    p_vs_0.50      : > 0.05 = ทายได้ไม่ต่างจากโยนเหรียญ
+    McNemar_p      : > 0.05 = ไม่ต่างจาก baseline อย่างมีนัยสำคัญ
+    Skill          : <= 0 = ไม่ดีกว่าการทำนาย 0.5 ทุกครั้ง
+    b/c            : b = โมเดลถูก/baseline ผิด, c = กลับกัน
+
+  Breakeven accuracy (ต้นทุน 0.338%): 0.6988
+
+  --- ส่วนเสริม: เฉพาะวันที่ >= 2025-09-07 (ยังอยู่ใน dev_pool) ---
+
+==============================================================================
+  Task A2 — KBANK.BK: เฉพาะ >= 2025-09-07 (n=94)
+==============================================================================
+                            Accuracy  Precision  Recall      F1  ROC-AUC  Pred_1_Rate
+Baseline: Persistence-1600    0.6702     0.6905  0.6170  0.6517      NaN       0.4468
+Baseline: Majority            0.6702     0.6905  0.6170  0.6517      NaN       0.4468
+Baseline: Rule                0.6702     0.6905  0.6170  0.6517      NaN       0.4468
+LightGBM                      0.6064     0.6316  0.5106  0.5647      NaN       0.4043
+ANN (MLP)                     0.5000     0.5000  0.4468  0.4719      NaN       0.4468
+Logistic Regression           0.4681     0.4634  0.4043  0.4318      NaN       0.4362
+
+      ผลสรุป (Accuracy) : ไม่ชนะ baseline (ต่ำกว่า 0.0638)
+      เกณฑ์นัยสำคัญ (n=94, 95%) = 10.11 percentage point
+
+  === รัน test ครั้งเดียว: refit LightGBM บน dev_pool (560 แถว) ===
+
+==============================================================================
+  Task A2 — KBANK.BK: ผลลัพธ์บน Test Set (ยิงนัดเดียว, n=140)
+==============================================================================
+                            Accuracy  Precision  Recall      F1  ROC-AUC  Pred_1_Rate
+Baseline: Majority            0.5500     0.5570  0.6111  0.5828      NaN       0.5643
+Baseline: Persistence-1600    0.5500     0.5570  0.6111  0.5828      NaN       0.5643
+Baseline: Rule                0.5500     0.5570  0.6111  0.5828      NaN       0.5643
+LightGBM                      0.5429     0.5556  0.5556  0.5556   0.5337       0.5143
+
+  ผลสรุป (Accuracy) : ไม่ชนะ baseline (ต่ำกว่า 0.0071)
+  เกณฑ์นัยสำคัญ (n=140, 95%) = 8.28 percentage point
+  (เกณฑ์หลักที่ต้องชนะคือ Baseline: Persistence-1600 = 0.5500)
+
+==============================================================================
+  รายงานสถิติ (n = 140, baseline อ้างอิง = Baseline: Persistence-1600)
+==============================================================================
+                     Model  Accuracy  CI_low  CI_high  p_vs_0.50  McNemar_p b/c  Brier  LogLoss    ECE   Skill
+        Baseline: Majority    0.5500  0.4674   0.6300     0.2718        1.0 0/0    NaN      NaN    NaN     NaN
+Baseline: Persistence-1600    0.5500  0.4674   0.6300     0.2718        NaN   -    NaN      NaN    NaN     NaN
+            Baseline: Rule    0.5500  0.4674   0.6300     0.2718        1.0 0/0    NaN      NaN    NaN     NaN
+                  LightGBM    0.5429  0.4603   0.6231     0.3526        1.0 4/5 0.2659   0.7299 0.0982 -0.0634
+
+  วิธีอ่าน:
+    CI_low/CI_high : ถ้าช่วงคร่อม 0.50 = ไม่ต่างจากการเดา
+    p_vs_0.50      : > 0.05 = ทายได้ไม่ต่างจากโยนเหรียญ
+    McNemar_p      : > 0.05 = ไม่ต่างจาก baseline อย่างมีนัยสำคัญ
+    Skill          : <= 0 = ไม่ดีกว่าการทำนาย 0.5 ทุกครั้ง
+    b/c            : b = โมเดลถูก/baseline ผิด, c = กลับกัน
+
+  [csv] C:/StudyUniversity/CN340/forLog/now/task_a2/results_floor/A2_test_results_KBANK_BK.csv
+
+  Confusion Matrix (LightGBM, refit บน dev_pool)
+                ทำนาย    คู่  ทำนาย    คี่
+    จริง    คู่          36            32
+    จริง    คี่          32            40
+
+##############################################################################
+#  Task A2 — ADVANC.BK
+##############################################################################
+  ทั้งหมด n=700  dev_pool=560 (2023-10-02 -> 2026-01-26)  test=140 (2026-01-27 -> 2026-08-28)
+
+  --- Walk-forward CV บน dev pool (ไม่แตะ test) ---
+    fold 1/5 (2024-05-17~2024-09-16, n=82): ANN (MLP)=0.476, LightGBM=0.549, Logistic Regression=0.500
+    fold 2/5 (2024-09-17~2025-01-16, n=82): ANN (MLP)=0.524, LightGBM=0.537, Logistic Regression=0.427
+    fold 3/5 (2025-01-17~2025-05-22, n=82): ANN (MLP)=0.415, LightGBM=0.366, Logistic Regression=0.439
+    fold 4/5 (2025-05-23~2025-09-23, n=82): ANN (MLP)=0.524, LightGBM=0.500, Logistic Regression=0.427
+    fold 5/5 (2025-09-24~2026-01-26, n=82): ANN (MLP)=0.537, LightGBM=0.537, Logistic Regression=0.488
+
+  --- Controls (oracle + negative) ---
+    Oracle (leak y_flip): accuracy=0.9098
+    Negative control (random): accuracy=0.4854
+
+==============================================================================
+  Task A2 — ADVANC.BK: Walk-forward OOF (n=410)
+==============================================================================
+                            Accuracy  Precision  Recall      F1  ROC-AUC  Pred_1_Rate
+Baseline: Persistence-1600    0.5244     0.4975  0.5155  0.5063      NaN       0.4902
+Baseline: Majority            0.5244     0.4975  0.5155  0.5063      NaN       0.4902
+Baseline: Rule                0.5244     0.4975  0.5155  0.5063      NaN       0.4902
+LightGBM                      0.4976     0.4667  0.4330  0.4492   0.5214       0.4390
+ANN (MLP)                     0.4951     0.4620  0.4072  0.4329   0.4702       0.4171
+Logistic Regression           0.4561     0.4256  0.4278  0.4267   0.4630       0.4756
+
+  ผลสรุป (Accuracy) : ไม่ชนะ baseline (ต่ำกว่า 0.0268)
+  เกณฑ์นัยสำคัญ (n=410, 95%) = 4.84 percentage point
+  (เกณฑ์หลักที่ต้องชนะคือ Baseline: Persistence-1600 = 0.5244)
+
+==============================================================================
+  รายงานสถิติ (n = 410, baseline อ้างอิง = Baseline: Persistence-1600)
+==============================================================================
+                     Model  Accuracy  CI_low  CI_high  p_vs_0.50  McNemar_p     b/c  Brier  LogLoss    ECE   Skill
+Baseline: Persistence-1600    0.5244  0.4760   0.5723     0.3481        NaN       -    NaN      NaN    NaN     NaN
+        Baseline: Majority    0.5244  0.4760   0.5723     0.3481     1.0000     0/0    NaN      NaN    NaN     NaN
+            Baseline: Rule    0.5244  0.4760   0.5723     0.3481     1.0000     0/0    NaN      NaN    NaN     NaN
+                  LightGBM    0.4976  0.4494   0.5458     0.9606     0.3553   53/64 0.2524   0.6984 0.0676 -0.0096
+                 ANN (MLP)    0.4951  0.4470   0.5433     0.8822     0.4500 100/112 0.3385   1.0813 0.2457 -0.3540
+       Logistic Regression    0.4561  0.4085   0.5045     0.0838     0.0609  90/118 0.2963   0.8120 0.1973 -0.1850
+
+  วิธีอ่าน:
+    CI_low/CI_high : ถ้าช่วงคร่อม 0.50 = ไม่ต่างจากการเดา
+    p_vs_0.50      : > 0.05 = ทายได้ไม่ต่างจากโยนเหรียญ
+    McNemar_p      : > 0.05 = ไม่ต่างจาก baseline อย่างมีนัยสำคัญ
+    Skill          : <= 0 = ไม่ดีกว่าการทำนาย 0.5 ทุกครั้ง
+    b/c            : b = โมเดลถูก/baseline ผิด, c = กลับกัน
+
+  Breakeven accuracy (ต้นทุน 0.338%): 0.6755
+
+  --- ส่วนเสริม: เฉพาะวันที่ >= 2025-09-07 (ยังอยู่ใน dev_pool) ---
+
+==============================================================================
+  Task A2 — ADVANC.BK: เฉพาะ >= 2025-09-07 (n=94)
+==============================================================================
+                            Accuracy  Precision  Recall      F1  ROC-AUC  Pred_1_Rate
+ANN (MLP)                     0.5426     0.5185  0.3182  0.3944      NaN       0.2872
+Baseline: Majority            0.5426     0.5111  0.5227  0.5169      NaN       0.4787
+Baseline: Rule                0.5426     0.5111  0.5227  0.5169      NaN       0.4787
+Baseline: Persistence-1600    0.5426     0.5111  0.5227  0.5169      NaN       0.4787
+LightGBM                      0.5213     0.4872  0.4318  0.4578      NaN       0.4149
+Logistic Regression           0.4787     0.4286  0.3409  0.3797      NaN       0.3723
+
+      ผลสรุป (Accuracy) : เท่ากับ baseline
+      เกณฑ์นัยสำคัญ (n=94, 95%) = 10.11 percentage point
+
+  === รัน test ครั้งเดียว: refit LightGBM บน dev_pool (560 แถว) ===
+
+==============================================================================
+  Task A2 — ADVANC.BK: ผลลัพธ์บน Test Set (ยิงนัดเดียว, n=140)
+==============================================================================
+                            Accuracy  Precision  Recall      F1  ROC-AUC  Pred_1_Rate
+Baseline: Majority            0.5357     0.5000  0.5231  0.5113      NaN       0.4857
+Baseline: Persistence-1600    0.5357     0.5000  0.5231  0.5113      NaN       0.4857
+Baseline: Rule                0.5357     0.5000  0.5231  0.5113      NaN       0.4857
+LightGBM                      0.4500     0.4091  0.4154  0.4122   0.4402       0.4714
+
+  ผลสรุป (Accuracy) : ไม่ชนะ baseline (ต่ำกว่า 0.0857)
+  เกณฑ์นัยสำคัญ (n=140, 95%) = 8.28 percentage point
+  (เกณฑ์หลักที่ต้องชนะคือ Baseline: Persistence-1600 = 0.5357)
+
+==============================================================================
+  รายงานสถิติ (n = 140, baseline อ้างอิง = Baseline: Persistence-1600)
+==============================================================================
+                     Model  Accuracy  CI_low  CI_high  p_vs_0.50  McNemar_p   b/c  Brier  LogLoss   ECE  Skill
+        Baseline: Majority    0.5357  0.4533   0.6163     0.4470     1.0000   0/0    NaN      NaN   NaN    NaN
+Baseline: Persistence-1600    0.5357  0.4533   0.6163     0.4470        NaN     -    NaN      NaN   NaN    NaN
+            Baseline: Rule    0.5357  0.4533   0.6163     0.4470     1.0000   0/0    NaN      NaN   NaN    NaN
+                  LightGBM    0.4500  0.3700   0.5326     0.2718     0.2408 38/50  0.264   0.7219 0.114 -0.056
+
+  วิธีอ่าน:
+    CI_low/CI_high : ถ้าช่วงคร่อม 0.50 = ไม่ต่างจากการเดา
+    p_vs_0.50      : > 0.05 = ทายได้ไม่ต่างจากโยนเหรียญ
+    McNemar_p      : > 0.05 = ไม่ต่างจาก baseline อย่างมีนัยสำคัญ
+    Skill          : <= 0 = ไม่ดีกว่าการทำนาย 0.5 ทุกครั้ง
+    b/c            : b = โมเดลถูก/baseline ผิด, c = กลับกัน
+
+  [csv] C:/StudyUniversity/CN340/forLog/now/task_a2/results_floor/A2_test_results_ADVANC_BK.csv
+
+  Confusion Matrix (LightGBM, refit บน dev_pool)
+                ทำนาย    คู่  ทำนาย    คี่
+    จริง    คู่          36            39
+    จริง    คี่          38            27
+
+[บันทึกช่วงวันที่ train/test] C:/StudyUniversity/CN340/forLog/now/task_a2/results_floor\A2_train_test_split_dates.csv
+   ticker  n_total  n_pool  n_test pool_start   pool_end test_start   test_end
+ KBANK.BK      700     560     140 2023-10-02 2026-01-26 2026-01-27 2026-08-28
+ADVANC.BK      700     560     140 2023-10-02 2026-01-26 2026-01-27 2026-08-28
+
+==============================================================================
+  จบ CV — ยังไม่แตะ test เลย รอรีวิวผลก่อนยิง test
+==============================================================================
