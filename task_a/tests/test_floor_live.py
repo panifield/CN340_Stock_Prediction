@@ -109,3 +109,25 @@ def test_write_outcomes_keeps_existing_column_order_first():
         EV.write_outcomes(df, path)
         assert pd.read_csv(path).columns.tolist() == [
             "a", "status", "correct", "label_rule", "correct_floor"]
+
+
+def _h1_days(statuses):
+    n = len(statuses)
+    return pd.DataFrame({
+        "ticker": [f"T{i}.BK" for i in range(n)], "target_date": ["2026-10-26"] * n,
+        "status": ["scored"] * n, "actual_parity_floor": [0.0] * n,
+        "h1_status": statuses, "h1_correct": [1.0 if s == "predict" else np.nan for s in statuses],
+    })
+
+
+def test_h1_abstain_note_shown_when_coverage_zero(capsys):
+    EV.summarize_h1(_h1_days(["abstain", "abstain"]))
+    out = capsys.readouterr().out
+    assert "coverage 0/2" in out and EV.H1_ABSTAIN_NOTE in out
+
+
+def test_h1_abstain_note_hidden_when_coverage_positive(capsys):
+    EV.summarize_h1(_h1_days(["predict", "abstain"]))
+    out = capsys.readouterr().out
+    assert "coverage 1/2" in out and "ถูก 1/1" in out
+    assert EV.H1_ABSTAIN_NOTE not in out

@@ -139,6 +139,17 @@ def summarize_h1(out):
     if len(pred):
         msg += f" · ถูก {int(pred['h1_correct'].sum())}/{len(pred)} ({pred['h1_correct'].mean():.0%})"
     print(msg)
+    if not len(pred):
+        print(H1_ABSTAIN_NOTE)
+
+
+# coverage = 0: บอกให้ชัดว่า log จริงยังไม่ใช่หลักฐานของ H1 (ตัวเลขย้อนหลังจาก docs/floor_label_followup.md)
+H1_ABSTAIN_NOTE = (
+    "  หมายเหตุ: H1 abstain ทุกวัน เพราะราคา ณ 16:00 ไม่อยู่ช่วง tick 0.50 บาท (100-200 บาท)\n"
+    "  -- h1_predicted_parity จึงว่าง ตราบใดที่ราคายังเกิน 200 บาท log จริงจึงยังยืนยัน H1 ไม่ได้\n"
+    "  หลักฐานของ H1 มาจากข้อมูลย้อนหลังเท่านั้น (KBANK ช่วง 100-200 บาท: 62.5% ชุดพัฒนา n=424,\n"
+    "  63.9% holdout n=61)"
+)
 
 
 def main():

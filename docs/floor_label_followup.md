@@ -102,9 +102,14 @@ parity_label(price) = (round(price × 100) // 100) % 2      0 = คู่, 1 = �
 
 - **H1 (รอบ 16:00):** ถ้า tick ของราคา ณ 16:00 เท่ากับ 0.50 (ช่วง 100–200 บาท) จะทายว่าคู่/คี่เท่ากับ `parity_label(ราคา 16:00)` ถ้าไม่ใช่จะบันทึก `abstain` กฎนี้อยู่ใน `task_a2/predict_live.py` ฟังก์ชัน `h1_rule()` และห้ามปรับตามผล log
 - **`evaluate_live.py`:** รายงาน coverage (วัน-หุ้นที่ไม่ abstain) และ accuracy ของ H1 แยกต่างหาก
-- **สถานะตอนนี้:** dry-run วันที่ 22 ต.ค. ได้ abstain ทั้ง 2 หุ้น เพราะ KBANK อยู่ที่ 242 และ ADVANC อยู่ที่ 336 coverage จะเป็น 0% จนกว่าราคาจะกลับเข้าช่วง 100–200 บาท
-- **ข้อมูลย้อนหลังเทียบกับ H1:** งานนี้ไม่ได้ใช้ทดสอบ H1 ใหม่ แต่ persistence-1600 ของ KBANK ช่วง 100–200 บาทตาม floor ได้ 62.5% บนชุดพัฒนา (n = 424) และ 63.9% บน holdout (n = 61)
 - **H2 (16:30) บันทึกเป็นแผนไว้ก่อน:** ระบบตอนนี้ทายแค่รอบ 16:02 ถ้าจะเพิ่มรอบ 16:30 ต้องแยก log และตัวกันเวลาออกจากรอบเดิม ต้องถามทีมก่อนเพิ่ม แท่ง 1 นาทีของ Settrade มีถึง 16:29 จึงพอเป็นข้อมูลให้ H2 ได้
+
+### H1 จะ abstain ทุกวันในตอนนี้
+
+- **ทายเฉพาะช่วง tick 0.50 บาท:** H1 ทายเฉพาะวันที่ราคา ณ 16:00 อยู่ในช่วง 100–200 บาท
+- **ราคาตอนนี้อยู่นอกช่วง:** KBANK (~242) และ ADVANC (~336) อยู่ช่วง tick 1 บาททั้งคู่ H1 จึง **abstain ทุกวัน** และคอลัมน์ `h1_predicted_parity` จะว่าง ตราบใดที่ราคายังเกิน 200 บาท (dry-run 22 ต.ค. ได้ abstain ทั้ง 2 หุ้น)
+- **log จริงยังยืนยัน H1 ไม่ได้:** หลักฐานของ H1 มาจากข้อมูลย้อนหลังเท่านั้น คือ KBANK ช่วง 100–200 บาทตาม floor ได้ **62.5% บนชุดพัฒนา (n = 424)** และ **63.9% บน holdout (n = 61)** (persistence-1600 ช่วงนั้น ซึ่งเท่ากับสิ่งที่ H1 ทาย)
+- **`evaluate_live.py` พิมพ์ข้อความนี้ใต้สรุป H1** เมื่อ coverage = 0 (`H1_ABSTAIN_NOTE`) และไม่พิมพ์เมื่อ coverage > 0 มีเทสใน `task_a/tests/test_floor_live.py`
 
 ## 3. โมเดลทายจำนวน tick ที่ขยับ (เฉพาะ A2)
 
@@ -182,7 +187,7 @@ parity_label(price) = (round(price × 100) // 100) % 2      0 = คู่, 1 = �
 
 | ชุด | ผล |
 |---|---|
-| task_a/tests | 26 ผ่าน (เพิ่ม `test_parity_label.py` และ `test_floor_live.py`) |
+| task_a/tests | 28 ผ่าน (เพิ่ม `test_parity_label.py` และ `test_floor_live.py`) |
 | task_a2/tests | 28 ผ่าน (เพิ่ม `test_floor_h1.py`, `test_dtick_model.py` และ `test_settrade_features.py`) |
 | task_c/tests | 15 ผ่าน |
 | automation/tests | 9 ผ่าน |
@@ -192,6 +197,44 @@ parity_label(price) = (round(price × 100) // 100) % 2      0 = คู่, 1 = �
 ผลรอบนั้นจึงใช้ไม่ได้ เก็บไว้ที่ `task_a/results_floor/logs/leak_test_report_vs_old_backfill_INVALID.csv`
 รอบที่ใช้ได้รันด้วย `BACKFILL_RESULTS_DIR=backfill/results_floor/results` อยู่ที่ `task_a/results_floor/logs/leak_test_report_floor.csv`
 ไฟล์ `backfill/leak_test/leak_test_report.csv` ของทีมคืนเป็นเวอร์ชันเดิมแล้ว
+
+## ไฟล์ Settrade ในประวัติ git
+
+ข้อมูลประกอบการตัดสินใจของทีม (ยังไม่ได้แก้ประวัติใดๆ)
+
+- **repo เป็น public:** `panifield/CN340_Stock_Prediction` (`gh repo view` ได้ visibility = PUBLIC)
+- **ไฟล์ Settrade ที่เคยถูก commit:** อยู่ใน commit `1b71e78` (28 ก.ย. 2026, "Task A2: intraday parity prediction at 16:00 + Settrade data collection") เท่านั้น ค้นทุก branch แล้วไม่พบ commit อื่นที่เพิ่มข้อมูล Settrade
+
+| ไฟล์ | ขนาด | เนื้อหา |
+|---|---|---|
+| `task_a2/data/KBANK_1m_atc_check.csv` | 66,308 bytes | แท่ง 1 นาทีจาก Settrade 1,000 แถว · 22 ก.ย. 2026 09:55 – 25 ก.ย. 2026 12:06 (4 วัน) |
+| `task_a2/data/ADVANC_1m_atc_check.csv` | 66,119 bytes | แท่ง 1 นาทีจาก Settrade 1,000 แถว · 22 ก.ย. 2026 09:55 – 25 ก.ย. 2026 11:17 (4 วัน) |
+| `task_a2/data/settrade_log/scheduler_run.log` | 2,190 bytes | ข้อความ log ของตัวเก็บข้อมูล (27 ก.ย.) ไม่มีราคา |
+
+- **ไฟล์ที่ตรวจแล้วว่าไม่ใช่ข้อมูล Settrade:**
+  - ไฟล์อื่นใน commit เดียวกัน เช่น `*_5m_60d.csv`, `*_1h_730d.csv`, `*_price1600_vs_close.csv` มาจาก Yahoo ผ่าน yfinance
+  - ไม่พบ credential (`.env` หรือค่า `SETTRADE_APP_*`) ในประวัติ git
+- **จะยังมีอยู่ทุกที่:** ไฟล์ทั้ง 3 ถูกเลิก track แล้วใน `floor-label` (`2946edc`) แต่ยังอยู่ใน `1b71e78` ซึ่ง `main` และ remote branch อีก 5 อัน (`task-b-rework`, `task-c`, `task-c-v2`, `task_b/fix-daily-snapshot-eol`, `task_b/target_close`) มีอยู่ และอยู่ใน clone ของทุกคนด้วย
+
+**ก) ยอมรับไว้**
+ไม่ต้องทำอะไร ไฟล์ทั้ง 3 จะยังดูได้จากประวัติ git ของ repo สาธารณะ ส่วนข้อมูลใหม่ไม่ถูก commit แล้ว เพราะอยู่ใน `.gitignore`
+
+**ข) เขียนประวัติใหม่**
+ทำบน clone ใหม่ที่ทุกคนหยุด push แล้ว ต้องติดตั้ง `git-filter-repo` ก่อน (`pip install git-filter-repo`)
+
+```bash
+git clone --mirror https://github.com/panifield/CN340_Stock_Prediction.git cn340-mirror
+cd cn340-mirror
+git filter-repo --invert-paths   --path task_a2/data/KBANK_1m_atc_check.csv   --path task_a2/data/ADVANC_1m_atc_check.csv   --path task_a2/data/settrade_log/scheduler_run.log
+git push --force --mirror origin      # ทุก branch และ tag
+```
+
+ผลกระทบ:
+- **hash ของ commit เปลี่ยน:** `1b71e78` และทุก commit หลังจากนั้นได้ hash ใหม่ ตอนนี้ `main` มีอีก 192 commit หลัง `1b71e78` และ branch อื่นที่มี `1b71e78` ก็เปลี่ยนด้วย ค่า `code_commit` ที่บันทึกใน `prediction_log.csv` จะชี้ไปที่ hash ที่ไม่มีแล้ว ส่วนแถวใน log ไม่เปลี่ยน
+- **ทุกคนต้อง clone ใหม่:** ห้าม push จาก clone เก่า ไม่งั้นประวัติเก่าจะกลับมา รวมถึงเครื่องที่ทำ branch `floor-label` ซึ่งต้องย้ายงานไปลงบน `main` ใหม่ด้วย
+- **hash ในหัวข้อ "ตรวจหลัง deploy" ต้องคำนวณใหม่:** sha256 ของเนื้อหา log ไม่เปลี่ยนถ้าไม่มีแถวใหม่ แต่ commit อ้างอิง (`c87a7f2`) จะเปลี่ยน และต้องตรวจซ้ำตามขั้นตอนเดิม
+- **Railway จะ deploy ใหม่:** การ force push เข้า `main` ทำให้ Railway deploy ใหม่
+- **ข้อมูลที่ถูก clone หรือ cache ไปแล้วลบคืนไม่ได้:** GitHub อาจยังเก็บ commit เดิมไว้ใน cache หรือ fork ถ้าต้องลบให้หมดต้องติดต่อ GitHub Support
 
 ## ก่อน deploy ขึ้น Railway
 
@@ -203,7 +246,7 @@ parity_label(price) = (round(price × 100) // 100) % 2      0 = คู่, 1 = �
 
 | รายการ | ผล |
 |---|---|
-| เทสทั้งหมด | 78 ผ่าน (task_a 26 · task_a2 28 · task_c 15 · automation 9) |
+| เทสทั้งหมด | 78 ผ่าน (task_a 26 · task_a2 28 · task_c 15 · automation 9) · หลังเพิ่มข้อความ H1 abstain: 80 ผ่าน (task_a 28) |
 | dry-run A (target 26 ต.ค.) และ A2 (target 22 ต.ค.) | ผ่าน · เขียนลง `results/dryrun/prediction_log_dryrun.csv` เท่านั้น |
 | hash ของ log จริงและ outcomes ก่อนและหลัง dry-run / evaluate | ไม่เปลี่ยนทั้ง 4 ไฟล์ |
 | คอลัมน์ใหม่ในไฟล์ dry-run | ครบ · A: `label_rule` = floor · A2: `label_rule`, `tick_1600` = 1.0, `h1_status` = abstain, `h1_predicted_parity` = ว่าง |
@@ -222,7 +265,7 @@ sha256 ของไฟล์จริงใน working tree (CRLF บน Windows
 ## ตรวจหลัง deploy
 
 ส่วนแถวเก่าของ log วัดด้วย `task_a/log_schema.py` (แปลง CRLF เป็น LF ก่อน ใช้ได้ทั้ง Windows และ Railway)
-ค่าที่คาดคือ log ใน `main` ณ 24 ต.ค. (`c87a7f2`):
+ค่าที่คาดคือ log ใน `main` ณ 24 ต.ค. (`c87a7f2`) · **ตรวจซ้ำแล้ว 24 ต.ค. 2026 01:47 น.** (`git fetch` แล้วเทียบกับ `origin/main` ยังเป็น `c87a7f2` จำนวนแถวและ sha256 ตรงทั้งสองไฟล์ ยังใช้ได้):
 
 | log | แถวเก่า | คอลัมน์ใหม่ | sha256 ของส่วนแถวเก่า |
 |---|---|---|---|
