@@ -18,12 +18,43 @@ Python ใช้ "banker's rounding" คือปัดไปหาเลขค�
 กฎอาจารย์คือ "เศษ > 0.5 ปัดขึ้น" ซึ่งไม่ตรงกับ round()
 จึงต้องเขียนเอง และคำนวณในหน่วย "สตางค์" (จำนวนเต็ม)
 เพื่อเลี่ยงปัญหา floating point (เช่น 142.50 อาจถูกเก็บเป็น 142.49999...)
+
+*** ตั้งแต่ 2026-10-24 label คู่/คี่ใช้ parity_label() (floor) ***
+to_int_baht() ด้านล่างเป็นกฎปัดเดิม เก็บไว้เทียบผลเก่าเท่านั้น
 """
 
 import numpy as np
 import pandas as pd
 
 from config import ROUND_THRESHOLD, ROUND_MODE
+
+
+def _to_satang(price):
+    """ราคาเป็นสตางค์จำนวนเต็ม (ปัดเศษ float ทิ้งก่อน: 162.99999999 -> 16300)"""
+    return np.rint(np.asarray(price, dtype=float) * 100)
+
+
+def floor_baht(price):
+    """ส่วนจำนวนเต็มบาทหลังแปลงเป็นสตางค์ (162.50 -> 162) — Series ถ้าใส่ Series มา"""
+    if np.ndim(price) == 0:
+        return np.nan if pd.isna(price) else int(_to_satang(price) // 100)
+    s = pd.Series(price, dtype=float) if not isinstance(price, pd.Series) else price.astype(float)
+    return pd.Series(np.floor(_to_satang(s.values) / 100), index=s.index, name="floor_baht")
+
+
+def parity_label(price):
+    """
+    label คู่/คี่ของงาน A/A2: (สตางค์ // 100) % 2   0 = คู่, 1 = คี่
+    แหล่งความจริงเดียว — ทุกที่ที่ต้องการคู่/คี่ของราคาต้องเรียกฟังก์ชันนี้
+
+        162.0 -> 0 · 162.5 -> 0 · 163.0 -> 1 · 199.5 -> 1 · 162.99999999 -> 1 (= 163.00)
+
+    scalar -> float, Series/array -> Series (NaN คงเป็น NaN)
+    """
+    fb = floor_baht(price)
+    if np.ndim(price) == 0:
+        return np.nan if pd.isna(fb) else float(fb % 2)
+    return pd.Series(np.mod(fb.values, 2), index=fb.index, name="parity")
 
 
 def to_int_baht_scalar(price, threshold=ROUND_THRESHOLD, mode=ROUND_MODE):

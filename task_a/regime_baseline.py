@@ -44,11 +44,11 @@ import pandas as pd
 
 from data_adapter import load_investing_csv
 from tick_utils import (
-    dev_cutoff, tick_size, to_int_baht, parity, resolve_data_path,
+    dev_cutoff, tick_size, parity_by_mode, LABEL_MODES, resolve_data_path,
 )
 
 
-def build_frame(df: pd.DataFrame, round_mode: str = "gt") -> pd.DataFrame:
+def build_frame(df: pd.DataFrame, round_mode: str = "floor") -> pd.DataFrame:
     """
     เตรียมคอลัมน์ที่ baseline ต้องใช้
 
@@ -60,7 +60,7 @@ def build_frame(df: pd.DataFrame, round_mode: str = "gt") -> pd.DataFrame:
     out["close"] = close
     out["regime"] = tick_size(close)
     out["regime_prev"] = out["regime"].shift(1)
-    out["y"] = parity(to_int_baht(close, mode=round_mode))
+    out["y"] = parity_by_mode(close, round_mode)
     out["prev_y"] = out["y"].shift(1)
     return out.dropna()
 
@@ -167,7 +167,7 @@ if __name__ == "__main__":
                     default=["KBANK_10Y_Cleaned.csv", "ADVANC_10Y_Cleaned.csv"])
     ap.add_argument("--n-folds", type=int, default=5)
     ap.add_argument("--min-train", type=int, default=250)
-    ap.add_argument("--round-mode", default="gt", choices=["gt", "gte"])
+    ap.add_argument("--round-mode", default="floor", choices=LABEL_MODES)
     ap.add_argument("--date-format", default="%m/%d/%Y")
     ap.add_argument("--outdir", default="results/dev")
     args = ap.parse_args()

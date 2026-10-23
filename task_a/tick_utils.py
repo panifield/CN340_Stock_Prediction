@@ -109,6 +109,7 @@ def find_data_files(names) -> list[str]:
 # ---------------------------------------------------------------
 try:
     from rounding import to_int_baht, tick_size as _tick_size_series, parity
+    from rounding import parity_label, floor_baht
     _USING_ROUNDING_PY = True
 except ImportError:
     _USING_ROUNDING_PY = False
@@ -210,9 +211,35 @@ def _parity_impl(int_prices):
 
 
 # ถ้าไม่มี rounding.py (รันเดี่ยว ๆ) ให้ใช้นิยามสำรองด้านบน
+def _floor_baht_impl(prices):
+    """ส่วนจำนวนเต็มบาท (label floor ตั้งแต่ 2026-10-24) เหมือน rounding.floor_baht"""
+    s = pd.Series(prices).astype(float)
+    return pd.Series(np.floor(np.rint(s.values * 100) / 100), index=s.index, name="floor_baht")
+
+
+def _parity_label_impl(prices):
+    """คู่/คี่ของส่วนจำนวนเต็มบาท เหมือน rounding.parity_label"""
+    fb = _floor_baht_impl(prices)
+    return pd.Series(np.mod(fb.values, 2), index=fb.index, name="parity")
+
+
 if not _USING_ROUNDING_PY:
     to_int_baht = _to_int_baht_impl
     parity = _parity_impl
+    floor_baht = _floor_baht_impl
+    parity_label = _parity_label_impl
+
+LABEL_MODES = ["floor", "gt", "gte"]   # floor = label หลักตั้งแต่ 2026-10-24 · gt/gte = กฎปัดเดิมไว้เทียบ
+
+
+def int_baht_by_mode(close, mode="floor"):
+    """จำนวนเต็มบาทตามกฎ label: floor -> floor_baht · gt/gte -> to_int_baht เดิม"""
+    return floor_baht(close) if mode == "floor" else to_int_baht(close, mode=mode)
+
+
+def parity_by_mode(close, mode="floor"):
+    """คู่/คี่ตามกฎ label: floor -> parity_label · gt/gte -> parity(to_int_baht) เดิม"""
+    return parity_label(close) if mode == "floor" else parity(to_int_baht(close, mode=mode))
 
 
 # ---------------------------------------------------------------

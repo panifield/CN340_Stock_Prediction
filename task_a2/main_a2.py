@@ -47,7 +47,8 @@ from sklearn.metrics import roc_curve, auc
 import features_a2
 
 TICKERS = {"KBANK.BK": "KBANK_BK", "ADVANC.BK": "ADVANC_BK"}
-RESULTS_DIR = os.path.join(HERE, "results")
+# TASK_A2_RESULTS_DIR: รันผลชุดใหม่ลงโฟลเดอร์อื่นโดยไม่ทับของเดิม
+RESULTS_DIR = os.environ.get("TASK_A2_RESULTS_DIR") or os.path.join(HERE, "results")
 FIG_DIR = os.path.join(RESULTS_DIR, "figures")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(FIG_DIR, exist_ok=True)

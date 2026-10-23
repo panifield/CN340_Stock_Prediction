@@ -23,7 +23,7 @@ from config import (
     DTICK_LAGS, DTICK_PARITY_LAGS, ZERO_RATE_WINDOW,
     ATR_PERIOD, STD_WINDOW, VOLUME_MA_WINDOW, BOUNDARY_LEVELS,
 )
-from rounding import to_int_baht, tick_size
+from rounding import tick_size
 
 
 def atr(high, low, close, period=ATR_PERIOD):

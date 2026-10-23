@@ -139,7 +139,7 @@ def adapter_task_a2():
     _enter("task_a2")
     sys.path.insert(0, str(ROOT / "task_a"))
     from data_loader import clean
-    from rounding import to_int_baht, parity as parity_fn
+    from rounding import parity_label
     import features_a2
     from main_a2 import get_classifiers
     out = {}
@@ -156,8 +156,8 @@ def adapter_task_a2():
         dates = [d for d in intraday.index.intersection(ctx.index) if d in close.index]
         X = pd.concat([intraday.loc[dates].drop(columns=["price_1600"]), ctx.loc[dates]], axis=1)
         X = X.replace([np.inf, -np.inf], np.nan)
-        y_par = parity_fn(to_int_baht(close.loc[dates])).values
-        p16 = parity_fn(to_int_baht(intraday.loc[dates, "price_1600"])).values
+        y_par = parity_label(close.loc[dates]).values
+        p16 = parity_label(intraday.loc[dates, "price_1600"]).values
         yflip = pd.Series((y_par + p16) % 2, index=dates)
         aux = pd.DataFrame({"prev_parity": p16, "actual": y_par}, index=dates)
         out[t] = dict(X=X, y=yflip, aux=aux, kind="cls_parity", make=get_classifiers)

@@ -34,6 +34,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from rounding import parity_label   # label floor ตั้งแต่ 2026-10-24 (เดิม round_half_up ด้านล่าง)
+
 warnings.filterwarnings("ignore")
 SEED = 42
 
@@ -63,7 +65,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     tick = close.apply(tick_size)
     n_tick = (close / tick).round().astype(int)
     dtick = n_tick.diff()
-    parity = close.apply(round_half_up) % 2
+    parity = parity_label(close)
 
     f = pd.DataFrame(index=df.index)
     f["n_mod2"] = n_tick % 2

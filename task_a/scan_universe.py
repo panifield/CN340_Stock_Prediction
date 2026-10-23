@@ -33,7 +33,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from tick_utils import dev_cutoff, month_end_flag, tick_size, to_int_baht
+from tick_utils import dev_cutoff, month_end_flag, tick_size, floor_baht, parity_label
 
 warnings.filterwarnings("ignore")
 
@@ -123,8 +123,8 @@ def build_dataset(df: pd.DataFrame) -> pd.DataFrame:
     d["dtick"] = d["n"].diff()
 
     # ---- target: parity ของราคาปิดปัดเป็นจำนวนเต็มบาท ----
-    d["int_price"] = to_int_baht(close).astype(int)
-    d["parity"] = d["int_price"] % 2                           # 1 = คี่
+    d["int_price"] = floor_baht(close).astype(int)
+    d["parity"] = parity_label(close)                         # 1 = คี่ (label floor)
 
     # ---- features (ทั้งหมด shift(1) = ใช้ข้อมูลถึงวัน t-1) ----
     f = pd.DataFrame(index=df.index)

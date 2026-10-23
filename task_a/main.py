@@ -245,7 +245,7 @@ def run_task_a(X, targets, verbose=True, dev=False):
 
     if dev:
         print("\n  (โหมด dev — จบแค่นี้ ไม่แตะ test ไม่บันทึกผล)")
-        return {"table": wf_df, "preds": preds_oof, "y_test": y_oof,
+        return {"table": wf_df, "wf_table": wf_df, "preds": preds_oof, "y_test": y_oof,
                 "test_index": y_oof.index, "best_model": best,
                 "stage": "walk_forward_oof"}
 
@@ -297,7 +297,7 @@ def run_task_a(X, targets, verbose=True, dev=False):
     print_confusion(parity_test, parity_test_pred, labels=("คู่", "คี่"),
                     title=f"({best}, refit บน train+val)")
 
-    return {"table": test_df, "preds": {best: parity_test_pred},
+    return {"table": test_df, "wf_table": wf_df, "preds": {best: parity_test_pred},
             "y_test": parity_test, "test_index": X_test.index,
             "best_model": best, "stage": "test"}
 
@@ -339,6 +339,8 @@ def save_results(all_results):
         t = r["ticker"].replace(".", "_").replace("^", "")
         path = os.path.join(OUTPUT_DIR, f"{t}_taskA_parity.csv")
         r["a"]["table"].to_csv(path, encoding="utf-8-sig")
+        r["a"]["wf_table"].to_csv(os.path.join(OUTPUT_DIR, f"{t}_taskA_walkforward.csv"),
+                                  encoding="utf-8-sig")
     print(f"\n[main] บันทึกตารางผลลัพธ์ไว้ที่โฟลเดอร์ '{OUTPUT_DIR}/'")
 
 

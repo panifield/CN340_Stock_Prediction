@@ -46,13 +46,13 @@ sys.path.insert(0, str(HERE.parent / "task_a2"))
 from config import (TICKERS, START_DATE, END_DATE, TRAIN_RATIO, VAL_RATIO,  # noqa: E402
                     ANN_PARAMS, LGBM_PARAMS, LOGREG_PARAMS, RANDOM_STATE)
 from features import build_features  # noqa: E402
-from rounding import to_int_baht, parity  # noqa: E402
+from rounding import to_int_baht, parity, parity_label  # noqa: E402
 from splits import walk_forward_splits  # noqa: E402
 from eval_stats import binom_ci, mcnemar_test  # noqa: E402
 import verified_daily  # noqa: E402
 import features_a2  # noqa: E402
 
-OUT = HERE / "results" / "five_analyses"
+OUT = Path(os.environ.get("FIVE_ANALYSES_OUT") or HERE / "results" / "five_analyses")
 FIG = OUT / "figures"
 MODEL_NAMES = ["ANN (MLP)", "LightGBM", "Logistic Regression"]
 COLORS = {"ANN (MLP)": "#4c78a8", "LightGBM": "#e45756", "Logistic Regression": "#54a24b"}
@@ -69,12 +69,13 @@ def _satang(p):
 
 
 def label_round(p):
-    """กฎอาจารย์ที่ใช้จริงใน production (rounding.to_int_baht)"""
-    return parity(to_int_baht(pd.Series(np.asarray(p, dtype=float)))).values
+    """กฎปัดเดิม (.50 ปัดขึ้น, rounding.to_int_baht) -- label หลักก่อน 2026-10-24 เก็บไว้เทียบ"""
+    return parity(to_int_baht(pd.Series(np.asarray(p, dtype=float)), mode="gte")).values
 
 
 def label_floor(p):
-    return np.mod(np.floor(_satang(p) / 100), 2)
+    """label หลักตั้งแต่ 2026-10-24 (rounding.parity_label)"""
+    return parity_label(np.asarray(p, dtype=float)).values
 
 
 def label_x2(p):
@@ -82,7 +83,8 @@ def label_x2(p):
     return np.mod(np.floor((2 * _satang(p) + 50) / 100), 2)
 
 
-LABELS = {"round": label_round, "floor": label_floor, "x2": label_x2}
+LABELS = {"floor": label_floor, "round": label_round, "x2": label_x2}
+MAIN_LABEL = "floor"
 
 
 # =============================================================================
@@ -117,7 +119,7 @@ def load_daily(ticker):
     return _DAILY[ticker]
 
 
-def dataset_A(ticker, label="round"):
+def dataset_A(ticker, label=MAIN_LABEL):
     df = load_daily(ticker)
     df = df.loc[df.index <= pd.Timestamp(END_DATE)]   # ช่วงเดียวกับ main.py
     X = build_features(df, verbose=False).replace([np.inf, -np.inf], np.nan)
@@ -130,7 +132,7 @@ def dataset_A(ticker, label="round"):
                 int(n * (TRAIN_RATIO + VAL_RATIO)))
 
 
-def dataset_A2(ticker, label="round"):
+def dataset_A2(ticker, label=MAIN_LABEL):
     safe = ticker.replace(".", "_")
     df = load_daily(ticker)
     intra = features_a2.build_intraday_features(ticker, safe)
@@ -146,7 +148,7 @@ def dataset_A2(ticker, label="round"):
                 LABELS[label](p1600), p1600, n - int(round(n * 0.20)))
 
 
-def dataset(task, ticker, label="round"):
+def dataset(task, ticker, label=MAIN_LABEL):
     return dataset_A(ticker, label) if task == "A" else dataset_A2(ticker, label)
 
 
@@ -229,7 +231,7 @@ def boot_auc_ci(y, s, n_boot=500, seed=RANDOM_STATE):
 _CACHE = {}
 
 
-def cached(task, ticker, label="round"):
+def cached(task, ticker, label=MAIN_LABEL):
     """(Data, OOF P(flip), holdout P(flip)) ของโมเดล default 3 ตัว — ใช้ร่วมกันหลายข้อ"""
     key = (task, ticker, label)
     if key not in _CACHE:
@@ -421,7 +423,7 @@ def run_label():
         for i, (pe, ml) in enumerate(zip(p.persistence, p[MODEL_NAMES].max(axis=1))):
             ax.text(i - 0.2, pe + 0.01, f"{pe:.3f}", ha="center", fontsize=8)
             ax.text(i + 0.2, ml + 0.01, f"{ml:.3f}", ha="center", fontsize=8)
-        ax.set_xticks(x); ax.set_xticklabels(["round (official)", "floor", "x2 (0.5-baht)"])
+        ax.set_xticks(x); ax.set_xticklabels(["floor (main)", "round .50 up (old)", "x2 (0.5-baht)"])
         ax.set_title(f"Task {task} - {ticker}"); ax.set_ylim(0.4, 1.05)
     axs[0].set_ylabel("OOF accuracy"); axs[0].legend(fontsize=8)
     fig.tight_layout(); fig.savefig(FIG / "label_compare.png", dpi=150); plt.close(fig)
