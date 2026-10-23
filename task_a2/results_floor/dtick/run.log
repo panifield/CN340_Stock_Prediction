@@ -1,0 +1,62 @@
+  [data] A2 KBANK.BK label=floor: n=720 pool=576 holdout=144 (9s)
+  KBANK.BK: เลือก Δtick LightGBM / Flip LightGBM จาก dev OOF (25s)
+  [data] A2 ADVANC.BK label=floor: n=720 pool=576 holdout=144 (7s)
+  ADVANC.BK: เลือก Δtick LogReg / Flip ANN (MLP) จาก dev OOF (19s)
+   ticker        price_range   n  class_-2  class_-1  class_+0  class_+1  class_+2  flip_rate
+ KBANK.BK 100-200 (tick 0.5) 635    0.0425    0.2331    0.4079    0.2362    0.0803     0.3559
+ KBANK.BK   200-400 (tick 1)  85    0.0353    0.3059    0.4353    0.2000    0.0235     0.5176
+ADVANC.BK 100-200 (tick 0.5)  10    0.1000    0.4000    0.3000    0.2000    0.0000     0.5000
+ADVANC.BK   200-400 (tick 1) 708    0.0805    0.2387    0.3785    0.2090    0.0932     0.4732
+   ticker   split                      model        price_range   n  accuracy          ci  persistence  mcnemar_p  p_bonferroni
+ KBANK.BK dev OOF Baseline: Persistence-1600                all 425    0.6259 0.579-0.671       0.6259        NaN           NaN
+ KBANK.BK dev OOF Baseline: Persistence-1600 100-200 (tick 0.5) 424    0.6250 0.578-0.670       0.6250        NaN           NaN
+ KBANK.BK dev OOF Baseline: Persistence-1600   200-400 (tick 1)   1    1.0000 0.207-1.000       1.0000        NaN           NaN
+ KBANK.BK dev OOF               Δtick LogReg                all 425    0.5718 0.524-0.618       0.6259     0.0433           NaN
+ KBANK.BK dev OOF               Δtick LogReg 100-200 (tick 0.5) 424    0.5708 0.523-0.617       0.6250     0.0433           NaN
+ KBANK.BK dev OOF               Δtick LogReg   200-400 (tick 1)   1    1.0000 0.207-1.000       1.0000     1.0000           NaN
+ KBANK.BK dev OOF             Δtick LightGBM                all 425    0.6188 0.572-0.664       0.6259     0.7428           NaN
+ KBANK.BK dev OOF             Δtick LightGBM 100-200 (tick 0.5) 424    0.6179 0.571-0.663       0.6250     0.7428           NaN
+ KBANK.BK dev OOF             Δtick LightGBM   200-400 (tick 1)   1    1.0000 0.207-1.000       1.0000     1.0000           NaN
+ KBANK.BK dev OOF                  Δtick MLP                all 425    0.5835 0.536-0.629       0.6259     0.1234           NaN
+ KBANK.BK dev OOF                  Δtick MLP 100-200 (tick 0.5) 424    0.5849 0.537-0.631       0.6250     0.1455           NaN
+ KBANK.BK dev OOF                  Δtick MLP   200-400 (tick 1)   1    0.0000 0.000-0.793       1.0000     1.0000           NaN
+ KBANK.BK dev OOF             Flip ANN (MLP)                all 425    0.5435 0.496-0.590       0.6259     0.0043           NaN
+ KBANK.BK dev OOF             Flip ANN (MLP) 100-200 (tick 0.5) 424    0.5448 0.497-0.592       0.6250     0.0054           NaN
+ KBANK.BK dev OOF             Flip ANN (MLP)   200-400 (tick 1)   1    0.0000 0.000-0.793       1.0000     1.0000           NaN
+ KBANK.BK dev OOF              Flip LightGBM                all 425    0.5788 0.531-0.625       0.6259     0.0169           NaN
+ KBANK.BK dev OOF              Flip LightGBM 100-200 (tick 0.5) 424    0.5778 0.530-0.624       0.6250     0.0169           NaN
+ KBANK.BK dev OOF              Flip LightGBM   200-400 (tick 1)   1    1.0000 0.207-1.000       1.0000     1.0000           NaN
+ KBANK.BK dev OOF   Flip Logistic Regression                all 425    0.5271 0.480-0.574       0.6259     0.0007           NaN
+ KBANK.BK dev OOF   Flip Logistic Regression 100-200 (tick 0.5) 424    0.5283 0.481-0.575       0.6250     0.0009           NaN
+ KBANK.BK dev OOF   Flip Logistic Regression   200-400 (tick 1)   1    0.0000 0.000-0.793       1.0000     1.0000           NaN
+ KBANK.BK holdout Baseline: Persistence-1600                all 144    0.5417 0.460-0.621       0.5417        NaN           NaN
+ KBANK.BK holdout Baseline: Persistence-1600 100-200 (tick 0.5)  61    0.6393 0.514-0.748       0.6393        NaN           NaN
+ KBANK.BK holdout Baseline: Persistence-1600   200-400 (tick 1)  83    0.4699 0.366-0.576       0.4699        NaN           NaN
+ KBANK.BK holdout             Δtick LightGBM                all 144    0.5556 0.474-0.634       0.5417     0.8506        1.0000
+ KBANK.BK holdout             Δtick LightGBM 100-200 (tick 0.5)  61    0.5902 0.465-0.705       0.6393     0.2500           NaN
+ KBANK.BK holdout             Δtick LightGBM   200-400 (tick 1)  83    0.5301 0.424-0.634       0.4699     0.4244           NaN
+ KBANK.BK holdout              Flip LightGBM                all 144    0.5486 0.467-0.628       0.5417     1.0000        1.0000
+ KBANK.BK holdout              Flip LightGBM 100-200 (tick 0.5)  61    0.6557 0.530-0.763       0.6393     1.0000           NaN
+ KBANK.BK holdout              Flip LightGBM   200-400 (tick 1)  83    0.4699 0.366-0.576       0.4699     1.0000           NaN
+ADVANC.BK dev OOF Baseline: Persistence-1600                all 425    0.5294 0.482-0.576       0.5294        NaN           NaN
+ADVANC.BK dev OOF Baseline: Persistence-1600   200-400 (tick 1) 425    0.5294 0.482-0.576       0.5294        NaN           NaN
+ADVANC.BK dev OOF               Δtick LogReg                all 425    0.5318 0.484-0.579       0.5294     1.0000           NaN
+ADVANC.BK dev OOF               Δtick LogReg   200-400 (tick 1) 425    0.5318 0.484-0.579       0.5294     1.0000           NaN
+ADVANC.BK dev OOF             Δtick LightGBM                all 425    0.5153 0.468-0.562       0.5294     0.6483           NaN
+ADVANC.BK dev OOF             Δtick LightGBM   200-400 (tick 1) 425    0.5153 0.468-0.562       0.5294     0.6483           NaN
+ADVANC.BK dev OOF                  Δtick MLP                all 425    0.5129 0.466-0.560       0.5294     0.5887           NaN
+ADVANC.BK dev OOF                  Δtick MLP   200-400 (tick 1) 425    0.5129 0.466-0.560       0.5294     0.5887           NaN
+ADVANC.BK dev OOF             Flip ANN (MLP)                all 425    0.5153 0.468-0.562       0.5294     0.7314           NaN
+ADVANC.BK dev OOF             Flip ANN (MLP)   200-400 (tick 1) 425    0.5153 0.468-0.562       0.5294     0.7314           NaN
+ADVANC.BK dev OOF              Flip LightGBM                all 425    0.5106 0.463-0.558       0.5294     0.5363           NaN
+ADVANC.BK dev OOF              Flip LightGBM   200-400 (tick 1) 425    0.5106 0.463-0.558       0.5294     0.5363           NaN
+ADVANC.BK dev OOF   Flip Logistic Regression                all 425    0.4800 0.433-0.527       0.5294     0.1643           NaN
+ADVANC.BK dev OOF   Flip Logistic Regression   200-400 (tick 1) 425    0.4800 0.433-0.527       0.5294     0.1643           NaN
+ADVANC.BK holdout Baseline: Persistence-1600                all 144    0.5139 0.433-0.594       0.5139        NaN           NaN
+ADVANC.BK holdout Baseline: Persistence-1600   200-400 (tick 1) 142    0.5070 0.426-0.588       0.5070        NaN           NaN
+ADVANC.BK holdout               Δtick LogReg                all 144    0.5556 0.474-0.634       0.5139     0.5386        1.0000
+ADVANC.BK holdout               Δtick LogReg   200-400 (tick 1) 142    0.5493 0.467-0.629       0.5070     0.5386           NaN
+ADVANC.BK holdout             Flip ANN (MLP)                all 144    0.4375 0.359-0.519       0.5139     0.2074        0.8295
+ADVANC.BK holdout             Flip ANN (MLP)   200-400 (tick 1) 142    0.4296 0.351-0.512       0.5070     0.2074           NaN
+
+ผลอยู่ที่ C:\StudyUniversity\CN340\forLog\now\task_a2\results_floor\dtick
