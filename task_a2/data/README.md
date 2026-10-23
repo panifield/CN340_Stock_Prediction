@@ -21,8 +21,10 @@ Task A — Task A2 ไม่มี cache รายวันเป็นของ
 ผลการทดลองจาก `check_settrade_atc_match.py` (ยืนยันว่า Settrade 1m
 match ราคาปิด ATC จริง) และการเทียบราคา ณ 16:00 กับราคาปิดรายวัน
 ใช้ตอนตรวจสอบ data quality ก่อนสร้าง target ไม่ใช่ input ของโมเดล
+`*_1m_atc_check.csv` เป็นข้อมูล Settrade -- เก็บในเครื่องเท่านั้น ไม่อยู่ใน repo (ดู README.md หลัก)
 
 **`settrade_log/`**
 ข้อมูลที่ Windows Task Scheduler เก็บอัตโนมัติทุกวันจาก Settrade Open API
-(ผ่าน `collect_settrade_daily.py` + `run_collector.bat`) สำหรับสะสมไว้ใช้
-ต่อในอนาคต (ไม่ใช่ input ปัจจุบันของ `main_a2.py`/`predict_live.py`)
+(ผ่าน `collect_settrade_daily.py`) สำหรับสะสมไว้ใช้ต่อในอนาคต (ไม่ใช่ input ปัจจุบันของ
+`main_a2.py`/`predict_live.py` · feature อยู่ที่ `settrade_features.py`) -- ข้อมูลของ broker
+เก็บในเครื่องเท่านั้น ทั้งโฟลเดอร์อยู่ใน `.gitignore` (ดู README.md หลัก)

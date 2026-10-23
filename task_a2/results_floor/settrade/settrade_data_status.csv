@@ -1,0 +1,3 @@
+﻿symbol,days_1m,days_with_official_close,first,last,min_days_for_eval,ready_to_evaluate
+KBANK,15,15,2026-09-28,2026-10-22,200,False
+ADVANC,15,15,2026-09-28,2026-10-22,200,False

@@ -5,9 +5,16 @@ collect_settrade_daily.py — Task A2 (เก็บสะสมข้อมู�
 เพราะ Settrade เก็บ retention แค่ ~1-2 สัปดาห์ ถ้าไม่เก็บเองทุกวัน
 ข้อมูลจะหายไปเรื่อยๆ
 
-*** รันด้วยมือหลังตลาดปิดทุกวัน (ยังไม่ตั้ง scheduler) ***
+รันหลังตลาดปิด (scheduled task SettradeDailyCollector เรียก run_collector.bat 17:30 ทุกวัน)
     cd task_a2
-    python collect_settrade_daily.py
+    python collect_settrade_daily.py              # วันนี้ + เติมวันที่ขาดย้อนหลัง 14 วัน
+    python collect_settrade_daily.py --days 0     # วันนี้อย่างเดียว
+
+เติมย้อนหลัง (2026-10-24): เครื่อง sleep/ใช้แบตตอน 17:30 ทำให้พลาดหลายวัน (21-22 ต.ค.) แต่ Settrade
+ยังเก็บแท่งไว้ ~1-2 สัปดาห์ ทุกครั้งที่รันจึงลองดึงวันทำการ (จ.-ศ.) ย้อนหลังที่ยังไม่มีไฟล์ด้วย
+ไฟล์ที่มีแล้วไม่ดึงซ้ำ ยกเว้นวันนี้ (เขียนทับได้ เผื่อรันก่อนตลาดปิด) · วันหยุดได้ "ไม่มีข้อมูล" ข้ามไป
+
+credential: environment variable ของผู้ใช้ หรือ .env
 
 อ่าน credential จาก .env (ไฟล์ .env ต้องอยู่ที่ root โปรเจกต์หรือ
 task_a2/ เอง) รูปแบบ:
@@ -20,6 +27,7 @@ task_a2/ เอง) รูปแบบ:
 รันซ้ำวันเดิมจะเขียนทับไฟล์ของวันนั้นเท่านั้น (idempotent ต่อวัน)
 """
 
+import argparse
 import os
 import sys
 
@@ -81,28 +89,55 @@ def fetch_today(market, symbol, interval, today):
     return df
 
 
+def file_path(symbol, interval, day):
+    return os.path.join(LOG_DIR, f"{symbol}_{interval}_{day.strftime('%Y-%m-%d')}.csv")
+
+
+def days_to_fetch(today, lookback_days):
+    """วันนี้ (ถ้าเป็นวันธรรมดา) + วันธรรมดาย้อนหลังที่ยังไม่มีไฟล์ครบทุก symbol/interval"""
+    out = []
+    for k in range(lookback_days, -1, -1):
+        day = today - pd.Timedelta(days=k)
+        if day.dayofweek >= 5:
+            continue
+        have_all = all(os.path.exists(file_path(s, i, day)) for s in SYMBOLS for i in INTERVALS)
+        if k == 0 or not have_all:
+            out.append(day)
+    return out
+
+
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--days", type=int, default=14, help="เติมวันที่ขาดย้อนหลังกี่วัน (0 = วันนี้อย่างเดียว)")
+    ap.add_argument("--log", help="เขียน output ต่อท้ายไฟล์นี้ (scheduled task รันผ่าน pythonw.exe ที่ไม่มี console)")
+    args = ap.parse_args()
+    if args.log:
+        # ไม่มี console window -> ไม่โดน Ctrl+C/ปิดหน้าต่างฆ่ากลางทาง (0xC000013A ใน scheduler_run.log เดิม)
+        sys.stdout = sys.stderr = open(args.log, "a", encoding="utf-8", buffering=1)
     today = pd.Timestamp.now(tz="Asia/Bangkok").normalize()
     date_str = today.strftime("%Y-%m-%d")
 
     print("=" * 70)
-    print(f"  เก็บ intraday จาก Settrade — วันที่ {date_str}")
+    print(f"  เก็บ intraday จาก Settrade — วันที่ {date_str} (เติมย้อนหลัง {args.days} วัน)")
     print("=" * 70)
 
     investor = get_investor()
     market = investor.MarketData()
 
     n_saved = 0
-    for symbol in SYMBOLS:
-        for interval in INTERVALS:
-            print(f"  ดึง {symbol}/{interval} ...", end=" ", flush=True)
-            df = fetch_today(market, symbol, interval, today)
-            if df is None:
-                continue
-            path = os.path.join(LOG_DIR, f"{symbol}_{interval}_{date_str}.csv")
-            df.to_csv(path, index=False, encoding="utf-8-sig")
-            print(f"OK ({len(df)} แท่ง) -> {path}")
-            n_saved += 1
+    for day in days_to_fetch(today, args.days):
+        for symbol in SYMBOLS:
+            for interval in INTERVALS:
+                path = file_path(symbol, interval, day)
+                if day != today and os.path.exists(path):
+                    continue
+                print(f"  ดึง {symbol}/{interval} {day.date()} ...", end=" ", flush=True)
+                df = fetch_today(market, symbol, interval, day)
+                if df is None:
+                    continue
+                df.to_csv(path, index=False, encoding="utf-8-sig")
+                print(f"OK ({len(df)} แท่ง) -> {path}")
+                n_saved += 1
 
     print(f"\nเสร็จสิ้น — บันทึกไป {n_saved} ไฟล์")
     if n_saved == 0:
