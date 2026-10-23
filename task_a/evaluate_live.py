@@ -11,6 +11,13 @@ evaluate_live.py — เทียบ prediction log จริงของ task_a
 baseline A : คู่/คี่เหมือนวันก่อน (prev_parity ใน log)
 baseline A2: คู่/คี่เหมือนราคา ณ 16:00 (parity_1600 ใน log)
 
+label 2 แบบ (2026-10-24): แถวที่ log มี label_rule = "floor" ทายด้วย rounding.parity_label
+  actual_parity                  = กฎปัดเดิม (.50 ปัดขึ้น) คำนวณทุกแถวไว้เทียบ
+  correct / baseline_correct     = กฎเดิม เฉพาะแถวเดิม (ค่าในแถวเก่าเหมือนเดิมทุกตัว)
+  *_floor                        = floor เฉพาะแถว floor (แถวเก่าว่าง)
+H1 (เฉพาะ A2, แถว floor): h1_correct = h1_predicted_parity == actual_parity_floor เฉพาะวันที่
+  h1_status = predict · coverage = สัดส่วนวัน-หุ้นที่ไม่ abstain
+
 bar15_settled (เฉพาะ A2): price_1600 ใน log (แท่ง 15:00 ที่ Yahoo ให้ตอนทาย ~16:02)
 ตรงกับแท่ง 15:00 ฉบับสุดท้ายที่ดึงตอนนี้ไหม -- แท่งนี้ยังเปลี่ยนได้หลัง 16:02 (พบต่าง
 1 tick ใน 4 จาก 8 วัน) ซึ่งพอจะพลิกคู่/คี่ วันที่ False จึงควรแยกดูตอนวัดผล
@@ -25,7 +32,7 @@ import pandas as pd
 import yfinance as yf
 
 from data_adapter import load_investing_csv
-from rounding import parity, to_int_baht
+from rounding import parity, parity_label, to_int_baht
 
 BASE_DIR = Path(__file__).resolve().parent
 ROOT = BASE_DIR.parent
@@ -66,37 +73,77 @@ def score(log, baseline_col):
     log["status"] = np.where(done, "scored", "pending")
     log["actual_parity"] = np.nan
     log.loc[done, "actual_parity"] = parity(to_int_baht(log.loc[done, "actual_close"])).values
-    log["correct"] = np.where(done, log["predicted_parity"] == log["actual_parity"], np.nan)
-    log["baseline_correct"] = np.where(done, log[baseline_col] == log["actual_parity"], np.nan)
+
+    rule = log["label_rule"] if "label_rule" in log else pd.Series(np.nan, index=log.index)
+    floor_rows = rule.astype(str) == "floor"
+    old, new = done & ~floor_rows, done & floor_rows
+    log["correct"] = np.where(old, log["predicted_parity"] == log["actual_parity"], np.nan)
+    log["baseline_correct"] = np.where(old, log[baseline_col] == log["actual_parity"], np.nan)
+
+    log["actual_parity_floor"] = np.nan
+    log.loc[new, "actual_parity_floor"] = parity_label(log.loc[new, "actual_close"]).values
+    log["correct_floor"] = np.where(new, log["predicted_parity"] == log["actual_parity_floor"], np.nan)
+    log["baseline_correct_floor"] = np.where(
+        new, log[baseline_col] == log["actual_parity_floor"], np.nan)
+    if "h1_status" in log:
+        h1 = new & (log["h1_status"] == "predict")
+        log["h1_correct"] = np.where(
+            h1, log["h1_predicted_parity"] == log["actual_parity_floor"], np.nan)
     return log
 
 
+def write_outcomes(df, path):
+    """คอลัมน์ที่ไฟล์เดิมมีอยู่แล้วคงลำดับเดิมไว้ข้างหน้า คอลัมน์ใหม่ต่อท้าย (แถวเก่าเป็นค่าว่าง)"""
+    first = pd.read_csv(path, nrows=0).columns.tolist() if path.exists() else []
+    first = [c for c in first if c in df.columns]
+    df[first + [c for c in df.columns if c not in first]].to_csv(path, index=False)
+
+
 def summarize(name, out, baseline_label, split_col=None):
-    s = out[out["status"] == "scored"]
-    print(f"\n=== {name} === scored {s['target_date'].nunique()} วัน · "
-          f"pending {(out['status'] == 'pending').sum()} แถว")
-    if s.empty:
+    print(f"\n=== {name} === pending {(out['status'] == 'pending').sum()} แถว")
+    for title, c, b in (("label เดิม (ปัด .50 ขึ้น)", "correct", "baseline_correct"),
+                        ("label floor", "correct_floor", "baseline_correct_floor")):
+        s = out[(out["status"] == "scored") & out[c].notna()]
+        print(f"  --- {title}: scored {s['target_date'].nunique()} วัน ---")
+        if s.empty:
+            print("  (ยังไม่มี)")
+            continue
+
+        def line(label, df):
+            days = df.drop_duplicates(["ticker", "target_date"])
+            print(f"  {label:<22} ถูก {int(df[c].sum())}/{len(df)} "
+                  f"({df[c].mean():.0%}) · baseline {baseline_label} "
+                  f"{int(days[b].sum())}/{len(days)} ({days[b].mean():.0%})")
+
+        for model, g in s.groupby("model"):
+            line(model, g)
+        ml = s[~s["model"].str.startswith("Baseline")]
+        line("รวม ML ทุกโมเดล", ml)
+        if split_col:
+            for flag, g in ml.groupby(ml[split_col].astype(str)):
+                line(f"{split_col}={flag}", g)
+
+
+def summarize_h1(out):
+    """กฎ H1 นับต่อวัน-หุ้น (ทุกแถวของวันเดียวกันมีค่า H1 ชุดเดียวกัน)"""
+    if "h1_status" not in out:
         return
-
-    def line(label, df):
-        days = df.drop_duplicates(["ticker", "target_date"])
-        print(f"  {label:<22} ถูก {int(df['correct'].sum())}/{len(df)} "
-              f"({df['correct'].mean():.0%}) · baseline {baseline_label} "
-              f"{int(days['baseline_correct'].sum())}/{len(days)} "
-              f"({days['baseline_correct'].mean():.0%})")
-
-    for model, g in s.groupby("model"):
-        line(model, g)
-    ml = s[~s["model"].str.startswith("Baseline")]
-    line("รวม ML ทุกโมเดล", ml)
-    if split_col:
-        for flag, g in ml.groupby(ml[split_col].astype(str)):
-            line(f"{split_col}={flag}", g)
+    days = out[(out["status"] == "scored") & out["actual_parity_floor"].notna()] \
+        .drop_duplicates(["ticker", "target_date"])
+    print("  --- กฎ H1 (ทายเฉพาะ tick 0.50, label floor) ---")
+    if days.empty:
+        print("  (ยังไม่มี)")
+        return
+    pred = days[days["h1_status"] == "predict"]
+    msg = f"  coverage {len(pred)}/{len(days)} วัน-หุ้น ({len(pred) / len(days):.0%})"
+    if len(pred):
+        msg += f" · ถูก {int(pred['h1_correct'].sum())}/{len(pred)} ({pred['h1_correct'].mean():.0%})"
+    print(msg)
 
 
 def main():
     a = score(pd.read_csv(A_LOG), "prev_parity")
-    a.to_csv(A_OUT, index=False)
+    write_outcomes(a, A_OUT)
     summarize("Task A (คู่/คี่ วันถัดไป)", a, "เหมือนเมื่อวาน")
 
     a2 = score(pd.read_csv(A2_LOG), "parity_1600")
@@ -105,9 +152,10 @@ def main():
     a2["bar15_final"] = final
     a2["bar15_settled"] = [None if pd.isna(f) else bool(np.isclose(p, f))
                            for p, f in zip(a2["price_1600"], final)]
-    a2.to_csv(A2_OUT, index=False)
+    write_outcomes(a2, A2_OUT)
     summarize("Task A2 (คู่/คี่ รอบ 16:00)", a2, "เหมือนราคา 16:00",
               split_col="bar15_settled")
+    summarize_h1(a2)
 
     print(f"\nเขียน {A_OUT.relative_to(ROOT)} และ {A2_OUT.relative_to(ROOT)}")
 
