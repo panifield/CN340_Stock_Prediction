@@ -53,7 +53,8 @@ from scipy import stats
 
 from data_adapter import load_investing_csv
 from tick_utils import (
-    dev_cutoff, tick_size, to_int_baht, parity, atr_wilder, month_end_flag,
+    dev_cutoff, tick_size, int_baht_by_mode, parity_by_mode, LABEL_MODES,
+    atr_wilder, month_end_flag,
     resolve_data_path,
 )
 
@@ -62,7 +63,7 @@ SEED = 42
 
 
 # =============================================================================
-def build_features(df: pd.DataFrame, round_mode: str = "gt") -> pd.DataFrame:
+def build_features(df: pd.DataFrame, round_mode: str = "floor") -> pd.DataFrame:
     """
     สร้าง feature หน่วย tick + target
 
@@ -76,8 +77,8 @@ def build_features(df: pd.DataFrame, round_mode: str = "gt") -> pd.DataFrame:
     n_tick = (close / tick).round()
     dtick = n_tick.diff()
 
-    int_price = to_int_baht(close, mode=round_mode)
-    y_parity = parity(int_price)
+    int_price = int_baht_by_mode(close, round_mode)
+    y_parity = parity_by_mode(close, round_mode)
 
     f = pd.DataFrame(index=df.index)
     f["n_mod2"] = n_tick % 2
@@ -259,7 +260,7 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="results/permutation")
     ap.add_argument("--n-perm", type=int, default=100)
     ap.add_argument("--models", default="lr,lgbm")
-    ap.add_argument("--round-mode", default="gt", choices=["gt", "gte"])
+    ap.add_argument("--round-mode", default="floor", choices=LABEL_MODES)
     ap.add_argument("--date-format", default="%m/%d/%Y")
     args = ap.parse_args()
 

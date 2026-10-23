@@ -1,13 +1,13 @@
 """
 targets.py — งาน A (คู่/คี่)
 ===========================
-สร้าง target ของงาน A เท่านั้น: ราคาปิดปัดเป็นจำนวนเต็มแล้วเป็นคู่(0)/คี่(1)
+สร้าง target ของงาน A เท่านั้น: คู่(0)/คี่(1) ของส่วนจำนวนเต็มบาท (floor, rounding.parity_label)
 """
 
 import numpy as np
 import pandas as pd
 
-from rounding import to_int_baht, parity
+from rounding import floor_baht, parity_label
 
 
 def build_targets(df, verbose=True):
@@ -25,8 +25,8 @@ def build_targets(df, verbose=True):
     t["prev_close"] = prev_close
 
     # ---------- งาน A : คู่ / คี่ ----------
-    t["int_price"] = to_int_baht(close)
-    t["y_parity"] = parity(t["int_price"])
+    t["int_price"] = floor_baht(close)
+    t["y_parity"] = parity_label(close)
 
     # parity ของเมื่อวาน (ใช้ทำ persistence baseline + reconstruct label)
     t["prev_parity"] = t["y_parity"].shift(1)

@@ -10,7 +10,8 @@ features_a2.py — Task A2
 -> close ของแท่งนี้ = ราคา ณ 16:00 เป๊ะ ห้ามใช้แท่ง label "16:00"
 (ครอบคลุม [16:00,~16:30) เป็นข้อมูลหลัง 16:00)
 
-target: y_flip_1600 = parity(close รายวัน) XOR parity(ราคา ณ 16:00)
+target: y_flip_1600 = parity_label(close รายวัน) XOR parity_label(ราคา ณ 16:00)
+        (label floor ตั้งแต่ 2026-10-24 ดู task_a/rounding.parity_label)
         reconstruct: parity_close_hat = (parity_1600 + flip_hat) mod 2
         (โครงสร้างเดียวกับ y_flip ของ Task A เป๊ะ แค่เปลี่ยน "ฐาน" จาก
         ราคาปิดเมื่อวาน เป็นราคา ณ 16:00 ของวันนี้เอง)
@@ -24,7 +25,7 @@ import pandas as pd
 
 TASK_A = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "task_a")
 sys.path.insert(0, TASK_A)
-from rounding import to_int_baht, parity, tick_size  # noqa: E402
+from rounding import parity_label, tick_size  # noqa: E402
 import features as task_a_features  # noqa: E402
 from data_loader import load_stock  # noqa: E402
 
@@ -40,12 +41,12 @@ def load_1h(ticker_safe):
 
 def _dist_to_round_boundary_ticks(price, tick):
     """
-    ระยะ (หน่วย tick) จากราคาไปยังจุดปัดที่ใกล้ที่สุด (x.50 บาท พอดี
-    ตามกฎอาจารย์ที่ threshold=0.5) ยิ่งใกล้ 0 ยิ่งเสี่ยงพลิก parity ง่าย
+    ระยะ (หน่วย tick) จากราคาไปยังจุดเปลี่ยนคู่/คี่ที่ใกล้ที่สุด ยิ่งใกล้ 0 ยิ่งพลิกง่าย
+    label floor (2026-10-24): จุดเปลี่ยนคือ x.00 บาทพอดี (เดิมกฎปัด .50 จุดเปลี่ยนคือ x.50)
+    คิดเป็นสตางค์จำนวนเต็มกัน float เพี้ยน แบบเดียวกับ rounding.parity_label
     """
-    shifted = price - 0.5
-    nearest = np.round(shifted)
-    dist_baht = np.abs(shifted - nearest)
+    frac = np.mod(np.rint(np.asarray(price, dtype=float) * 100), 100)
+    dist_baht = np.minimum(frac, 100 - frac) / 100
     return dist_baht / tick
 
 
@@ -158,8 +159,8 @@ def build_dataset(ticker, ticker_safe):
     daily_ctx = daily_ctx.loc[common]
     close_t = close_daily.loc[common]
 
-    y_parity = parity(to_int_baht(close_t))
-    parity_1600 = parity(to_int_baht(intraday["price_1600"]))
+    y_parity = parity_label(close_t)
+    parity_1600 = parity_label(intraday["price_1600"])
     y_flip = (y_parity.values + parity_1600.values) % 2
 
     X = pd.concat([intraday.drop(columns=["price_1600"]), daily_ctx], axis=1)

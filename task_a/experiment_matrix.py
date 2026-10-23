@@ -21,8 +21,12 @@ Bonferroni + Benjamini-Hochberg FDR ตอนจบ
 ผลลัพธ์: stage1_screening_results.csv
 """
 
+import os
 import warnings
 warnings.filterwarnings("ignore")
+
+# EXPERIMENT_MATRIX_OUT: เขียนผลลงโฟลเดอร์อื่นโดยไม่ทับของเดิม (ค่าเริ่มต้น = cwd เหมือนเดิม)
+_OUT = os.environ.get("EXPERIMENT_MATRIX_OUT") or "."
 
 import numpy as np
 import pandas as pd
@@ -38,7 +42,7 @@ from lightgbm import LGBMClassifier
 from config import RANDOM_STATE, TICKERS, LOGREG_PARAMS, LGBM_PARAMS
 from data_loader import load_stock
 from targets import build_targets
-from rounding import to_int_baht, parity as parity_fn, tick_size
+from rounding import parity_label, tick_size
 from features import build_raw_features as _R0_raw, atr as _atr
 from splits import chronological_split, walk_forward_splits
 from baselines import get_classification_baselines
@@ -108,7 +112,7 @@ def rep_R1(df):
 def rep_R2(df):
     """Parity n-gram — pattern ของ parity 5 วันหลัง one-hot 32 แบบ"""
     close = df["Close"]
-    par = parity_fn(to_int_baht(close))
+    par = parity_label(close)
     pattern = pd.Series(0.0, index=df.index)
     for k in range(1, 6):
         pattern = pattern + par.shift(k - 1).fillna(0) * (2 ** (k - 1))
@@ -463,7 +467,7 @@ def run_stage1():
     results_df["p_FDR"] = np.round(p_fdr, 5)
     results_df["significant_FDR"] = rej_fdr
 
-    results_df.to_csv("stage1_screening_results.csv", index=False,
+    results_df.to_csv(os.path.join(_OUT, "stage1_screening_results.csv"), index=False,
                       encoding="utf-8-sig")
 
     print("\n" + "=" * 90)
@@ -528,7 +532,7 @@ def run_selective_prediction(reps=("R0_current", "R11_kitchen_sink", "R14_intrad
     _, p_fdr, _, _ = multipletests(out["p_vs_0.50"].values, alpha=0.05, method="fdr_bh")
     out["p_FDR"] = p_fdr
 
-    out.to_csv("selective_prediction_results.csv", index=False,
+    out.to_csv(os.path.join(_OUT, "selective_prediction_results.csv"), index=False,
               encoding="utf-8-sig")
 
     below, above = summarize_significant(out)

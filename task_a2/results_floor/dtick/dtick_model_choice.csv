@@ -1,0 +1,3 @@
+﻿ticker,selected_dtick_model,selected_flip_model,n_pool,n_holdout
+KBANK.BK,Δtick LightGBM,Flip LightGBM,576,144
+ADVANC.BK,Δtick LogReg,Flip ANN (MLP),576,144

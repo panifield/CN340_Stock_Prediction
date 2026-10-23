@@ -1,0 +1,7 @@
+﻿,Accuracy,Precision,Recall,F1,ROC-AUC,Pred_1_Rate
+Baseline: Persistence-1600,0.5244,0.4975,0.5155,0.5063,,0.4902
+Baseline: Majority,0.5244,0.4975,0.5155,0.5063,,0.4902
+Baseline: Rule,0.5244,0.4975,0.5155,0.5063,,0.4902
+LightGBM,0.4976,0.4667,0.433,0.4492,0.5214,0.439
+ANN (MLP),0.4951,0.462,0.4072,0.4329,0.4702,0.4171
+Logistic Regression,0.4561,0.4256,0.4278,0.4267,0.463,0.4756

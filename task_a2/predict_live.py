@@ -45,7 +45,8 @@ TASK_A = HERE / ".." / "task_a"
 sys.path.insert(0, str(TASK_A))
 
 from config import RANDOM_STATE  # noqa: E402
-from rounding import to_int_baht, parity as parity_fn  # noqa: E402
+from rounding import parity_label, tick_size  # noqa: E402
+from log_schema import migrate_log_columns  # noqa: E402
 from main import _prepare, _reconstruct_parity  # noqa: E402
 
 # ใช้ fetch_live ตัวเดียวกับ task_a/predict_live.py เป๊ะ (ไม่ก็อปโค้ด
@@ -76,12 +77,30 @@ TICKERS = {"KBANK.BK": "KBANK", "ADVANC.BK": "ADVANC"}
 
 KEY = ["ticker", "target_date", "model"]   # ต้องมี model ด้วย เพราะตอนนี้ทำนาย 3 โมเดล/หุ้น (2026-09-30)
 BASELINE_MODEL = "Baseline: Persistence-1600"   # ชื่อเดียวกับตารางผลของ main_a2.py
-LOG_COLUMNS = [
+OLD_LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "bar_1600_time", "train_rows",
     "model", "price_1600", "parity_1600", "predicted_flip_proba",
     "predicted_parity", "predicted_label", "code_commit", "worktree_dirty",
     "is_dry_run",
 ]
+# 2026-10-24 -- แถวก่อนหน้านี้เป็นค่าว่าง (log_schema.migrate_log_columns):
+#   label_rule          "floor" = parity_1600/predicted_parity ใช้ rounding.parity_label
+#   tick_1600           tick size ของราคา ณ 16:00
+#   h1_status           กฎ H1 (ล็อกไว้ ห้ามปรับตามผล log): "predict" ถ้า tick_1600 = 0.50
+#                       (ช่วงราคา 100-200 บาท) ไม่งั้น "abstain"
+#   h1_predicted_parity คู่/คี่ที่ H1 ทาย = parity_label(ราคา ณ 16:00) · ว่างถ้า abstain
+NEW_LOG_COLUMNS = ["label_rule", "tick_1600", "h1_status", "h1_predicted_parity"]
+LOG_COLUMNS = OLD_LOG_COLUMNS + NEW_LOG_COLUMNS
+LABEL_RULE = "floor"
+H1_TICK = 0.50
+
+
+def h1_rule(price_1600):
+    """กฎ H1 (pre-registered ใน repo อีกตัวของทีม: 66.4%, n=244) -> (tick, status, parity)"""
+    tick = float(tick_size(pd.Series([price_1600])).iloc[0])
+    if np.isclose(tick, H1_TICK):
+        return tick, "predict", parity_label(price_1600)
+    return tick, "abstain", np.nan
 
 
 def get_code_commit(cwd=HERE):
@@ -192,8 +211,8 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
     X_hist = X_hist.replace([np.inf, -np.inf], np.nan)
 
     close_hist = close_daily.loc[hist_dates]
-    y_parity_hist = parity_fn(to_int_baht(close_hist))
-    parity_1600_hist = parity_fn(to_int_baht(intraday.loc[hist_dates, "price_1600"]))
+    y_parity_hist = parity_label(close_hist)
+    parity_1600_hist = parity_label(intraday.loc[hist_dates, "price_1600"])
     yflip_hist = pd.Series((y_parity_hist.values + parity_1600_hist.values) % 2,
                           index=hist_dates)
     parity1600_hist_s = pd.Series(parity_1600_hist.values, index=hist_dates)
@@ -230,7 +249,10 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
     X_live = X_live.replace([np.inf, -np.inf], np.nan)
 
     price_1600 = float(intraday.loc[today_ts, "price_1600"])
-    parity_1600 = float(parity_fn(to_int_baht(pd.Series([price_1600]))).iloc[0])
+    parity_1600 = parity_label(price_1600)
+    tick_1600, h1_status, h1_parity = h1_rule(price_1600)
+    h1_cols = {"label_rule": LABEL_RULE, "tick_1600": tick_1600,
+               "h1_status": h1_status, "h1_predicted_parity": h1_parity}
 
     bar_time = [t.strftime("%H:%M") for t in today_bars.index
                if t.time() == pd.Timestamp("15:00").time()]
@@ -264,6 +286,7 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
             "predicted_flip_proba": round(float(flip_proba[0]), 6),
             "predicted_parity": float(parity_pred[0]),
             "predicted_label": label,
+            **h1_cols,
         })
 
     # baseline เป็น "โมเดล" แถวที่ 4: ทายว่าไม่พลิก (คู่/คี่เหมือนราคา 16:00) -- walk-forward
@@ -282,7 +305,10 @@ def predict_one_ticker(yf_ticker, short_name, target_date, allow_incomplete,
         "predicted_flip_proba": 0.0,
         "predicted_parity": parity_1600,
         "predicted_label": label,
+        **h1_cols,
     })
+    print(f"    H1 (tick {tick_1600:.2f}): {h1_status}"
+          + (f" -> parity = {'คี่' if h1_parity == 1 else 'คู่'}" if h1_status == "predict" else ""))
     return rows
 
 
@@ -353,6 +379,7 @@ def main():
     out = out[LOG_COLUMNS]
 
     log_path = DRYRUN_LOG_PATH if args.dry_run else LOG_PATH
+    migrate_log_columns(log_path, OLD_LOG_COLUMNS, NEW_LOG_COLUMNS)
     if not args.dry_run:
         check_no_duplicate(out)
     append_log(out, log_path)

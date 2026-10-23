@@ -1,0 +1,42 @@
+
+##############################################################################
+#  หุ้น: KBANK.BK  ->  ทำนาย 2026-10-07
+##############################################################################
+[live] ข้อมูลล่าสุด (data_cutoff) = 2026-10-06  (2458 แถวใช้เทรนได้)
+    fold 1/5 (2017-09-04~2019-06-24, n=441): ANN (MLP)=0.488, LightGBM=0.474, Logistic Regression=0.492
+    fold 2/5 (2019-06-25~2021-04-19, n=441): ANN (MLP)=0.490, LightGBM=0.476, Logistic Regression=0.492
+    fold 3/5 (2021-04-20~2023-02-10, n=441): ANN (MLP)=0.460, LightGBM=0.537, Logistic Regression=0.474
+    fold 4/5 (2023-02-13~2024-12-03, n=441): ANN (MLP)=0.458, LightGBM=0.494, Logistic Regression=0.469
+    fold 5/5 (2024-12-04~2026-10-01, n=441): ANN (MLP)=0.492, LightGBM=0.501, Logistic Regression=0.517
+    walk-forward OOF (n=2205): ANN (MLP)=0.4776, LightGBM=0.4966, Logistic Regression=0.4889
+    parity ของวันนี้ (2026-10-06) = คู่
+    ANN (MLP)            P(พลิก parity พรุ่งนี้)=0.4500 -> ทำนาย 2026-10-07: parity = คู่
+    LightGBM             P(พลิก parity พรุ่งนี้)=0.5001 -> ทำนาย 2026-10-07: parity = คี่
+    Logistic Regression  P(พลิก parity พรุ่งนี้)=0.5002 -> ทำนาย 2026-10-07: parity = คี่
+    Baseline: Persistence ไม่พลิก -> ทำนาย 2026-10-07: parity = คู่
+
+##############################################################################
+#  หุ้น: ADVANC.BK  ->  ทำนาย 2026-10-07
+##############################################################################
+[live] ข้อมูลล่าสุด (data_cutoff) = 2026-10-06  (2458 แถวใช้เทรนได้)
+    fold 1/5 (2017-09-04~2019-06-24, n=441): ANN (MLP)=0.494, LightGBM=0.506, Logistic Regression=0.481
+    fold 2/5 (2019-06-25~2021-04-19, n=441): ANN (MLP)=0.490, LightGBM=0.488, Logistic Regression=0.519
+    fold 3/5 (2021-04-20~2023-02-10, n=441): ANN (MLP)=0.528, LightGBM=0.497, Logistic Regression=0.535
+    fold 4/5 (2023-02-13~2024-12-03, n=441): ANN (MLP)=0.503, LightGBM=0.524, Logistic Regression=0.535
+    fold 5/5 (2024-12-04~2026-10-01, n=441): ANN (MLP)=0.528, LightGBM=0.472, Logistic Regression=0.526
+    walk-forward OOF (n=2205): ANN (MLP)=0.5088, LightGBM=0.4971, Logistic Regression=0.5193
+    parity ของวันนี้ (2026-10-06) = คี่
+    ANN (MLP)            P(พลิก parity พรุ่งนี้)=0.5827 -> ทำนาย 2026-10-07: parity = คู่
+    LightGBM             P(พลิก parity พรุ่งนี้)=0.5621 -> ทำนาย 2026-10-07: parity = คู่
+    Logistic Regression  P(พลิก parity พรุ่งนี้)=0.6212 -> ทำนาย 2026-10-07: parity = คู่
+    Baseline: Persistence ไม่พลิก -> ทำนาย 2026-10-07: parity = คี่
+[backfill] เขียน 8 แถว -> C:\StudyUniversity\CN340\forLog\now\backfill\results_floor\results\task_a_next_day.csv
+   ticker target_date                 model predicted_label
+ KBANK.BK  2026-10-07             ANN (MLP)             คู่
+ KBANK.BK  2026-10-07              LightGBM             คี่
+ KBANK.BK  2026-10-07   Logistic Regression             คี่
+ KBANK.BK  2026-10-07 Baseline: Persistence             คู่
+ADVANC.BK  2026-10-07             ANN (MLP)             คู่
+ADVANC.BK  2026-10-07              LightGBM             คู่
+ADVANC.BK  2026-10-07   Logistic Regression             คู่
+ADVANC.BK  2026-10-07 Baseline: Persistence             คี่

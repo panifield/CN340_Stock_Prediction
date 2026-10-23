@@ -42,6 +42,7 @@ from targets import build_targets
 from models import get_classifiers
 from main import _prepare, _walk_forward_eval, _reconstruct_parity
 import verified_daily
+from log_schema import migrate_log_columns
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "results"
@@ -51,11 +52,16 @@ BANGKOK = timezone(timedelta(hours=7))
 
 KEY = ["ticker", "target_date", "model"]   # ต้องมี model ด้วย เพราะตอนนี้ทำนาย 3 โมเดล/หุ้น (2026-09-30)
 BASELINE_MODEL = "Baseline: Persistence"   # ชื่อเดียวกับตารางผลของ main.py
-LOG_COLUMNS = [
+OLD_LOG_COLUMNS = [
     "generated_at", "ticker", "target_date", "data_cutoff", "train_rows",
     "model", "prev_parity", "predicted_flip_proba", "predicted_parity",
     "predicted_label", "code_commit", "worktree_dirty", "is_dry_run",
 ]
+# label_rule (2026-10-24): "floor" = prev_parity/predicted_parity ใช้ rounding.parity_label
+# แถวก่อนหน้านี้ว่าง = กฎปัดเดิม (.50 ปัดขึ้น) -- log_schema.migrate_log_columns เติมให้
+NEW_LOG_COLUMNS = ["label_rule"]
+LOG_COLUMNS = OLD_LOG_COLUMNS + NEW_LOG_COLUMNS
+LABEL_RULE = "floor"
 
 
 def get_code_commit(cwd=BASE_DIR):
@@ -187,6 +193,7 @@ def predict_one_ticker(ticker, target_date, verbose=True):
             "predicted_flip_proba": round(float(flip_proba[0]), 6),
             "predicted_parity": float(parity_pred[0]),
             "predicted_label": label,
+            "label_rule": LABEL_RULE,
         })
 
     # baseline เป็น "โมเดล" แถวที่ 4: ทายว่าไม่พลิก (คู่/คี่เหมือนวันนี้) -- ทั้ง test set
@@ -205,6 +212,7 @@ def predict_one_ticker(ticker, target_date, verbose=True):
         "predicted_flip_proba": 0.0,
         "predicted_parity": prev_parity,
         "predicted_label": label,
+        "label_rule": LABEL_RULE,
     })
     return rows
 
@@ -310,6 +318,7 @@ def main():
     out = out[LOG_COLUMNS]
 
     log_path = DRYRUN_LOG_PATH if args.dry_run else LOG_PATH
+    migrate_log_columns(log_path, OLD_LOG_COLUMNS, NEW_LOG_COLUMNS)
     if not args.dry_run:
         check_no_duplicate(out)
     append_log(out, log_path)

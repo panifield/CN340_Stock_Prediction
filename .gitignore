@@ -23,3 +23,8 @@ backfill/leak_test/*/
 backfill/*.log
 backfill/rolling_backtest/*.log
 backfill/rolling_backtest/status.txt
+
+# ข้อมูล Settrade (ข้อมูลของ broker) เก็บในเครื่องเท่านั้น ไม่อยู่ใน repo -- ดู README.md
+task_a2/data/settrade_log/
+task_a2/data/*_1m_atc_check.csv
+task_a2/results_floor/settrade/*_settrade_features.csv

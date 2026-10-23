@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from tick_utils import dev_cutoff, month_end_flag, tick_size, to_int_baht
+from tick_utils import dev_cutoff, month_end_flag, tick_size, floor_baht, parity_label
 
 warnings.filterwarnings("ignore")
 SEED = 42
@@ -60,7 +60,7 @@ def digit_analysis(close: pd.Series, label: str = "") -> dict:
       เจอ     -> ได้ feature ใหม่ที่มีทฤษฎีรองรับ
       ไม่เจอ  -> ได้ประโยคในรายงานว่าทดสอบสมมติฐานนี้แล้ว
     """
-    ip = to_int_baht(close).astype(int)
+    ip = floor_baht(close).astype(int)
     digit = (ip % 10).to_numpy()
     n = len(digit)
 
@@ -125,8 +125,7 @@ def build_features(df: pd.DataFrame, use_open: bool = False) -> pd.DataFrame:
     tick = tick_size(close)
     n_tick = (close / tick).round().astype(int)
     dtick = n_tick.diff()
-    ip = to_int_baht(close).astype(int)
-    parity = ip % 2
+    parity = parity_label(close)
 
     f = pd.DataFrame(index=df.index)
     f["n_mod2"] = n_tick % 2
@@ -160,7 +159,7 @@ def build_features(df: pd.DataFrame, use_open: bool = False) -> pd.DataFrame:
         op_n = (op / op_tick).round().astype(int)
         # ไม่ shift - ข้อมูลของวัน t เอง
         out["open_n_mod2"] = op_n % 2
-        out["open_parity"] = to_int_baht(op).astype(int) % 2
+        out["open_parity"] = parity_label(op)
         out["open_satang"] = ((op * 100).round().astype(int) % 100)
         out["gap_ticks"] = (op - close.shift(1)) / op_tick
 

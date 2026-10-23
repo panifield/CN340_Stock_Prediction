@@ -1,0 +1,57 @@
+generated_at,ticker,target_date,bar_1600_time,train_rows,model,price_1600,parity_1600,predicted_flip_proba,predicted_parity,predicted_label,code_commit,worktree_dirty,is_dry_run,label_rule,tick_1600,h1_status,h1_predicted_parity,is_backfill,backfill_reason
+2026-10-24T01:17:29+07:00,KBANK.BK,2026-09-28,15:00,712,ANN (MLP),252.0,0.0,0.379461,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:29+07:00,KBANK.BK,2026-09-28,15:00,712,LightGBM,252.0,0.0,0.265026,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:29+07:00,KBANK.BK,2026-09-28,15:00,712,Logistic Regression,252.0,0.0,0.459795,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:29+07:00,KBANK.BK,2026-09-28,15:00,712,Baseline: Persistence-1600,252.0,0.0,0.0,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:29+07:00,ADVANC.BK,2026-09-28,15:00,712,ANN (MLP),348.0,0.0,0.627781,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:29+07:00,ADVANC.BK,2026-09-28,15:00,712,LightGBM,348.0,0.0,0.514796,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:29+07:00,ADVANC.BK,2026-09-28,15:00,712,Logistic Regression,348.0,0.0,0.397738,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:29+07:00,ADVANC.BK,2026-09-28,15:00,712,Baseline: Persistence-1600,348.0,0.0,0.0,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:47+07:00,KBANK.BK,2026-09-29,15:00,713,ANN (MLP),244.0,0.0,0.918806,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:47+07:00,KBANK.BK,2026-09-29,15:00,713,LightGBM,244.0,0.0,0.448172,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:47+07:00,KBANK.BK,2026-09-29,15:00,713,Logistic Regression,244.0,0.0,0.548698,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:47+07:00,KBANK.BK,2026-09-29,15:00,713,Baseline: Persistence-1600,244.0,0.0,0.0,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:47+07:00,ADVANC.BK,2026-09-29,15:00,713,ANN (MLP),349.0,1.0,0.473895,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:47+07:00,ADVANC.BK,2026-09-29,15:00,713,LightGBM,349.0,1.0,0.620947,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:47+07:00,ADVANC.BK,2026-09-29,15:00,713,Logistic Regression,349.0,1.0,0.481129,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:17:47+07:00,ADVANC.BK,2026-09-29,15:00,713,Baseline: Persistence-1600,349.0,1.0,0.0,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:04+07:00,KBANK.BK,2026-09-30,15:00,714,ANN (MLP),233.0,1.0,0.673391,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,partial_models
+2026-10-24T01:18:04+07:00,KBANK.BK,2026-09-30,15:00,714,LightGBM,233.0,1.0,0.558864,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,partial_models
+2026-10-24T01:18:04+07:00,KBANK.BK,2026-09-30,15:00,714,Logistic Regression,233.0,1.0,0.614355,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,partial_models
+2026-10-24T01:18:04+07:00,KBANK.BK,2026-09-30,15:00,714,Baseline: Persistence-1600,233.0,1.0,0.0,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,partial_models
+2026-10-24T01:18:04+07:00,ADVANC.BK,2026-09-30,15:00,714,ANN (MLP),344.0,0.0,0.20759,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,partial_models
+2026-10-24T01:18:04+07:00,ADVANC.BK,2026-09-30,15:00,714,LightGBM,344.0,0.0,0.544085,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,partial_models
+2026-10-24T01:18:04+07:00,ADVANC.BK,2026-09-30,15:00,714,Logistic Regression,344.0,0.0,0.463244,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,partial_models
+2026-10-24T01:18:04+07:00,ADVANC.BK,2026-09-30,15:00,714,Baseline: Persistence-1600,344.0,0.0,0.0,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,partial_models
+2026-10-24T01:18:16+07:00,KBANK.BK,2026-10-07,15:00,719,ANN (MLP),235.0,1.0,0.293284,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:16+07:00,KBANK.BK,2026-10-07,15:00,719,LightGBM,235.0,1.0,0.421572,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:16+07:00,KBANK.BK,2026-10-07,15:00,719,Logistic Regression,235.0,1.0,0.397922,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:16+07:00,KBANK.BK,2026-10-07,15:00,719,Baseline: Persistence-1600,235.0,1.0,0.0,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:16+07:00,ADVANC.BK,2026-10-07,15:00,719,ANN (MLP),338.0,0.0,0.447383,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:16+07:00,ADVANC.BK,2026-10-07,15:00,719,LightGBM,338.0,0.0,0.515516,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:16+07:00,ADVANC.BK,2026-10-07,15:00,719,Logistic Regression,338.0,0.0,0.441806,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:16+07:00,ADVANC.BK,2026-10-07,15:00,719,Baseline: Persistence-1600,338.0,0.0,0.0,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:29+07:00,KBANK.BK,2026-10-08,15:00,720,ANN (MLP),231.0,1.0,0.297564,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:29+07:00,KBANK.BK,2026-10-08,15:00,720,LightGBM,231.0,1.0,0.418704,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:29+07:00,KBANK.BK,2026-10-08,15:00,720,Logistic Regression,231.0,1.0,0.433449,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:29+07:00,KBANK.BK,2026-10-08,15:00,720,Baseline: Persistence-1600,231.0,1.0,0.0,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:29+07:00,ADVANC.BK,2026-10-08,15:00,720,ANN (MLP),334.0,0.0,0.378776,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:29+07:00,ADVANC.BK,2026-10-08,15:00,720,LightGBM,334.0,0.0,0.617635,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:29+07:00,ADVANC.BK,2026-10-08,15:00,720,Logistic Regression,334.0,0.0,0.415352,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:29+07:00,ADVANC.BK,2026-10-08,15:00,720,Baseline: Persistence-1600,334.0,0.0,0.0,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:41+07:00,KBANK.BK,2026-10-09,15:00,721,ANN (MLP),227.0,1.0,0.890569,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:41+07:00,KBANK.BK,2026-10-09,15:00,721,LightGBM,227.0,1.0,0.555847,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:41+07:00,KBANK.BK,2026-10-09,15:00,721,Logistic Regression,227.0,1.0,0.598441,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:41+07:00,KBANK.BK,2026-10-09,15:00,721,Baseline: Persistence-1600,227.0,1.0,0.0,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:41+07:00,ADVANC.BK,2026-10-09,15:00,721,ANN (MLP),333.0,1.0,0.393281,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:41+07:00,ADVANC.BK,2026-10-09,15:00,721,LightGBM,333.0,1.0,0.604789,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:41+07:00,ADVANC.BK,2026-10-09,15:00,721,Logistic Regression,333.0,1.0,0.531223,0.0,คู่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:41+07:00,ADVANC.BK,2026-10-09,15:00,721,Baseline: Persistence-1600,333.0,1.0,0.0,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:52+07:00,KBANK.BK,2026-10-21,15:00,725,ANN (MLP),239.0,1.0,0.150609,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:52+07:00,KBANK.BK,2026-10-21,15:00,725,LightGBM,239.0,1.0,0.463964,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:52+07:00,KBANK.BK,2026-10-21,15:00,725,Logistic Regression,239.0,1.0,0.406752,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:52+07:00,KBANK.BK,2026-10-21,15:00,725,Baseline: Persistence-1600,239.0,1.0,0.0,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:52+07:00,ADVANC.BK,2026-10-21,15:00,725,ANN (MLP),333.0,1.0,0.473847,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:52+07:00,ADVANC.BK,2026-10-21,15:00,725,LightGBM,333.0,1.0,0.429296,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:52+07:00,ADVANC.BK,2026-10-21,15:00,725,Logistic Regression,333.0,1.0,0.418042,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing
+2026-10-24T01:18:52+07:00,ADVANC.BK,2026-10-21,15:00,725,Baseline: Persistence-1600,333.0,1.0,0.0,1.0,คี่,c87a7f26a2c346f128714f41dbc402172042b218,True,False,floor,1.0,abstain,,True,missing

@@ -23,7 +23,7 @@ import pandas as pd
 
 import sys
 sys.path.insert(0, os.path.join("..", "task_a"))
-from rounding import to_int_baht, parity, tick_size  # noqa: E402
+from rounding import parity_label, tick_size  # noqa: E402
 
 TICKERS = {"KBANK.BK": "KBANK_BK", "ADVANC.BK": "ADVANC_BK"}
 DAILY_CACHE = os.path.join("..", "task_a", "data_cache")
@@ -135,8 +135,8 @@ for ticker in TICKERS:
     p1600_c = p1600.loc[idx]
     dclose_c = dclose.loc[idx]
 
-    parity_1600 = parity(to_int_baht(p1600_c)).values
-    parity_close = parity(to_int_baht(dclose_c)).values
+    parity_1600 = parity_label(p1600_c).values
+    parity_close = parity_label(dclose_c).values
     persist_acc = float(np.mean(parity_1600 == parity_close))
 
     tick = tick_size(dclose_c).values

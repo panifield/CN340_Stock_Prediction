@@ -1,0 +1,5 @@
+﻿,Accuracy,Precision,Recall,F1,ROC-AUC,Pred_1_Rate
+Baseline: Majority,0.5357,0.5,0.5231,0.5113,,0.4857
+Baseline: Persistence-1600,0.5357,0.5,0.5231,0.5113,,0.4857
+Baseline: Rule,0.5357,0.5,0.5231,0.5113,,0.4857
+LightGBM,0.45,0.4091,0.4154,0.4122,0.4402,0.4714

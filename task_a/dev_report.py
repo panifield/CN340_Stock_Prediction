@@ -34,7 +34,8 @@ import pandas as pd
 
 from data_adapter import load_investing_csv
 from tick_utils import (
-    DEV_RATIO, dev_cutoff, tick_size, to_int_baht, parity, resolve_data_path,
+    DEV_RATIO, dev_cutoff, tick_size, parity_label, resolve_data_path,
+    LABEL_MODES, int_baht_by_mode, parity_by_mode,
 )
 
 WARMUP = 21          # ปรับได้ด้วย --warmup (ตั้ง 0 ให้ตรงกับ main.py ที่ใช้ imputer)
@@ -59,8 +60,8 @@ def prepare_dev(df: pd.DataFrame, mode: str = "gt",
 
     close = dev["Close"]
     dev["tick"] = tick_size(close)
-    dev["int_price"] = to_int_baht(close, mode=mode)
-    dev["y"] = parity(dev["int_price"])
+    dev["int_price"] = int_baht_by_mode(close, mode)
+    dev["y"] = parity_by_mode(close, mode)
     dev["prev_y"] = dev["y"].shift(1)
     dev["flip"] = (dev["y"] != dev["prev_y"]).astype(float)
     dev.loc[dev.index[0], "flip"] = np.nan
@@ -150,9 +151,9 @@ def table_digit_clustering(dev: pd.DataFrame, name: str):
 
     digits = np.rint(sub["Close"]).astype(int) % 10
     dist = (digits.value_counts(normalize=True).sort_index() * 100).round(2)
-    even = float((np.rint(sub["Close"]).astype(int) % 2 == 0).mean())
-    lo, hi = _wilson(int((np.rint(sub["Close"]).astype(int) % 2 == 0).sum()),
-                     len(sub))
+    is_even = parity_label(sub["Close"]) == 0
+    even = float(is_even.mean())
+    lo, hi = _wilson(int(is_even.sum()), len(sub))
 
     return {
         "ticker": name,
@@ -176,15 +177,15 @@ def table_rounding_sensitivity(df: pd.DataFrame, name: str,
     ตารางนี้ทำบน dev เพื่อประกอบการตัดสินใจ ไม่ใช่เพื่อเลือกอันที่ได้ผลดีกว่า
     """
     rows = []
-    for mode in ["gt", "gte"]:
+    for mode in LABEL_MODES:
         dev = prepare_dev(df, mode=mode, warmup=warmup)
         base = table_baselines(dev, name)
         satang = (np.rint(dev["Close"] * 100).astype(int) % 100)
         rows.append({
             "ticker": name,
             "round_mode": mode,
-            "rule": "เศษ > 0.50 ปัดขึ้น" if mode == "gt"
-                    else "เศษ >= 0.50 ปัดขึ้น",
+            "rule": {"floor": "floor (ส่วนจำนวนเต็มบาท)", "gt": "เศษ > 0.50 ปัดขึ้น",
+                     "gte": "เศษ >= 0.50 ปัดขึ้น"}[mode],
             "pct_close_at_.50": float((satang == 50).mean()) * 100,
             "even_pct": base["even_pct"],
             "majority_baseline": base["majority_baseline"],
@@ -267,7 +268,7 @@ if __name__ == "__main__":
     ap.add_argument("--files", nargs="*",
                     default=["KBANK_10Y_Cleaned.csv", "ADVANC_10Y_Cleaned.csv"])
     ap.add_argument("--outdir", default="results/dev")
-    ap.add_argument("--mode", default="gt", choices=["gt", "gte"],
+    ap.add_argument("--mode", default="floor", choices=LABEL_MODES,
                     help="กฎการปัดหลักที่ใช้ในตารางอื่น")
     ap.add_argument("--date-format", default="%m/%d/%Y")
     ap.add_argument("--warmup", type=int, default=WARMUP,

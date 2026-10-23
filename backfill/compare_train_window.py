@@ -19,7 +19,7 @@ import common  # noqa: E402
 from common import ROOT, TASKS, BACKFILL_DIR  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "task_a"))
-from rounding import to_int_baht, parity  # noqa: E402
+from rounding import parity_label  # noqa: E402
 
 KEY = ["ticker", "target_date", "model"]
 CLS = {  # task -> (pred col, proba col)
@@ -67,7 +67,7 @@ def main(exp):
         if task in CLS:
             pc, qc = CLS[task]
             if task in ("task_a", "task_a2"):
-                actual = parity(to_int_baht(pd.Series(close))).to_numpy()
+                actual = parity_label(pd.Series(close)).to_numpy()
             elif task == "task_c":
                 actual = (close > prev).astype(float)
             else:

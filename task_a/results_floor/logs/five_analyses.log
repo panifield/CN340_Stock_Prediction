@@ -1,0 +1,175 @@
+
+[1] ROC + AUC
+  [data] A KBANK.BK label=floor: n=2431 pool=2066 holdout=365 (10s)
+  [data] A ADVANC.BK label=floor: n=2431 pool=2066 holdout=365 (10s)
+  [data] A2 KBANK.BK label=floor: n=720 pool=576 holdout=144 (7s)
+  [data] A2 ADVANC.BK label=floor: n=720 pool=576 holdout=144 (6s)
+task    ticker                 model            score price_range    n    AUC  ci_low  ci_high
+   A  KBANK.BK             ANN (MLP) P(odd) vs parity         all 1815 0.4851  0.4583   0.5122
+   A  KBANK.BK             ANN (MLP)  P(flip) vs flip         all 1815 0.4854  0.4590   0.5134
+   A  KBANK.BK              LightGBM P(odd) vs parity         all 1815 0.4890  0.4624   0.5169
+   A  KBANK.BK              LightGBM  P(flip) vs flip         all 1815 0.4884  0.4620   0.5160
+   A  KBANK.BK   Logistic Regression P(odd) vs parity         all 1815 0.4851  0.4580   0.5151
+   A  KBANK.BK   Logistic Regression  P(flip) vs flip         all 1815 0.4842  0.4564   0.5135
+   A  KBANK.BK Baseline: Persistence P(odd) vs parity         all 1815 0.5008  0.4801   0.5246
+   A ADVANC.BK             ANN (MLP) P(odd) vs parity         all 1815 0.5009  0.4732   0.5273
+   A ADVANC.BK             ANN (MLP)  P(flip) vs flip         all 1815 0.4987  0.4713   0.5251
+   A ADVANC.BK              LightGBM P(odd) vs parity         all 1815 0.5111  0.4862   0.5374
+   A ADVANC.BK              LightGBM  P(flip) vs flip         all 1815 0.5103  0.4838   0.5353
+   A ADVANC.BK   Logistic Regression P(odd) vs parity         all 1815 0.5033  0.4772   0.5301
+   A ADVANC.BK   Logistic Regression  P(flip) vs flip         all 1815 0.5047  0.4783   0.5331
+   A ADVANC.BK Baseline: Persistence P(odd) vs parity         all 1815 0.5086  0.4854   0.5309
+  A2  KBANK.BK             ANN (MLP) P(odd) vs parity         all  425 0.5183  0.4667   0.5703
+  A2  KBANK.BK             ANN (MLP)  P(flip) vs flip         all  425 0.4856  0.4305   0.5428
+  A2  KBANK.BK              LightGBM P(odd) vs parity         all  425 0.6036  0.5482   0.6592
+  A2  KBANK.BK              LightGBM  P(flip) vs flip         all  425 0.4878  0.4339   0.5471
+  A2  KBANK.BK   Logistic Regression P(odd) vs parity         all  425 0.5339  0.4776   0.5907
+  A2  KBANK.BK   Logistic Regression  P(flip) vs flip         all  425 0.4943  0.4374   0.5484
+  A2  KBANK.BK Baseline: Persistence P(odd) vs parity         all  425 0.6242  0.5808   0.6696
+  A2 ADVANC.BK             ANN (MLP) P(odd) vs parity         all  425 0.4725  0.4205   0.5275
+  A2 ADVANC.BK             ANN (MLP)  P(flip) vs flip         all  425 0.4782  0.4264   0.5304
+  A2 ADVANC.BK              LightGBM P(odd) vs parity         all  425 0.5196  0.4654   0.5781
+  A2 ADVANC.BK              LightGBM  P(flip) vs flip         all  425 0.5261  0.4785   0.5851
+  A2 ADVANC.BK   Logistic Regression P(odd) vs parity         all  425 0.4708  0.4182   0.5279
+  A2 ADVANC.BK   Logistic Regression  P(flip) vs flip         all  425 0.4713  0.4190   0.5251
+  A2 ADVANC.BK Baseline: Persistence P(odd) vs parity         all  425 0.5290  0.4799   0.5808
+
+[2] Threshold sweep
+task    ticker               model   score  oof_acc_at_0.5  chosen_threshold  oof_acc_at_chosen  persistence_oof  holdout_acc_at_0.5  holdout_acc_at_chosen  persistence_holdout  n_holdout
+   A  KBANK.BK           ANN (MLP)  P(odd)          0.4865              0.40             0.5118           0.5014              0.5014                 0.4685               0.4986        365
+   A  KBANK.BK           ANN (MLP) P(flip)          0.4865              0.40             0.4992           0.5014              0.5014                 0.5096               0.4986        365
+   A  KBANK.BK            LightGBM  P(odd)          0.4964              0.35             0.5190           0.5014              0.5014                 0.4712               0.4986        365
+   A  KBANK.BK            LightGBM P(flip)          0.4964              0.65             0.5025           0.5014              0.5014                 0.4986               0.4986        365
+   A  KBANK.BK Logistic Regression  P(odd)          0.4804              0.35             0.5157           0.5014              0.5288                 0.4658               0.4986        365
+   A  KBANK.BK Logistic Regression P(flip)          0.4804              0.30             0.4992           0.5014              0.5288                 0.5014               0.4986        365
+   A ADVANC.BK           ANN (MLP)  P(odd)          0.5069              0.70             0.5146           0.5091              0.5288                 0.5397               0.5041        365
+   A ADVANC.BK           ANN (MLP) P(flip)          0.5069              0.60             0.5157           0.5091              0.5288                 0.4932               0.5041        365
+   A ADVANC.BK            LightGBM  P(odd)          0.5129              0.65             0.5174           0.5091              0.4849                 0.5397               0.5041        365
+   A ADVANC.BK            LightGBM P(flip)          0.5129              0.60             0.5152           0.5091              0.4849                 0.4959               0.5041        365
+   A ADVANC.BK Logistic Regression  P(odd)          0.5091              0.55             0.5207           0.5091              0.5479                 0.5425               0.5041        365
+   A ADVANC.BK Logistic Regression P(flip)          0.5091              0.55             0.5185           0.5091              0.5479                 0.4849               0.5041        365
+  A2  KBANK.BK           ANN (MLP)  P(odd)          0.5435              0.50             0.5435           0.6259              0.5208                 0.5208               0.5417        144
+  A2  KBANK.BK           ANN (MLP) P(flip)          0.5435              0.70             0.5553           0.6259              0.5208                 0.5347               0.5417        144
+  A2  KBANK.BK            LightGBM  P(odd)          0.5788              0.60             0.5882           0.6259              0.5486                 0.5139               0.5417        144
+  A2  KBANK.BK            LightGBM P(flip)          0.5788              0.65             0.6259           0.6259              0.5486                 0.5417               0.5417        144
+  A2  KBANK.BK Logistic Regression  P(odd)          0.5271              0.60             0.5388           0.6259              0.5069                 0.5000               0.5417        144
+  A2  KBANK.BK Logistic Regression P(flip)          0.5271              0.70             0.5835           0.6259              0.5069                 0.5486               0.5417        144
+  A2 ADVANC.BK           ANN (MLP)  P(odd)          0.5153              0.50             0.5153           0.5294              0.4375                 0.4375               0.5139        144
+  A2 ADVANC.BK           ANN (MLP) P(flip)          0.5153              0.60             0.5176           0.5294              0.4375                 0.4792               0.5139        144
+  A2 ADVANC.BK            LightGBM  P(odd)          0.5106              0.65             0.5271           0.5294              0.5139                 0.5278               0.5139        144
+  A2 ADVANC.BK            LightGBM P(flip)          0.5106              0.70             0.5294           0.5294              0.5139                 0.5139               0.5139        144
+  A2 ADVANC.BK Logistic Regression  P(odd)          0.4800              0.55             0.5035           0.5294              0.5417                 0.5208               0.5139        144
+  A2 ADVANC.BK Logistic Regression P(flip)          0.4800              0.65             0.5224           0.5294              0.5417                 0.5347               0.5139        144
+
+[3] Label: round vs floor vs x2
+  [data] A KBANK.BK label=round: n=2431 pool=2066 holdout=365 (8s)
+  [data] A KBANK.BK label=x2: n=2431 pool=2066 holdout=365 (8s)
+  [data] A ADVANC.BK label=round: n=2431 pool=2066 holdout=365 (9s)
+  [data] A ADVANC.BK label=x2: n=2431 pool=2066 holdout=365 (8s)
+  [data] A2 KBANK.BK label=round: n=720 pool=576 holdout=144 (6s)
+  [data] A2 KBANK.BK label=x2: n=720 pool=576 holdout=144 (6s)
+  [data] A2 ADVANC.BK label=round: n=720 pool=576 holdout=144 (6s)
+  [data] A2 ADVANC.BK label=x2: n=720 pool=576 holdout=144 (6s)
+task    ticker label  n_oof  flip_rate_oof  persistence  ANN (MLP)  LightGBM  Logistic Regression          best_model  best_minus_persistence  mcnemar_p
+   A  KBANK.BK floor   1815         0.4986       0.5014     0.4865    0.4964               0.4804            LightGBM                 -0.0050     0.8014
+   A  KBANK.BK round   1815         0.5113       0.4887     0.4964    0.4887               0.5019 Logistic Regression                  0.0132     0.4988
+   A  KBANK.BK    x2   1815         0.4545       0.5455     0.5554    0.5614               0.5554            LightGBM                  0.0159     0.2826
+   A ADVANC.BK floor   1815         0.4909       0.5091     0.5069    0.5129               0.5091            LightGBM                  0.0038     0.8230
+   A ADVANC.BK round   1815         0.4915       0.5085     0.5229    0.5185               0.5223           ANN (MLP)                  0.0144     0.3447
+   A ADVANC.BK    x2   1815         0.2606       0.7394     0.7405    0.7223               0.7455 Logistic Regression                  0.0061     0.6324
+  A2  KBANK.BK floor    425         0.3741       0.6259     0.5435    0.5788               0.5271            LightGBM                 -0.0471     0.0169
+  A2  KBANK.BK round    425         0.3365       0.6635     0.6235    0.6612               0.6282            LightGBM                 -0.0023     1.0000
+  A2  KBANK.BK    x2    425         0.4988       0.5012     0.5176    0.5106               0.5082           ANN (MLP)                  0.0164     0.6768
+  A2 ADVANC.BK floor    425         0.4706       0.5294     0.5153    0.5106               0.4800           ANN (MLP)                 -0.0141     0.7314
+  A2 ADVANC.BK round    425         0.4706       0.5294     0.4894    0.5082               0.4800            LightGBM                 -0.0212     0.4351
+  A2 ADVANC.BK    x2    425         0.0000       1.0000     1.0000    1.0000               1.0000           ANN (MLP)                  0.0000     1.0000
+task    ticker label        price_range    n  pct_odd  flip_rate  persistence_acc
+   A  KBANK.BK floor   <100 (tick 0.25)  158   0.5190     0.4937           0.5063
+   A  KBANK.BK floor 100-200 (tick 0.5) 1967   0.5135     0.5033           0.4967
+   A  KBANK.BK floor   200-400 (tick 1)  306   0.5033     0.5033           0.4967
+   A  KBANK.BK round   <100 (tick 0.25)  158   0.4873     0.5506           0.4494
+   A  KBANK.BK round 100-200 (tick 0.5) 1967   0.5038     0.5003           0.4997
+   A  KBANK.BK round   200-400 (tick 1)  306   0.4837     0.4837           0.5163
+   A  KBANK.BK    x2   <100 (tick 0.25)  158   0.5253     0.5506           0.4494
+   A  KBANK.BK    x2 100-200 (tick 0.5) 1967   0.4825     0.5033           0.4967
+   A  KBANK.BK    x2   200-400 (tick 1)  306   0.0261     0.0261           0.9739
+   A ADVANC.BK floor 100-200 (tick 0.5) 1154   0.5225     0.4861           0.5139
+   A ADVANC.BK floor   200-400 (tick 1) 1275   0.4533     0.4902           0.5098
+   A ADVANC.BK floor     >=400 (tick 2)    2   0.0000     0.0000           1.0000
+   A ADVANC.BK round 100-200 (tick 0.5) 1154   0.4939     0.4905           0.5095
+   A ADVANC.BK round   200-400 (tick 1) 1275   0.4424     0.4839           0.5161
+   A ADVANC.BK round     >=400 (tick 2)    2   0.0000     0.0000           1.0000
+   A ADVANC.BK    x2 100-200 (tick 0.5) 1154   0.4809     0.4983           0.5017
+   A ADVANC.BK    x2   200-400 (tick 1) 1275   0.0141     0.0141           0.9859
+   A ADVANC.BK    x2     >=400 (tick 2)    2   0.0000     0.0000           1.0000
+  A2  KBANK.BK floor 100-200 (tick 0.5)  635   0.4677     0.3559           0.6441
+  A2  KBANK.BK floor   200-400 (tick 1)   85   0.5176     0.5176           0.4824
+  A2  KBANK.BK round 100-200 (tick 0.5)  635   0.4976     0.3354           0.6646
+  A2  KBANK.BK round   200-400 (tick 1)   85   0.5176     0.5176           0.4824
+  A2  KBANK.BK    x2 100-200 (tick 0.5)  635   0.4929     0.4898           0.5102
+  A2  KBANK.BK    x2   200-400 (tick 1)   85   0.0000     0.0000           1.0000
+  A2 ADVANC.BK floor 100-200 (tick 0.5)   10   0.8000     0.5000           0.5000
+  A2 ADVANC.BK floor   200-400 (tick 1)  708   0.4760     0.4732           0.5268
+  A2 ADVANC.BK floor     >=400 (tick 2)    2   0.0000     0.0000           1.0000
+  A2 ADVANC.BK round 100-200 (tick 0.5)   10   0.4000     0.3000           0.7000
+  A2 ADVANC.BK round   200-400 (tick 1)  708   0.4760     0.4732           0.5268
+  A2 ADVANC.BK round     >=400 (tick 2)    2   0.0000     0.0000           1.0000
+  A2 ADVANC.BK    x2 100-200 (tick 0.5)   10   0.6000     0.6000           0.4000
+  A2 ADVANC.BK    x2   200-400 (tick 1)  708   0.0000     0.0000           1.0000
+  A2 ADVANC.BK    x2     >=400 (tick 2)    2   0.0000     0.0000           1.0000
+
+[4] Pretrain (2016-2023) -> fine-tune (2024) -> test (2025-01 .. 2026-08)
+  KBANK.BK: pretrain n=1787 (2016-08-30..2023-12-28) fine-tune n=244 test n=400 (2025-01-02..2026-08-28)
+  ADVANC.BK: pretrain n=1787 (2016-08-30..2023-12-28) fine-tune n=244 test n=400 (2025-01-02..2026-08-28)
+   ticker                                strategy  n_test  accuracy  ci_low  ci_high  vs_persistence  mcnemar_p_vs_persistence  pred_flip_rate
+ KBANK.BK                   Baseline: Persistence     400    0.4850     NaN      NaN             NaN                       NaN             NaN
+ KBANK.BK    LightGBM | pretrain only (2016-2023)     400    0.4850  0.4364   0.5339          0.0000                    1.0000          0.3700
+ KBANK.BK  LightGBM | fine-tune +50 trees on 2024     400    0.5250  0.4761   0.5735          0.0400                    0.3247          0.5800
+ KBANK.BK LightGBM | fine-tune +100 trees on 2024     400    0.5225  0.4736   0.5710          0.0375                    0.3898          0.6625
+ KBANK.BK LightGBM | fine-tune +200 trees on 2024     400    0.5125  0.4636   0.5611          0.0275                    0.5537          0.7125
+ KBANK.BK           LightGBM | recent only (2024)     400    0.5200  0.4711   0.5685          0.0350                    0.4702          0.8100
+ KBANK.BK           LightGBM | pooled (2016-2024)     400    0.4775  0.4290   0.5264         -0.0075                    0.8732          0.3925
+ KBANK.BK         ANN | pretrain only (2016-2023)     400    0.4850  0.4364   0.5339          0.0000                    1.0000          0.3950
+ KBANK.BK      ANN | fine-tune +50 epochs on 2024     400    0.4925  0.4438   0.5413          0.0075                    0.8763          0.4125
+ KBANK.BK                ANN | recent only (2024)     400    0.5075  0.4587   0.5562          0.0225                    0.6543          0.7975
+ KBANK.BK                ANN | pooled (2016-2024)     400    0.4925  0.4438   0.5413          0.0075                    0.8884          0.5075
+ADVANC.BK                   Baseline: Persistence     400    0.4975     NaN      NaN             NaN                       NaN             NaN
+ADVANC.BK    LightGBM | pretrain only (2016-2023)     400    0.4725  0.4241   0.5215         -0.0250                    0.4565          0.3650
+ADVANC.BK  LightGBM | fine-tune +50 trees on 2024     400    0.4625  0.4142   0.5115         -0.0350                    0.2022          0.2600
+ADVANC.BK LightGBM | fine-tune +100 trees on 2024     400    0.4600  0.4118   0.5090         -0.0375                    0.1505          0.2375
+ADVANC.BK LightGBM | fine-tune +200 trees on 2024     400    0.4700  0.4216   0.5190         -0.0275                    0.2604          0.1975
+ADVANC.BK           LightGBM | recent only (2024)     400    0.4775  0.4290   0.5264         -0.0200                    0.2430          0.0900
+ADVANC.BK           LightGBM | pooled (2016-2024)     400    0.4875  0.4389   0.5364         -0.0100                    0.7971          0.3400
+ADVANC.BK         ANN | pretrain only (2016-2023)     400    0.5150  0.4661   0.5636          0.0175                    0.5793          0.2925
+ADVANC.BK      ANN | fine-tune +50 epochs on 2024     400    0.4925  0.4438   0.5413         -0.0050                    0.9409          0.4550
+ADVANC.BK                ANN | recent only (2024)     400    0.5050  0.4562   0.5537          0.0075                    0.8778          0.4225
+ADVANC.BK                ANN | pooled (2016-2024)     400    0.5000  0.4512   0.5488          0.0025                    1.0000          0.2775
+
+[5] Optuna 60 trials ต่อชุด (เลือกบน dev pool OOF เท่านั้น)
+  A KBANK.BK: best OOF=0.5185 vs persistence 0.5014 | holdout 0.5041 vs 0.4986 p=0.942 (56s)
+  A ADVANC.BK: best OOF=0.5207 vs persistence 0.5091 | holdout 0.5233 vs 0.5041 p=0.489 (72s)
+  A2 KBANK.BK: best OOF=0.6259 vs persistence 0.6259 | holdout 0.5417 vs 0.5417 p=1.000 (21s)
+  A2 ADVANC.BK: best OOF=0.5459 vs persistence 0.5294 | holdout 0.4931 vs 0.5139 p=0.743 (13s)
+                                            0            1                          2                                           3
+task                                        A            A                         A2                                          A2
+ticker                               KBANK.BK    ADVANC.BK                   KBANK.BK                                   ADVANC.BK
+n_trials                                   57           57                         59                                          59
+trials_beating_persistence_oof             26           37                          0                                          15
+persistence_oof                        0.5014       0.5091                     0.6259                                      0.5294
+default_best_model                   LightGBM     LightGBM                   LightGBM                                   ANN (MLP)
+default_best_oof                       0.4964       0.5129                     0.5788                                      0.5153
+best_trial_oof                         0.5185       0.5207                     0.6259                                      0.5459
+best_model                               lgbm          mlp                     logreg                                      logreg
+best_groups                     daily_history  daily_state  intraday_move+daily_state  intraday_state+intraday_move+daily_history
+oof_mcnemar_p                          0.3887       0.4115                        1.0                                      0.5584
+oof_p_bonferroni_x_trials                 1.0          1.0                        1.0                                         1.0
+n_holdout                                 365          365                        144                                         144
+persistence_holdout                    0.4986       0.5041                     0.5417                                      0.5139
+default_best_holdout                   0.5014       0.4849                     0.5486                                      0.4375
+best_trial_holdout                     0.5041       0.5233                     0.5417                                      0.4931
+holdout_ci                        0.453-0.555  0.472-0.574                0.460-0.621                                 0.413-0.574
+holdout_mcnemar_p                      0.9419       0.4887                        1.0                                      0.7428
+holdout_p_bonferroni                      1.0          1.0                        1.0                                         1.0
+passes_bonferroni                       False        False                      False                                       False
+
+เสร็จ (353s) ผลอยู่ที่ C:\StudyUniversity\CN340\forLog\now\task_a\results_floor\five_analyses
