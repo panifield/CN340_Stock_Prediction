@@ -49,6 +49,7 @@ from eval_stats import binom_ci, mcnemar_test  # noqa: E402
 import features as task_a_features  # noqa: E402
 import features_a2  # noqa: E402
 import verified_daily  # noqa: E402
+from preds_dump import dump_preds  # noqa: E402
 
 OUT = Path(os.environ.get("DTICK_OUT") or HERE / "results_floor" / "dtick")
 TICKERS = {"KBANK.BK": "KBANK_BK", "ADVANC.BK": "ADVANC_BK"}
@@ -266,6 +267,12 @@ def main():
         preds_hold.update({f"Flip {n}": FA.parity_pred(f_hold[n].values, base.loc[f_hold.index].values)
                            for n in FA.MODEL_NAMES})
         assert f_oof.index.equals(oof.index) and f_hold.index.equals(hold.index)
+        for split, P, F, pr in (("oof", oof, f_oof, preds_oof), ("holdout", hold, f_hold, preds_hold)):
+            b = base.loc[P.index].values
+            dump_preds(f"dtick_{safe}_{split}", y.loc[P.index], b, pr,
+                       {**{n: P[n].values for n in MODELS},
+                        **{f"Flip {n}": FA.p_odd(F[n].values, b) for n in FA.MODEL_NAMES}},
+                       extra={"price_1600": p.loc[P.index].values})
 
         yo, bo = y.loc[oof.index].values, base.loc[oof.index].values
         yh, bh = y.loc[hold.index].values, base.loc[hold.index].values

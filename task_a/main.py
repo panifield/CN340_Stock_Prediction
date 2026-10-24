@@ -44,6 +44,7 @@ from evaluate import (
 )
 from eval_stats import verdict, full_report, permutation_test
 import rounding
+from preds_dump import dump_preds
 
 
 def _prepare(X, y, extra=None):
@@ -181,7 +182,7 @@ def _walk_forward_eval(X_pool, yflip_pool, extra_, n_splits=5, min_train=250,
     return y_oof, preds_oof, probas_oof
 
 
-def run_task_a(X, targets, verbose=True, dev=False):
+def run_task_a(X, targets, verbose=True, dev=False, dump_name=None):
     print("\n" + "=" * 78)
     print("  งาน A : ทำนายราคาปิดปัดเป็นจำนวนเต็มแล้ว เป็นเลขคู่หรือคี่")
     print("  (เทรนบน y_flip = พลิก parity หรือไม่ แล้ว reconstruct กลับ)")
@@ -208,6 +209,9 @@ def run_task_a(X, targets, verbose=True, dev=False):
                  for name, pred in preds_oof.items()}
     wf_df = results_table(wf_results, sort_by="Accuracy", ascending=False)
     print_table(wf_df, f"งาน A : Walk-forward Out-of-Fold (n={len(y_oof)})")
+    if dump_name:
+        dump_preds(f"A_{dump_name}_oof", y_oof,
+                   extra_.loc[y_oof.index, "prev_parity"].fillna(0), preds_oof, probas_oof)
 
     model_names = ["ANN (MLP)", "LightGBM", "Logistic Regression"]
     best = max(model_names, key=lambda n: wf_results[n]["Accuracy"])
@@ -288,6 +292,9 @@ def run_task_a(X, targets, verbose=True, dev=False):
 
     all_preds_test = {best: parity_test_pred, **base_preds_test}
     probas_test = {best: parity_test_proba} if parity_test_proba is not None else {}
+    if dump_name:
+        dump_preds(f"A_{dump_name}_test", parity_test, prev_parity_test,
+                   all_preds_test, probas_test)
     full_report(parity_test, all_preds_test, probabilities=probas_test,
                baseline_name=best_baseline_test)
 
@@ -329,7 +336,7 @@ def run_one_ticker(ticker, dev=False):
     else:
         diag = run_all_diagnostics(df, targets, X)
 
-    res = run_task_a(X, targets, dev=dev)
+    res = run_task_a(X, targets, dev=dev, dump_name=ticker.replace(".", "_"))
     return {"ticker": ticker, "diag": diag, "a": res}
 
 
