@@ -1,0 +1,61 @@
+﻿task,ticker,split,model,n,acc_rerun,acc_saved,diff_pts,ok
+A,KBANK_BK,dev OOF,ANN (MLP),1815,0.4865,0.4865,0.0,True
+A,KBANK_BK,dev OOF,LightGBM,1815,0.4964,0.4964,0.0,True
+A,KBANK_BK,dev OOF,Logistic Regression,1815,0.4804,0.4804,0.0,True
+A,KBANK_BK,dev OOF,Baseline: Majority,1815,0.5179,0.5179,0.0,True
+A,KBANK_BK,dev OOF,Baseline: Persistence,1815,0.5014,0.5014,-0.0,True
+A,KBANK_BK,dev OOF,Baseline: Markov(1),1815,0.5179,0.5179,0.0,True
+A,KBANK_BK,test,LightGBM,365,0.5014,0.5014,-0.0,True
+A,KBANK_BK,test,Baseline: Majority,365,0.4712,0.4712,0.0,True
+A,KBANK_BK,test,Baseline: Persistence,365,0.4986,0.4986,0.0,True
+A,KBANK_BK,test,Baseline: Markov(1),365,0.4712,0.4712,0.0,True
+A2,KBANK_BK,dev OOF,ANN (MLP),410,0.5171,0.5171,-0.0,True
+A2,KBANK_BK,dev OOF,LightGBM,410,0.5902,0.5902,0.0,True
+A2,KBANK_BK,dev OOF,Logistic Regression,410,0.5293,0.5293,-0.0,True
+A2,KBANK_BK,dev OOF,Baseline: Majority,410,0.6293,0.6293,-0.0,True
+A2,KBANK_BK,dev OOF,Baseline: Persistence-1600,410,0.6293,0.6293,-0.0,True
+A2,KBANK_BK,dev OOF,Baseline: Rule,410,0.6293,0.6293,-0.0,True
+A2,KBANK_BK,test,LightGBM,140,0.5429,0.5429,-0.0,True
+A2,KBANK_BK,test,Baseline: Majority,140,0.55,0.55,0.0,True
+A2,KBANK_BK,test,Baseline: Persistence-1600,140,0.55,0.55,0.0,True
+A2,KBANK_BK,test,Baseline: Rule,140,0.55,0.55,0.0,True
+A2 Δtick,KBANK_BK,dev OOF,Δtick LogReg,425,0.5718,0.5718,-0.0,True
+A2 Δtick,KBANK_BK,dev OOF,Δtick LightGBM,425,0.6188,0.6188,0.0,True
+A2 Δtick,KBANK_BK,dev OOF,Δtick MLP,425,0.5835,0.5835,0.0,True
+A2 Δtick,KBANK_BK,dev OOF,Flip ANN (MLP),425,0.5435,0.5435,0.0,True
+A2 Δtick,KBANK_BK,dev OOF,Flip LightGBM,425,0.5788,0.5788,0.0,True
+A2 Δtick,KBANK_BK,dev OOF,Flip Logistic Regression,425,0.5271,0.5271,-0.0,True
+A2 Δtick,KBANK_BK,dev OOF,Baseline: Persistence-1600,425,0.6259,0.6259,-0.0,True
+A2 Δtick,KBANK_BK,holdout,Δtick LightGBM,144,0.5556,0.5556,-0.0,True
+A2 Δtick,KBANK_BK,holdout,Flip LightGBM,144,0.5486,0.5486,0.0,True
+A2 Δtick,KBANK_BK,holdout,Baseline: Persistence-1600,144,0.5417,0.5417,-0.0,True
+A,ADVANC_BK,dev OOF,ANN (MLP),1815,0.5069,0.5069,-0.0,True
+A,ADVANC_BK,dev OOF,LightGBM,1815,0.5129,0.5129,0.0,True
+A,ADVANC_BK,dev OOF,Logistic Regression,1815,0.5091,0.5091,-0.0,True
+A,ADVANC_BK,dev OOF,Baseline: Majority,1815,0.4876,0.4876,0.0,True
+A,ADVANC_BK,dev OOF,Baseline: Persistence,1815,0.5091,0.5091,-0.0,True
+A,ADVANC_BK,dev OOF,Baseline: Markov(1),1815,0.5025,0.5025,-0.0,True
+A,ADVANC_BK,test,LightGBM,365,0.4849,0.4849,0.0,True
+A,ADVANC_BK,test,Baseline: Majority,365,0.5397,0.5397,0.0,True
+A,ADVANC_BK,test,Baseline: Persistence,365,0.5041,0.5041,0.0,True
+A,ADVANC_BK,test,Baseline: Markov(1),365,0.5041,0.5041,0.0,True
+A2,ADVANC_BK,dev OOF,ANN (MLP),410,0.4951,0.4951,0.0,True
+A2,ADVANC_BK,dev OOF,LightGBM,410,0.4976,0.4976,-0.0,True
+A2,ADVANC_BK,dev OOF,Logistic Regression,410,0.4561,0.4561,-0.0,True
+A2,ADVANC_BK,dev OOF,Baseline: Majority,410,0.5244,0.5244,-0.0,True
+A2,ADVANC_BK,dev OOF,Baseline: Persistence-1600,410,0.5244,0.5244,-0.0,True
+A2,ADVANC_BK,dev OOF,Baseline: Rule,410,0.5244,0.5244,-0.0,True
+A2,ADVANC_BK,test,LightGBM,140,0.45,0.45,0.0,True
+A2,ADVANC_BK,test,Baseline: Majority,140,0.5357,0.5357,0.0,True
+A2,ADVANC_BK,test,Baseline: Persistence-1600,140,0.5357,0.5357,0.0,True
+A2,ADVANC_BK,test,Baseline: Rule,140,0.5357,0.5357,0.0,True
+A2 Δtick,ADVANC_BK,dev OOF,Δtick LogReg,425,0.5318,0.5318,-0.0,True
+A2 Δtick,ADVANC_BK,dev OOF,Δtick LightGBM,425,0.5153,0.5153,-0.0,True
+A2 Δtick,ADVANC_BK,dev OOF,Δtick MLP,425,0.5129,0.5129,0.0,True
+A2 Δtick,ADVANC_BK,dev OOF,Flip ANN (MLP),425,0.5153,0.5153,-0.0,True
+A2 Δtick,ADVANC_BK,dev OOF,Flip LightGBM,425,0.5106,0.5106,-0.0,True
+A2 Δtick,ADVANC_BK,dev OOF,Flip Logistic Regression,425,0.48,0.48,0.0,True
+A2 Δtick,ADVANC_BK,dev OOF,Baseline: Persistence-1600,425,0.5294,0.5294,0.0,True
+A2 Δtick,ADVANC_BK,holdout,Δtick LogReg,144,0.5556,0.5556,-0.0,True
+A2 Δtick,ADVANC_BK,holdout,Flip ANN (MLP),144,0.4375,0.4375,0.0,True
+A2 Δtick,ADVANC_BK,holdout,Baseline: Persistence-1600,144,0.5139,0.5139,-0.0,True

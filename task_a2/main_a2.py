@@ -32,6 +32,7 @@ from evaluate import (  # noqa: E402
     classification_metrics, results_table, print_table, print_confusion,
 )
 from eval_stats import verdict, full_report, binom_ci, binom_test_vs  # noqa: E402
+from preds_dump import dump_preds  # noqa: E402
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
@@ -242,6 +243,8 @@ def run_ticker(ticker, safe, dev=True):
     print("\n  --- Walk-forward CV บน dev pool (ไม่แตะ test) ---")
     y_oof, preds_oof, probas_oof = walk_forward_eval(
         X_pool, yflip_pool, parity1600_pool, yparity_pool, dist_pool)
+    dump_preds(f"A2_{safe}_oof", y_oof, parity1600_pool.loc[y_oof.index], preds_oof, probas_oof,
+               extra={"price_1600": t_pool["price_1600"].values[X_pool.index.get_indexer(y_oof.index)]})
 
     # ---------- controls: oracle + negative (ใน CV เดียวกัน) ----------
     print("\n  --- Controls (oracle + negative) ---")
@@ -451,6 +454,8 @@ def run_ticker(ticker, safe, dev=True):
                       "Baseline: Persistence-1600": pers_par,
                       "Baseline: Rule": rule_par}
     probas_test = {best: parity_proba} if parity_proba is not None else {}
+    dump_preds(f"A2_{safe}_test", yparity_test, parity1600_test, all_preds_test, probas_test,
+               extra={"price_1600": t_test["price_1600"].values})
     full_report(yparity_test, all_preds_test, probabilities=probas_test,
                baseline_name="Baseline: Persistence-1600")
 

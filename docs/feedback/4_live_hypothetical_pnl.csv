@@ -1,0 +1,17 @@
+﻿task,model,fee_f,n_bets,n_correct,accuracy,cum_profit_units,profit_per_bet
+A,ANN (MLP),0.0,23,10,0.4348,-3.0,-0.1304
+A,ANN (MLP),0.01,23,10,0.4348,-3.23,-0.1404
+A,LightGBM,0.0,22,8,0.3636,-6.0,-0.2727
+A,LightGBM,0.01,22,8,0.3636,-6.22,-0.2827
+A,Logistic Regression,0.0,23,12,0.5217,1.0,0.0435
+A,Logistic Regression,0.01,23,12,0.5217,0.77,0.0335
+A,Baseline: Persistence,0.0,24,14,0.5833,4.0,0.1667
+A,Baseline: Persistence,0.01,24,14,0.5833,3.76,0.1567
+A2,ANN (MLP),0.0,20,8,0.4,-4.0,-0.2
+A2,ANN (MLP),0.01,20,8,0.4,-4.2,-0.21
+A2,LightGBM,0.0,22,11,0.5,0.0,0.0
+A2,LightGBM,0.01,22,11,0.5,-0.22,-0.01
+A2,Logistic Regression,0.0,20,6,0.3,-8.0,-0.4
+A2,Logistic Regression,0.01,20,6,0.3,-8.2,-0.41
+A2,Baseline: Persistence-1600,0.0,22,11,0.5,0.0,0.0
+A2,Baseline: Persistence-1600,0.01,22,11,0.5,-0.22,-0.01
