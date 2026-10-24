@@ -118,13 +118,13 @@ RF / XGBoost ใช้ `n_jobs=1` (เปลี่ยนจาก `-1` เมื
 | `intraday_1600.py` / `metrics_1600.py` / `tune_1600.py` / `PHASE1D_PLAN.md` | Phase 1D Mode A (16:00) — pre-registered ที่ `0b09905` · search รันครั้งเดียวแล้ว |
 | `report_1600.py` | สร้างรายงาน `results/phase1d/summary_1600.md` จากผลค้นหา (อ่าน CSV อย่างเดียว) |
 | `predict_1600.py` | Phase 1D live pipeline — **dry-run เท่านั้น** เขียน `results/dryrun/` |
-| `tests/test_pipeline.py` | 18 tests: alignment, dow, NaN, lock gate, seed averaging, shape, weighting, costs, fingerprint, dry-run log, historical test cut |
+| `tests/test_pipeline.py` | 20 tests: alignment, dow, NaN, lock gate, seed averaging, shape, weighting, costs, fingerprint, dry-run log, historical test cut, **เซฟตาราง shape/costs/preds/stats + cost_sensitivity (ข้อ 10/2/4), ไฟล์ val จริงมีครบทุกโมเดล** |
 | `tests/test_phase1d.py` | 21 tests ของ Phase 1D (ข้อมูลสังเคราะห์) |
 | `results_reference/` | ผลของเวอร์ชันก่อนหน้า — backup เท่านั้น ห้ามเป็น input |
 | **ไฟล์ใหม่ของรอบ feedback 14 ก.ย. 2026** | |
 | `REFERENCES.md` | ข้อ 4: แหล่งอ้างอิงทั้งหมด (ข้อมูล / ค่าธรรมเนียม / วิธีการ) + ตารางโยงโค้ด→reference |
 | `MODEL_RATIONALE.md` | ข้อ 11: ทำไมทำนาย return · แต่ละโมเดลแก้ปัญหาอะไร · พารามิเตอร์มาจากไหน |
-| `FEEDBACK_STATUS.md` | สถานะ feedback ทั้ง 12 ข้อ + ไฟล์หลักฐาน |
+| `FEEDBACK_STATUS.md` | สถานะ feedback ทั้ง 12 ข้อ + ไฟล์หลักฐาน + ที่มาของไฟล์ผล (Windows vs Linux) |
 | `split_profile.py` | ข้อ 5: distribution ของ train/val/test + KS / Levene (descriptive · ไม่เทรนบน test) |
 | `stats_tests.py` | ข้อ 2: DM test + HLN correction · direction metrics · การแยก MAE วันนิ่ง/วันขยับ |
 | `features_experimental.py` | ข้อ 3: จัด 29 feature เป็น 7 กลุ่ม + กลุ่มใหม่ `cross_stock` (**ไม่แก้ `features.py`**) |
@@ -133,7 +133,7 @@ RF / XGBoost ใช้ `n_jobs=1` (เปลี่ยนจาก `-1` เมื
 | `requirements-experiments.txt` | pin ของสคริปต์ทดลองข้างบน (**ไม่แก้ `requirements.txt`**) |
 | `tests/test_stats.py` | 13 tests ของ `stats_tests.py` (ข้อมูลสังเคราะห์ + ตรวจ HLN กับค่าคำนวณมือ) |
 | `tests/test_features_experimental.py` | 16 tests ของ `features_experimental.py` (รวม negative control ของ leak test + ตาข่ายนิรภัย `dev_only`) |
-| `results/feedback/` | แผนที่ pre-register ไว้ (`FINETUNE_PLAN.md`, `OPTUNA_PLAN.md` + SHA-256) · ผล · `WHY_NAIVE_WINS.md` · `DECISIONS.md` |
+| `results/feedback/` | แผนที่เขียนก่อนรัน (`FINETUNE_PLAN.md`, `OPTUNA_PLAN.md` + SHA-256 — ไม่มี commit คั่น ระหว่างเขียนแผนกับรัน SHA-256 ยืนยันได้แค่ว่าไฟล์ไม่ถูกแก้หลังบันทึก hash ไม่ใช่ pre-registration แบบมี commit จริงเหมือน Phase 1D) · ผล · `WHY_NAIVE_WINS.md` · `DECISIONS.md` |
 
 ---
 

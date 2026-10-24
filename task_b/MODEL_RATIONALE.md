@@ -189,13 +189,29 @@ evaluation** (ข้อ 5.2) → การจูนย้ายโมเดล�
 มาจาก container Linux และต่างกัน ~0.03–0.08% ตามที่ `KNOWN_ISSUES.md` บันทึกไว้ —
 ดู `results/feedback/DECISIONS.md` ข้อ 1)
 
+**ผลภายใต้ squared loss (MSE) ต่างจาก absolute loss ข้างบน** — DM test (p one-sided,
+คอลัมน์ `dm_sq_*` ใน `results/<TICKER>_taskB_val_stats.csv`): ADVANC ANN (MLP) **0.0327**
+(< 0.05) · ADVANC XGBoost / Random Forest 0.0591 (ทั้งคู่) · KBANK Random Forest 0.134 ·
+KBANK XGBoost 0.220 · KBANK ANN (MLP) 0.527 — ตรงข้ามกับ absolute loss ที่ไม่มีช่องใดเข้าใกล้
+0.05 เลย รายละเอียดวิธีตีความว่าทำไมสอง loss ต่างกัน ดู
+[`results/feedback/WHY_NAIVE_WINS.md`](results/feedback/WHY_NAIVE_WINS.md) ข้อ 5
+
 ### 5.2 walk-forward 6 evaluation — `results/feedback/walkforward_summary.csv`
+
+**Absolute loss (MAE)**
 
 | โมเดล | mean MAE_return | mean relMAE | evals ที่ MAE ต่ำกว่า Naive | ชนะอย่างมีนัยสำคัญ | mean IC | hit rate (วันที่ราคาขยับ) |
 |---|---|---|---|---|---|---|
 | Random Forest | 0.009167 | 1.0025 | 2 / 6 | **0 / 6** | +0.1122 | 54.9% |
 | XGBoost | 0.009172 | 1.0029 | 2 / 6 | **0 / 6** | +0.0772 | 54.0% |
 | ANN (MLP) | 0.009199 | 1.0061 | 1 / 6 | **0 / 6** | +0.0933 | 55.3% |
+
+**Squared loss (MSE)** — จาก `walkforward_stats.csv` คอลัมน์ `dm_sq_*`: evals ที่ MSE
+ต่ำกว่า Naive สูงกว่า absolute loss มาก (Random Forest 6/6, ANN / XGBoost 5/6) และมีนัยสำคัญ
+ก่อนปรับหลายการทดสอบรวม **3/18 evaluation ทุกโมเดล** (ANN 2/6, Random Forest 1/6, XGBoost
+0/6 — ทั้งสามช่องเป็นหุ้น ADVANC) **แต่ไม่เหลือสักช่องหลัง Bonferroni correction**
+(α/6 = 0.00833) → สัญญาณที่เห็นภายใต้ MSE มีอยู่จริงแต่ยังไม่แข็งพอให้สรุปว่าชนะ ·
+ตารางเต็ม + การตีความ ดู [`results/feedback/WHY_NAIVE_WINS.md`](results/feedback/WHY_NAIVE_WINS.md) ข้อ 5
 
 ---
 
@@ -212,10 +228,15 @@ boosting) ให้คำตอบเดียวกัน แปลว่า **
 ส่วนต่างระดับ 1e-5 ถึง 1e-4 ซึ่ง **เล็กกว่าความต่างข้าม platform ของ XGBoost เองที่
 ~0.03–0.08%** → การประกาศผู้ชนะจากตัวเลขเหล่านี้ไม่มีความหมาย
 
-**(3) โมเดลชนะ Naive จริงในวันที่ตลาดขยับ แต่แพ้เพราะวันที่ตลาดนิ่ง**
-`contrib_moved_days` ติดลบ 16 จาก 18 evaluation (= MAE ต่ำกว่า Naive บนวันที่ `y ≠ 0`)
-แต่ `contrib_zero_days` บวกทุกช่อง เพราะ Naive มี error = 0 เป๊ะบนวันนิ่ง 15% ของวัน
-→ รายละเอียดเต็มใน [`results/feedback/WHY_NAIVE_WINS.md`](results/feedback/WHY_NAIVE_WINS.md)
+**(3) การแยกส่วน MAE อธิบายกลไกได้ แต่ไม่ใช่หลักฐานของฝีมือโดยตัวมันเอง — ส่วน MSE ให้
+สัญญาณอ่อน ๆ ที่น่าสนใจกว่า**
+`contrib_zero_days` บวกทุกช่อง เพราะ Naive มี error = 0 เป๊ะบนวันนิ่ง 15% ของวัน แล้ว
+`contrib_moved_days` ติดลบ 16 จาก 18 evaluation ตามมาเกือบเป็นผลทางบัญชี (เพื่อหักล้างกัน
+เมื่อ MAE รวมใกล้ Naive) การแบ่งวันตาม `y` จริงก็ใช้ตอนทำนายไม่ได้ด้วย — ไม่ใช่กลยุทธ์จริง
+หลักฐานที่น่าเชื่อกว่าคือ IC เป็นบวก 16/18 evaluation และผล DM ภายใต้ squared loss (MSE)
+ที่โมเดล loss ต่ำกว่า Naive 16/18 evaluation โดยมีนัยสำคัญก่อนปรับหลายการทดสอบ 3/18
+(ไม่เหลือหลัง Bonferroni) → รายละเอียดเต็มใน
+[`results/feedback/WHY_NAIVE_WINS.md`](results/feedback/WHY_NAIVE_WINS.md)
 
 **(4) การคุม capacity สำคัญกว่าการเลือกตระกูลโมเดล** — ANN v1 `(64,32)` + `alpha=1e-3`
 ได้ `R2_return` −2.39 · ANN ตอนนี้ `(8,4)` + `alpha=7.0` ได้ −0.003 ถึง +0.015

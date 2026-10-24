@@ -15,12 +15,15 @@
 | # | feedback (สรุป) | เกี่ยวกับ Task B? | สถานะ | ไฟล์หลักฐาน | ผลสรุป |
 |---|---|---|---|---|---|
 | **1** | ใช้ปัญหาคู่/คี่ (parity) | **ไม่เกี่ยว** | งานของ **Task A / A2** | `task_a/`, `task_a2/`, `docs/floor_label_followup.md` | Task B เป็น regression ทำนายค่าต่อเนื่อง ไม่มี label คู่/คี่ให้ตัด |
-| **2** | ทำไม Naive ถึงชนะ | **เกี่ยว** | ✅ **ทำรอบนี้** | `stats_tests.py` · `results/<หุ้น>_taskB_val_stats.csv` · `results/<หุ้น>_taskB_val_preds.csv` · `results/feedback/walkforward_stats.csv` + `walkforward_summary.csv` · **`results/feedback/WHY_NAIVE_WINS.md`** · `tests/test_stats.py` | ราคาปิดไม่ขยับเลย **15.0%** ของวัน (เฉลี่ย 6 evaluation) · วันเหล่านั้น Naive มี error = 0 เป๊ะ · โมเดล ML **ชนะ Naive จริงในวันที่ราคาขยับ** (`contrib_moved_days` ติดลบ 16/18 evaluation) แต่ไม่พอกลบที่เสียในวันนิ่ง · **DM test: 0 จาก 18 evaluation ที่ต่างจาก Naive อย่างมีนัยสำคัญ** (ทั้งสองทิศ) |
+| **2** | ทำไม Naive ถึงชนะ | **เกี่ยว** | ✅ **ทำรอบนี้** | `stats_tests.py` · `results/<หุ้น>_taskB_val_stats.csv` · `results/<หุ้น>_taskB_val_preds.csv` · `results/feedback/walkforward_stats.csv` + `walkforward_summary.csv` · **`results/feedback/WHY_NAIVE_WINS.md`** · `tests/test_stats.py` | ราคาปิดไม่ขยับเลย **15.0%** ของวัน (เฉลี่ย 6 evaluation) · วันเหล่านั้น Naive มี error = 0 เป๊ะ โมเดลจึงเสียเปรียบแบบหนีไม่ได้ (`contrib_zero_days` บวกทุกช่อง) · **DM test ภายใต้ absolute loss (MAE): 0 จาก 18 evaluation ที่ต่างจาก Naive อย่างมีนัยสำคัญ** (ทั้งสองทิศ) · **ภายใต้ squared loss (MSE): loss ต่ำกว่า Naive 16/18 evaluation มีนัยสำคัญก่อนปรับหลายการทดสอบ 3/18 (ทั้งหมดเป็น ADVANC) แต่ไม่เหลือหลัง Bonferroni** → สัญญาณจากราคาย้อนหลังมีอยู่จริงแต่อ่อนมาก และ loss function ที่เลือกเปลี่ยนว่าใครดูดีกว่า |
 | **3** | ใช้ HyperOpt เพื่อหา Feature | **เกี่ยว** | ✅ **ทำรอบนี้** | `features_experimental.py` · `optuna_features.py` · `results/feedback/OPTUNA_PLAN.md` (+SHA-256) · `optuna_trials.csv` / `optuna_summary.csv` / `optuna_group_frequency.csv` / `optuna_fold3.csv` / `optuna_ablation.csv` / `optuna_null.csv` · 3 รูป · **`results/feedback/OPTUNA_RESULTS.md`** · `tests/test_features_experimental.py` | Optuna TPE **160 trials** (RF 60 / XGB 60 / ANN 40) ค้น 8 feature group + hyperparameter บน fold 1–2 · ผู้ชนะดีกว่า Phase 1C **0.38–0.40%** บนสนามที่ค้น แต่บน **fold 3 แย่กว่า Phase 1C ทั้งสามโมเดล** และ **ไม่มีใครชนะ Naive อย่างมีนัยสำคัญ (0/6)** → เป็น selection bias ไม่ใช่สัญญาณ · กลุ่มใหม่ `cross_stock` ไม่ช่วย · **ไม่ได้นำผู้ชนะไปใส่ config** |
 | **4** | ต้องมี Reference | **เกี่ยว** | ✅ **ทำรอบนี้** | **`REFERENCES.md`** · คอมเมนต์ใน `config.py` (`SET_COSTS`, `SET_TICK_BANDS`) · `trading_costs.cost_sensitivity()` · `results/cost_sensitivity.csv` | 17 reference วิชาการ (R1–R17) + 6 แหล่งค่าธรรมเนียม/tick (S1–S3, B1–B3) แบ่ง 4 หมวด · **DOI ตรวจผ่าน Crossref 9 ชิ้น** · ลิงก์ที่เหลือตรวจว่าเข้าถึงได้จริง (HTTP 200) ทุกอัน ยกเว้น investing.com ที่คืน 403 ให้ request อัตโนมัติ · สิ่งที่ยืนยันไม่ได้ติดป้าย `[ยังไม่ได้ตรวจ]` ไว้ตรง ๆ และสรุปรวมไว้ใน `REFERENCES.md` หมวด 5 (**5 หัวข้อ**) · **tick size ตรงกับ SET ทั้ง 8 ช่วง** · ค่าธรรมเนียมตรงกับตารางโบรกเกอร์จริง 3 ราย · **ไม่ได้แก้ตัวเลขใน config** |
 | **5** | test set ควร balance / ทำไมให้เท่า ๆ กัน | **เกี่ยว** | ✅ **ทำรอบนี้** | `split_profile.py` · `results/split_profile.csv` · `results/split_profile_tests.csv` · **`results/split_profile.md`** | val กับ test เท่ากัน (362 แถว) เพราะ **ตั้งใจเลือกวันที่ให้เทียบกับเวอร์ชันก่อนได้** (คอมเมนต์ `SPLIT_BY_DATE`) ไม่ใช่เพราะต้อง balance · regression ไม่มี class ให้ balance → เทียบ volatility / zero-move / ทิศทางแทน · KBANK train ผันผวนกว่า val/test ชัดเจน (KS p = 0.00063 / 0.00021) ส่วน ADVANC ไม่ต่าง (p = 0.093 / 0.18) · **`PRE_TEST_LOCK.md` ยังไม่มี → historical test ยังไม่ถูกเปิด เป็นการตัดสินใจของผู้ใช้** |
 | **6** | ทำนายวันถัดไปจริง (live) | **เกี่ยว** | ✅ ทำแล้วก่อนรอบนี้ | `predict_live.py` · `predict_1600.py` · `predict_close.py` · `daily_next_day.py` · `daily_1600.py` · `record_outcomes.py` · `report_live.py` · `PHASE1D_PLAN.md` / `PHASE1D_PLAN_R2.md` · `results/prediction_log.csv` · `results/outcomes.csv` · `results/live_report/` | มี pipeline ทำนายวันข้างหน้าจริงที่รันอัตโนมัติ + บันทึกผลจริงย้อนกลับมาเทียบ · Phase 1D (16:00) pre-registered ไว้สองรอบ · **รอบนี้ไม่แตะไฟล์เหล่านี้เลย** |
-| **7** | pretrain ด้วยข้อมูลเก่า แล้ว fine-tune ด้วยข้อมูลใหม่ | **เกี่ยว** | ✅ **ทำรอบนี้** | `finetune_experiment.py` · `results/feedback/FINETUNE_PLAN.md` (+SHA-256) · `finetune_results.csv` (222 แถว) · `finetune_summary.csv` (37 config) · `finetune.png` · **`results/feedback/FINETUNE_RESULTS.md`** | เดิมมีแค่ recency weighting (`weighting.py`) ซึ่งเป็นเหตุผลเชิงทฤษฎีที่ยังไม่เคยทดลอง · รอบนี้ทดลองจริง 37 config × 6 evaluation: **ไม่มี config ใดผ่านกฎตัดสินที่ประกาศไว้ล่วงหน้า** · ANN มี 3 config ที่ MAE ต่ำกว่า `pooled` แต่ **ตก guard StdRatio** (ยุบเข้าหาค่าคงที่) · `recent_only` แย่กว่า `pooled` ทุกตัว (+1.3% ถึง +5.9%) · **7/7 คำทำนายในแผนตรง** |
+| **7** | pretrain ด้วยข้อมูลเก่า แล้ว fine-tune ด้วยข้อมูลใหม่ | **เกี่ยว** | ✅ **ทำรอบนี้** | `finetune_experiment.py` · `results/feedback/FINETUNE_PLAN.md` (+SHA-256) · `finetune_results.csv` (222 แถว) · `finetune_summary.csv` (37 config) · `finetune.png` · **`results/feedback/FINETUNE_RESULTS.md`** | เดิมมีแค่ recency weighting (`weighting.py`) ซึ่งเป็นเหตุผลเชิงทฤษฎีที่ยังไม่เคยทดลอง · รอบนี้ทดลองจริง 37 config × 6 evaluation: **ไม่มี config ใดผ่านกฎตัดสินที่ประกาศไว้ล่วงหน้า** · ANN มี 3 config ที่ MAE ต่ำกว่า `pooled` แต่ **ตก guard StdRatio** (ยุบเข้าหาค่าคงที่) · `recent_only` แย่กว่า `pooled` ทุกตัว (+1.3% ถึง +5.9%) · คำทำนายในแผนตรงทั้ง 7 ข้อ
+(ข้อมูลประกอบ — แผนเขียนก่อนรันจริง แต่ไม่มี commit คั่นระหว่างเขียนแผนกับรัน SHA-256
+จึงยืนยันได้แค่ว่าไฟล์ไม่ถูกแก้หลังบันทึก hash ไม่ใช่ pre-registration แบบมี commit จริง
+เหมือน Phase 1D) |
 | **8** | C-Curve | **เกี่ยว** | ✅ ทำแล้วก่อนรอบนี้ | `curves.py` · `results/curves/` (`python main.py --dev --curves`) · REC curve → `REFERENCES.md` R10 | **ตีความ C-Curve = REC curve** (Regression Error Characteristic, Bi & Bennett 2003) = สัดส่วนวันที่ `\|error_return\| ≤ tolerance` ของทุกโมเดล + baseline · **นี่เป็นการตีความ** ไม่ได้ยืนยันกับอาจารย์ว่าหมายถึง curve ตัวนี้จริง · มี ANN loss curve และ ANN alpha curve ด้วย |
 | **9** | Threshold ของ Binary | **ไม่เกี่ยว** | งานของ **Task A / C** | `task_a/results/five_analyses/2_threshold_choice.csv` + `2_threshold_sweep.csv` · `task_c/` | Task B เป็น regression **ไม่มี probability ให้ตัด threshold** · **หมายเหตุสำคัญ:** `trading_costs.signal_economics(threshold=cost_rt)` ใน Task B ไม่ใช่ข้อ 9 — มันเป็น **เกณฑ์ต้นทุน** ของข้อ 10 ("ทำนายกำไรเกินค่าธรรมเนียมไหม") ไม่ใช่ threshold ของ classifier |
 | **10** | Breakeven / commission + ตาราง diagnostic | **เกี่ยว** | ✅ ทำแล้ว + **เซฟไฟล์รอบนี้** | `trading_costs.py` · `main.py` (`save_results`) · `results/<หุ้น>_taskB_val_shape.csv` · `results/<หุ้น>_taskB_val_costs.csv` · `results/cost_sensitivity.csv` · `tests/test_pipeline.py` (2 tests ใหม่) | ตารางที่ 2 (รูปร่างการทำนาย) และตารางที่ 3 (ต้นทุน) เดิม **print อย่างเดียว อ้างอิงในรายงานไม่ได้** → รอบนี้เซฟลง CSV แล้ว (ตารางหลักไม่เปลี่ยนแม้แต่ byte เดียว) · ต้นทุนไป-กลับ **33.598 bps** · โมเดลทำนายการขยับเฉลี่ย **0.14–0.24 tick** (เล็กกว่าขั้นราคาที่ตลาดขยับได้) · แนะนำซื้อเพียง **0–1.9% ของวัน** · ลดค่าคอมมิชชันเป็น 0.10% ก็ยังแค่ 1.4–3.9% → **ข้อสรุปไม่เปลี่ยนตามค่าธรรมเนียม** |
@@ -38,6 +41,27 @@
 | ทำรอบนี้ | **6 ข้อ** (2, 3, 4, 5, 7, 11) + เซฟไฟล์เพิ่มของข้อ 10 |
 | ทำแล้วก่อนรอบนี้ | **3 ข้อ** (6, 8, และการจูนของข้อ 11) |
 | **ยังไม่ได้ทำ** | **0 ข้อของ Task B** |
+
+---
+
+## ที่มาของไฟล์ผลรอบนี้
+
+- ไฟล์ `*_taskB_val_shape.csv`, `*_val_costs.csv`, `*_val_preds.csv`, `*_val_stats.csv`,
+  `cost_sensitivity.csv`, และทุกไฟล์ใน `results/feedback/` สร้างบนเครื่อง **Windows**
+  (Python 3.12.5 + เวอร์ชันตาม `requirements-experiments.txt`) ในรอบ feedback นี้
+- ตารางหลัก `*_taskB_val.csv` ที่ **commit อยู่ใน repo** สร้างบน **Linux** (container ของ
+  Railway) ซึ่งให้ค่าต่างจากที่รันบน Windows เฉพาะ **คอลัมน์ XGBoost**:
+  KBANK `MAE_return` 0.00840197 (Windows) vs 0.00839552 (Linux ที่ commit อยู่) ·
+  ADVANC 0.00942496 (Windows) vs 0.00942258 (Linux) — ต่างกัน 0.025–0.077% · คอลัมน์ของ
+  ANN / Random Forest / baseline **ตรงกันทุกหลักที่พิมพ์** ระหว่างสองเครื่อง · ความต่างนี้
+  **ไม่เปลี่ยนลำดับโมเดลหรือข้อสรุปใด** ในเอกสารรอบนี้ (ดู `KNOWN_ISSUES.md` สำหรับ
+  สาเหตุ: XGBoost อ่อนไหวต่อ platform/BLAS backend แม้ `n_jobs=1`)
+- ตัวเลข XGBoost ทุกตัวในเอกสาร feedback (MODEL_RATIONALE.md, WHY_NAIVE_WINS.md, …)
+  อ้างจากไฟล์ที่รันบน **Windows** ของรอบนี้ ไม่ใช่ค่าที่ commit อยู่ใน `*_taskB_val.csv`
+- `main.py --dev` เขียนไฟล์ diagnostic ชุดนี้ทับทุกครั้งที่รัน · ถ้ากลับมาใช้ daily pipeline
+  (`daily_next_day.py` ซึ่ง `git add results`) ในอนาคต ต้องแยกไฟล์เหล่านี้ออกจาก flow ก่อน
+  ไม่งั้นจะถูกเขียนทับด้วยค่าของเครื่องที่รันแล้ว commit ไปพร้อม prediction log โดยไม่ตั้งใจ
+  — **ขณะนี้หยุดรัน daily pipeline ของ repo นี้แล้ว** จึงยังไม่มีความเสี่ยงนี้เกิดขึ้นจริง
 
 ---
 
