@@ -1,0 +1,41 @@
+﻿task,ticker,split,model,accuracy,balanced_accuracy,pct_odd_used
+A,KBANK.BK,dev OOF,Baseline: Markov(1),0.5179,0.5,0.5179
+A,KBANK.BK,dev OOF,Baseline: Majority,0.5179,0.5,0.5179
+A,KBANK.BK,dev OOF,Baseline: Persistence,0.5014,0.5007,0.5179
+A,KBANK.BK,dev OOF,LightGBM,0.4964,0.4964,0.5179
+A,KBANK.BK,dev OOF,ANN (MLP),0.4865,0.4868,0.5179
+A,KBANK.BK,dev OOF,Logistic Regression,0.4804,0.4803,0.5179
+A,KBANK.BK,test,LightGBM,0.5014,0.5019,0.4712
+A,KBANK.BK,test,Baseline: Persistence,0.4986,0.4968,0.4712
+A,KBANK.BK,test,Baseline: Majority,0.4712,0.5,0.4712
+A,KBANK.BK,test,Baseline: Markov(1),0.4712,0.5,0.4712
+A2,KBANK.BK,dev OOF,Baseline: Persistence-1600,0.6293,0.6266,0.4512
+A2,KBANK.BK,dev OOF,Baseline: Majority,0.6293,0.6266,0.4512
+A2,KBANK.BK,dev OOF,Baseline: Rule,0.6293,0.6266,0.4512
+A2,KBANK.BK,dev OOF,LightGBM,0.5902,0.5887,0.4512
+A2,KBANK.BK,dev OOF,Logistic Regression,0.5293,0.5269,0.4512
+A2,KBANK.BK,dev OOF,ANN (MLP),0.5171,0.5153,0.4512
+A2,KBANK.BK,test,Baseline: Majority,0.55,0.5482,0.5143
+A2,KBANK.BK,test,Baseline: Persistence-1600,0.55,0.5482,0.5143
+A2,KBANK.BK,test,Baseline: Rule,0.55,0.5482,0.5143
+A2,KBANK.BK,test,LightGBM,0.5429,0.5425,0.5143
+A,ADVANC.BK,dev OOF,LightGBM,0.5129,0.5112,0.4838
+A,ADVANC.BK,dev OOF,Logistic Regression,0.5091,0.5039,0.4838
+A,ADVANC.BK,dev OOF,Baseline: Persistence,0.5091,0.5085,0.4838
+A,ADVANC.BK,dev OOF,ANN (MLP),0.5069,0.5041,0.4838
+A,ADVANC.BK,dev OOF,Baseline: Markov(1),0.5025,0.5053,0.4838
+A,ADVANC.BK,dev OOF,Baseline: Majority,0.4876,0.4974,0.4838
+A,ADVANC.BK,test,Baseline: Majority,0.5397,0.5,0.4603
+A,ADVANC.BK,test,Baseline: Persistence,0.5041,0.5012,0.4603
+A,ADVANC.BK,test,Baseline: Markov(1),0.5041,0.5012,0.4603
+A,ADVANC.BK,test,LightGBM,0.4849,0.4725,0.4603
+A2,ADVANC.BK,dev OOF,Baseline: Persistence-1600,0.5244,0.524,0.4731
+A2,ADVANC.BK,dev OOF,Baseline: Majority,0.5244,0.524,0.4731
+A2,ADVANC.BK,dev OOF,Baseline: Rule,0.5244,0.524,0.4731
+A2,ADVANC.BK,dev OOF,LightGBM,0.4976,0.4943,0.4731
+A2,ADVANC.BK,dev OOF,ANN (MLP),0.4951,0.4906,0.4731
+A2,ADVANC.BK,dev OOF,Logistic Regression,0.4561,0.4546,0.4731
+A2,ADVANC.BK,test,Baseline: Majority,0.5357,0.5349,0.4643
+A2,ADVANC.BK,test,Baseline: Persistence-1600,0.5357,0.5349,0.4643
+A2,ADVANC.BK,test,Baseline: Rule,0.5357,0.5349,0.4643
+A2,ADVANC.BK,test,LightGBM,0.45,0.4477,0.4643

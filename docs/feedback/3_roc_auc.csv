@@ -1,0 +1,49 @@
+﻿task,ticker,split,model,n,auc_p_odd,ci_low,ci_high,auc_p_flip,flip_ci_low,flip_ci_high,fpr,tpr,accuracy
+A,KBANK_BK,dev OOF,ANN (MLP),1815,0.4851,0.4572,0.5122,0.4854,0.46,0.5115,,,
+A,KBANK_BK,dev OOF,LightGBM,1815,0.489,0.463,0.5176,0.4884,0.4635,0.5148,,,
+A,KBANK_BK,dev OOF,Logistic Regression,1815,0.4851,0.4585,0.513,0.4842,0.457,0.5096,,,
+A,KBANK_BK,dev OOF,Persistence (point),1815,,,,,,,0.5166,0.5181,0.5014
+A,KBANK_BK,test,LightGBM,365,0.4992,0.4421,0.5554,0.4982,0.4399,0.5541,,,
+A,KBANK_BK,test,Persistence (point),365,,,,,,,0.4715,0.4651,0.4986
+A,ADVANC_BK,dev OOF,ANN (MLP),1815,0.5009,0.4757,0.5267,0.4987,0.4697,0.5249,,,
+A,ADVANC_BK,dev OOF,LightGBM,1815,0.5111,0.4845,0.5373,0.5103,0.4834,0.5366,,,
+A,ADVANC_BK,dev OOF,Logistic Regression,1815,0.5033,0.4767,0.5304,0.5047,0.4781,0.5312,,,
+A,ADVANC_BK,dev OOF,Persistence (point),1815,,,,,,,0.4749,0.492,0.5091
+A,ADVANC_BK,test,LightGBM,365,0.4653,0.408,0.525,0.483,0.4219,0.5412,,,
+A,ADVANC_BK,test,Persistence (point),365,,,,,,,0.4619,0.4643,0.5041
+A2,KBANK_BK,dev OOF,ANN (MLP),410,0.5116,0.4543,0.5667,0.4775,0.4193,0.536,,,
+A2,KBANK_BK,dev OOF,LightGBM,410,0.62,0.5672,0.672,0.5002,0.444,0.557,,,
+A2,KBANK_BK,dev OOF,Logistic Regression,410,0.5488,0.4961,0.6037,0.5008,0.4419,0.5592,,,
+A2,KBANK_BK,dev OOF,Persistence (point),410,,,,,,,0.3467,0.6,0.6293
+A2,KBANK_BK,dev OOF,"H1 (point, 100-200 subset)",410,,,,,,,0.3467,0.6,0.6293
+A2,KBANK_BK,test,LightGBM,140,0.5337,0.436,0.6292,0.4595,0.3635,0.5557,,,
+A2,KBANK_BK,test,Persistence (point),140,,,,,,,0.5147,0.6111,0.55
+A2,KBANK_BK,test,"H1 (point, 100-200 subset)",75,,,,,,,0.4737,0.7027,0.6133
+A2,ADVANC_BK,dev OOF,ANN (MLP),410,0.4702,0.4155,0.5251,0.4789,0.4261,0.5334,,,
+A2,ADVANC_BK,dev OOF,LightGBM,410,0.5214,0.4651,0.5775,0.5184,0.4635,0.5759,,,
+A2,ADVANC_BK,dev OOF,Logistic Regression,410,0.463,0.4058,0.5191,0.4668,0.4113,0.5197,,,
+A2,ADVANC_BK,dev OOF,Persistence (point),410,,,,,,,0.4676,0.5155,0.5244
+A2,ADVANC_BK,test,LightGBM,140,0.4402,0.3469,0.5356,0.4562,0.3632,0.5534,,,
+A2,ADVANC_BK,test,Persistence (point),140,,,,,,,0.4533,0.5231,0.5357
+A2 Δtick,KBANK_BK,dev OOF,Δtick LogReg,425,0.6026,0.5453,0.6609,0.5537,0.4989,0.6097,,,
+A2 Δtick,KBANK_BK,dev OOF,Δtick LightGBM,425,0.6324,0.5783,0.684,0.5186,0.4598,0.574,,,
+A2 Δtick,KBANK_BK,dev OOF,Δtick MLP,425,0.5987,0.5423,0.6519,0.5314,0.4719,0.5899,,,
+A2 Δtick,KBANK_BK,dev OOF,Flip ANN (MLP),425,0.5183,0.4651,0.5708,0.4856,0.4262,0.5441,,,
+A2 Δtick,KBANK_BK,dev OOF,Flip LightGBM,425,0.6036,0.5503,0.6554,0.4878,0.434,0.545,,,
+A2 Δtick,KBANK_BK,dev OOF,Flip Logistic Regression,425,0.5339,0.4803,0.5884,0.4943,0.4366,0.5487,,,
+A2 Δtick,KBANK_BK,dev OOF,Persistence (point),425,,,,,,,0.359,0.6073,0.6259
+A2 Δtick,KBANK_BK,dev OOF,"H1 (point, 100-200 subset)",424,,,,,,,0.3605,0.6073,0.625
+A2 Δtick,KBANK_BK,holdout,Δtick LightGBM,144,0.6021,0.5089,0.6918,0.5983,0.5056,0.6931,,,
+A2 Δtick,KBANK_BK,holdout,Flip LightGBM,144,0.5033,0.4013,0.5973,0.4341,0.3461,0.528,,,
+A2 Δtick,KBANK_BK,holdout,Persistence (point),144,,,,,,,0.5,0.5811,0.5417
+A2 Δtick,KBANK_BK,holdout,"H1 (point, 100-200 subset)",61,,,,,,,0.4,0.6774,0.6393
+A2 Δtick,ADVANC_BK,dev OOF,Δtick LogReg,425,0.5405,0.4864,0.595,0.5352,0.4816,0.5888,,,
+A2 Δtick,ADVANC_BK,dev OOF,Δtick LightGBM,425,0.5119,0.4574,0.5681,0.5134,0.4567,0.5673,,,
+A2 Δtick,ADVANC_BK,dev OOF,Δtick MLP,425,0.4901,0.433,0.5474,0.4814,0.4256,0.5356,,,
+A2 Δtick,ADVANC_BK,dev OOF,Flip ANN (MLP),425,0.4725,0.4196,0.5277,0.4782,0.4247,0.5336,,,
+A2 Δtick,ADVANC_BK,dev OOF,Flip LightGBM,425,0.5196,0.4659,0.576,0.5261,0.4704,0.5805,,,
+A2 Δtick,ADVANC_BK,dev OOF,Flip Logistic Regression,425,0.4708,0.4186,0.5264,0.4713,0.4152,0.5289,,,
+A2 Δtick,ADVANC_BK,dev OOF,Persistence (point),425,,,,,,,0.4615,0.5196,0.5294
+A2 Δtick,ADVANC_BK,holdout,Δtick LogReg,144,0.5287,0.4355,0.6242,0.556,0.4627,0.6554,,,
+A2 Δtick,ADVANC_BK,holdout,Flip ANN (MLP),144,0.4326,0.3419,0.5262,0.4317,0.3401,0.5274,,,
+A2 Δtick,ADVANC_BK,holdout,Persistence (point),144,,,,,,,0.5,0.5303,0.5139

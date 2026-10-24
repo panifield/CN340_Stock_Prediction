@@ -1,0 +1,231 @@
+﻿task,ticker,split,model,n,accuracy,fee_f,profit_per_bet,profit_ci_low,profit_ci_high,ci_excludes_zero,days_needed_power80
+A,KBANK.BK,dev OOF,LightGBM,1815,0.4964,0.0,-0.0072,-0.0531,0.0388,False,
+A,KBANK.BK,dev OOF,LightGBM,1815,0.4964,0.005,-0.0122,-0.0581,0.0338,False,
+A,KBANK.BK,dev OOF,LightGBM,1815,0.4964,0.01,-0.0172,-0.0631,0.0288,False,
+A,KBANK.BK,dev OOF,LightGBM,1815,0.4964,0.02,-0.0272,-0.0731,0.0188,False,
+A,KBANK.BK,dev OOF,LightGBM,1815,0.4964,0.05,-0.0572,-0.1031,-0.0112,False,
+A,KBANK.BK,test,LightGBM,365,0.5014,0.0,0.0028,-0.0993,0.1048,False,788590.0
+A,KBANK.BK,test,LightGBM,365,0.5014,0.005,-0.0022,-0.1043,0.0998,False,
+A,KBANK.BK,test,LightGBM,365,0.5014,0.01,-0.0072,-0.1093,0.0948,False,
+A,KBANK.BK,test,LightGBM,365,0.5014,0.02,-0.0172,-0.1193,0.0848,False,
+A,KBANK.BK,test,LightGBM,365,0.5014,0.05,-0.0472,-0.1493,0.0548,False,
+A,KBANK.BK,dev OOF,Baseline: Persistence,1815,0.5014,0.0,0.0028,-0.0432,0.0488,False,788590.0
+A,KBANK.BK,dev OOF,Baseline: Persistence,1815,0.5014,0.005,-0.0022,-0.0482,0.0438,False,
+A,KBANK.BK,dev OOF,Baseline: Persistence,1815,0.5014,0.01,-0.0072,-0.0532,0.0388,False,
+A,KBANK.BK,dev OOF,Baseline: Persistence,1815,0.5014,0.02,-0.0172,-0.0632,0.0288,False,
+A,KBANK.BK,dev OOF,Baseline: Persistence,1815,0.5014,0.05,-0.0472,-0.0932,-0.0012,False,
+A,KBANK.BK,test,Baseline: Persistence,365,0.4986,0.0,-0.0028,-0.1048,0.0993,False,
+A,KBANK.BK,test,Baseline: Persistence,365,0.4986,0.005,-0.0078,-0.1098,0.0943,False,
+A,KBANK.BK,test,Baseline: Persistence,365,0.4986,0.01,-0.0128,-0.1148,0.0893,False,
+A,KBANK.BK,test,Baseline: Persistence,365,0.4986,0.02,-0.0228,-0.1248,0.0793,False,
+A,KBANK.BK,test,Baseline: Persistence,365,0.4986,0.05,-0.0528,-0.1548,0.0493,False,
+A2,KBANK.BK,dev CV,Baseline: Persistence-1600,410,0.6293,0.0,0.2586,0.1631,0.3493,True,91.0
+A2,KBANK.BK,dev CV,Baseline: Persistence-1600,410,0.6293,0.005,0.2536,0.1581,0.3443,True,94.0
+A2,KBANK.BK,dev CV,Baseline: Persistence-1600,410,0.6293,0.01,0.2486,0.1531,0.3393,True,98.0
+A2,KBANK.BK,dev CV,Baseline: Persistence-1600,410,0.6293,0.02,0.2386,0.1431,0.3293,True,107.0
+A2,KBANK.BK,dev CV,Baseline: Persistence-1600,410,0.6293,0.05,0.2086,0.1131,0.2993,True,139.0
+A2,KBANK.BK,test,Baseline: Persistence-1600,140,0.55,0.0,0.1,-0.0653,0.26,False,617.0
+A2,KBANK.BK,test,Baseline: Persistence-1600,140,0.55,0.005,0.095,-0.0703,0.255,False,683.0
+A2,KBANK.BK,test,Baseline: Persistence-1600,140,0.55,0.01,0.09,-0.0753,0.25,False,761.0
+A2,KBANK.BK,test,Baseline: Persistence-1600,140,0.55,0.02,0.08,-0.0853,0.24,False,963.0
+A2,KBANK.BK,test,Baseline: Persistence-1600,140,0.55,0.05,0.05,-0.1153,0.21,False,2461.0
+A2,KBANK.BK,dev CV,LightGBM,410,0.5902,0.0,0.1804,0.0839,0.2735,True,188.0
+A2,KBANK.BK,dev CV,LightGBM,410,0.5902,0.005,0.1754,0.0789,0.2685,True,199.0
+A2,KBANK.BK,dev CV,LightGBM,410,0.5902,0.01,0.1704,0.0739,0.2635,True,211.0
+A2,KBANK.BK,dev CV,LightGBM,410,0.5902,0.02,0.1604,0.0639,0.2535,True,238.0
+A2,KBANK.BK,dev CV,LightGBM,410,0.5902,0.05,0.1304,0.0339,0.2235,True,359.0
+A2,KBANK.BK,test,LightGBM,140,0.5429,0.0,0.0858,-0.0793,0.2463,False,838.0
+A2,KBANK.BK,test,LightGBM,140,0.5429,0.005,0.0808,-0.0843,0.2413,False,945.0
+A2,KBANK.BK,test,LightGBM,140,0.5429,0.01,0.0758,-0.0893,0.2363,False,1074.0
+A2,KBANK.BK,test,LightGBM,140,0.5429,0.02,0.0658,-0.0993,0.2263,False,1425.0
+A2,KBANK.BK,test,LightGBM,140,0.5429,0.05,0.0358,-0.1293,0.1963,False,4804.0
+A2,KBANK.BK,dev CV,Logistic Regression,410,0.5293,0.0,0.0586,-0.0381,0.1542,False,1799.0
+A2,KBANK.BK,dev CV,Logistic Regression,410,0.5293,0.005,0.0536,-0.0431,0.1492,False,2150.0
+A2,KBANK.BK,dev CV,Logistic Regression,410,0.5293,0.01,0.0486,-0.0481,0.1442,False,2615.0
+A2,KBANK.BK,dev CV,Logistic Regression,410,0.5293,0.02,0.0386,-0.0581,0.1342,False,4144.0
+A2,KBANK.BK,dev CV,Logistic Regression,410,0.5293,0.05,0.0086,-0.0881,0.1042,False,83358.0
+A2,KBANK.BK,dev CV,ANN (MLP),410,0.5171,0.0,0.0342,-0.0624,0.1302,False,5284.0
+A2,KBANK.BK,dev CV,ANN (MLP),410,0.5171,0.005,0.0292,-0.0674,0.1252,False,7249.0
+A2,KBANK.BK,dev CV,ANN (MLP),410,0.5171,0.01,0.0242,-0.0724,0.1202,False,10553.0
+A2,KBANK.BK,dev CV,ANN (MLP),410,0.5171,0.02,0.0142,-0.0824,0.1102,False,30642.0
+A2,KBANK.BK,dev CV,ANN (MLP),410,0.5171,0.05,-0.0158,-0.1124,0.0802,False,
+A,ADVANC.BK,dev OOF,LightGBM,1815,0.5129,0.0,0.0258,-0.0202,0.0717,False,9287.0
+A,ADVANC.BK,dev OOF,LightGBM,1815,0.5129,0.005,0.0208,-0.0252,0.0667,False,14287.0
+A,ADVANC.BK,dev OOF,LightGBM,1815,0.5129,0.01,0.0158,-0.0302,0.0617,False,24759.0
+A,ADVANC.BK,dev OOF,LightGBM,1815,0.5129,0.02,0.0058,-0.0402,0.0517,False,183696.0
+A,ADVANC.BK,dev OOF,LightGBM,1815,0.5129,0.05,-0.0242,-0.0702,0.0217,False,
+A,ADVANC.BK,test,LightGBM,365,0.4849,0.0,-0.0302,-0.1319,0.0721,False,
+A,ADVANC.BK,test,LightGBM,365,0.4849,0.005,-0.0352,-0.1369,0.0671,False,
+A,ADVANC.BK,test,LightGBM,365,0.4849,0.01,-0.0402,-0.1419,0.0621,False,
+A,ADVANC.BK,test,LightGBM,365,0.4849,0.02,-0.0502,-0.1519,0.0521,False,
+A,ADVANC.BK,test,LightGBM,365,0.4849,0.05,-0.0802,-0.1819,0.0221,False,
+A,ADVANC.BK,dev OOF,Baseline: Persistence,1815,0.5091,0.0,0.0182,-0.0278,0.0641,False,18663.0
+A,ADVANC.BK,dev OOF,Baseline: Persistence,1815,0.5091,0.005,0.0132,-0.0328,0.0591,False,35479.0
+A,ADVANC.BK,dev OOF,Baseline: Persistence,1815,0.5091,0.01,0.0082,-0.0378,0.0541,False,91932.0
+A,ADVANC.BK,dev OOF,Baseline: Persistence,1815,0.5091,0.02,-0.0018,-0.0478,0.0441,False,
+A,ADVANC.BK,dev OOF,Baseline: Persistence,1815,0.5091,0.05,-0.0318,-0.0778,0.0141,False,
+A,ADVANC.BK,test,Baseline: Persistence,365,0.5041,0.0,0.0082,-0.0939,0.1102,False,91946.0
+A,ADVANC.BK,test,Baseline: Persistence,365,0.5041,0.005,0.0032,-0.0989,0.1052,False,603742.0
+A,ADVANC.BK,test,Baseline: Persistence,365,0.5041,0.01,-0.0018,-0.1039,0.1002,False,
+A,ADVANC.BK,test,Baseline: Persistence,365,0.5041,0.02,-0.0118,-0.1139,0.0902,False,
+A,ADVANC.BK,test,Baseline: Persistence,365,0.5041,0.05,-0.0418,-0.1439,0.0602,False,
+A2,ADVANC.BK,dev CV,Baseline: Persistence-1600,410,0.5244,0.0,0.0488,-0.0479,0.1446,False,2595.0
+A2,ADVANC.BK,dev CV,Baseline: Persistence-1600,410,0.5244,0.005,0.0438,-0.0529,0.1396,False,3221.0
+A2,ADVANC.BK,dev CV,Baseline: Persistence-1600,410,0.5244,0.01,0.0388,-0.0579,0.1346,False,4104.0
+A2,ADVANC.BK,dev CV,Baseline: Persistence-1600,410,0.5244,0.02,0.0288,-0.0679,0.1246,False,7446.0
+A2,ADVANC.BK,dev CV,Baseline: Persistence-1600,410,0.5244,0.05,-0.0012,-0.0979,0.0946,False,
+A2,ADVANC.BK,test,Baseline: Persistence-1600,140,0.5357,0.0,0.0714,-0.0935,0.2325,False,1211.0
+A2,ADVANC.BK,test,Baseline: Persistence-1600,140,0.5357,0.005,0.0664,-0.0985,0.2275,False,1400.0
+A2,ADVANC.BK,test,Baseline: Persistence-1600,140,0.5357,0.01,0.0614,-0.1035,0.2225,False,1638.0
+A2,ADVANC.BK,test,Baseline: Persistence-1600,140,0.5357,0.02,0.0514,-0.1135,0.2125,False,2336.0
+A2,ADVANC.BK,test,Baseline: Persistence-1600,140,0.5357,0.05,0.0214,-0.1435,0.1825,False,13455.0
+A2,ADVANC.BK,dev CV,LightGBM,410,0.4976,0.0,-0.0048,-0.1011,0.0916,False,
+A2,ADVANC.BK,dev CV,LightGBM,410,0.4976,0.005,-0.0098,-0.1061,0.0866,False,
+A2,ADVANC.BK,dev CV,LightGBM,410,0.4976,0.01,-0.0148,-0.1111,0.0816,False,
+A2,ADVANC.BK,dev CV,LightGBM,410,0.4976,0.02,-0.0248,-0.1211,0.0716,False,
+A2,ADVANC.BK,dev CV,LightGBM,410,0.4976,0.05,-0.0548,-0.1511,0.0416,False,
+A2,ADVANC.BK,test,LightGBM,140,0.45,0.0,-0.1,-0.26,0.0653,False,
+A2,ADVANC.BK,test,LightGBM,140,0.45,0.005,-0.105,-0.265,0.0603,False,
+A2,ADVANC.BK,test,LightGBM,140,0.45,0.01,-0.11,-0.27,0.0553,False,
+A2,ADVANC.BK,test,LightGBM,140,0.45,0.02,-0.12,-0.28,0.0453,False,
+A2,ADVANC.BK,test,LightGBM,140,0.45,0.05,-0.15,-0.31,0.0153,False,
+A2,ADVANC.BK,dev CV,ANN (MLP),410,0.4951,0.0,-0.0098,-0.1061,0.0866,False,
+A2,ADVANC.BK,dev CV,ANN (MLP),410,0.4951,0.005,-0.0148,-0.1111,0.0816,False,
+A2,ADVANC.BK,dev CV,ANN (MLP),410,0.4951,0.01,-0.0198,-0.1161,0.0766,False,
+A2,ADVANC.BK,dev CV,ANN (MLP),410,0.4951,0.02,-0.0298,-0.1261,0.0666,False,
+A2,ADVANC.BK,dev CV,ANN (MLP),410,0.4951,0.05,-0.0598,-0.1561,0.0366,False,
+A2,ADVANC.BK,dev CV,Logistic Regression,410,0.4561,0.0,-0.0878,-0.183,0.009,False,
+A2,ADVANC.BK,dev CV,Logistic Regression,410,0.4561,0.005,-0.0928,-0.188,0.004,False,
+A2,ADVANC.BK,dev CV,Logistic Regression,410,0.4561,0.01,-0.0978,-0.193,-0.001,False,
+A2,ADVANC.BK,dev CV,Logistic Regression,410,0.4561,0.02,-0.1078,-0.203,-0.011,False,
+A2,ADVANC.BK,dev CV,Logistic Regression,410,0.4561,0.05,-0.1378,-0.233,-0.041,False,
+A2 Δtick-split,KBANK.BK,dev OOF,Baseline: Persistence-1600,425,0.6259,0.0,0.2518,0.1579,0.3412,True,96.0
+A2 Δtick-split,KBANK.BK,dev OOF,Baseline: Persistence-1600,425,0.6259,0.005,0.2468,0.1529,0.3362,True,100.0
+A2 Δtick-split,KBANK.BK,dev OOF,Baseline: Persistence-1600,425,0.6259,0.01,0.2418,0.1479,0.3312,True,104.0
+A2 Δtick-split,KBANK.BK,dev OOF,Baseline: Persistence-1600,425,0.6259,0.02,0.2318,0.1379,0.3212,True,113.0
+A2 Δtick-split,KBANK.BK,dev OOF,Baseline: Persistence-1600,425,0.6259,0.05,0.2018,0.1079,0.2912,True,149.0
+A2 Δtick-split,KBANK.BK,dev OOF,H1 / Baseline: Persistence-1600 [100-200],424,0.625,0.0,0.25,0.156,0.3395,True,97.0
+A2 Δtick-split,KBANK.BK,dev OOF,H1 / Baseline: Persistence-1600 [100-200],424,0.625,0.005,0.245,0.151,0.3345,True,101.0
+A2 Δtick-split,KBANK.BK,dev OOF,H1 / Baseline: Persistence-1600 [100-200],424,0.625,0.01,0.24,0.146,0.3295,True,106.0
+A2 Δtick-split,KBANK.BK,dev OOF,H1 / Baseline: Persistence-1600 [100-200],424,0.625,0.02,0.23,0.136,0.3195,True,115.0
+A2 Δtick-split,KBANK.BK,dev OOF,H1 / Baseline: Persistence-1600 [100-200],424,0.625,0.05,0.2,0.106,0.2895,True,152.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg,425,0.5718,0.0,0.1436,0.0486,0.236,True,298.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg,425,0.5718,0.005,0.1386,0.0436,0.231,True,320.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg,425,0.5718,0.01,0.1336,0.0386,0.226,True,344.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg,425,0.5718,0.02,0.1236,0.0286,0.216,True,402.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg,425,0.5718,0.05,0.0936,-0.0014,0.186,False,700.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg [100-200],424,0.5708,0.0,0.1416,0.0465,0.2341,True,307.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg [100-200],424,0.5708,0.005,0.1366,0.0415,0.2291,True,330.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg [100-200],424,0.5708,0.01,0.1316,0.0365,0.2241,True,355.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg [100-200],424,0.5708,0.02,0.1216,0.0265,0.2141,True,416.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LogReg [100-200],424,0.5708,0.05,0.0916,-0.0035,0.1841,False,731.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM,425,0.6188,0.0,0.2376,0.1435,0.3274,True,108.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM,425,0.6188,0.005,0.2326,0.1385,0.3224,True,113.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM,425,0.6188,0.01,0.2276,0.1335,0.3174,True,118.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM,425,0.6188,0.02,0.2176,0.1235,0.3074,True,129.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM,425,0.6188,0.05,0.1876,0.0935,0.2774,True,172.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM [100-200],424,0.6179,0.0,0.2358,0.1416,0.3258,True,110.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM [100-200],424,0.6179,0.005,0.2308,0.1366,0.3208,True,114.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM [100-200],424,0.6179,0.01,0.2258,0.1316,0.3158,True,119.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM [100-200],424,0.6179,0.02,0.2158,0.1216,0.3058,True,131.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick LightGBM [100-200],424,0.6179,0.05,0.1858,0.0916,0.2758,True,176.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP,425,0.5835,0.0,0.167,0.0722,0.2588,True,220.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP,425,0.5835,0.005,0.162,0.0672,0.2538,True,234.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP,425,0.5835,0.01,0.157,0.0622,0.2488,True,249.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP,425,0.5835,0.02,0.147,0.0522,0.2388,True,284.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP,425,0.5835,0.05,0.117,0.0222,0.2088,True,447.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP [100-200],424,0.5849,0.0,0.1698,0.0749,0.2617,True,213.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP [100-200],424,0.5849,0.005,0.1648,0.0699,0.2567,True,226.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP [100-200],424,0.5849,0.01,0.1598,0.0649,0.2517,True,240.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP [100-200],424,0.5849,0.02,0.1498,0.0549,0.2417,True,273.0
+A2 Δtick-split,KBANK.BK,dev OOF,Δtick MLP [100-200],424,0.5849,0.05,0.1198,0.0249,0.2117,True,426.0
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600,144,0.5417,0.0,0.0834,-0.0794,0.2419,False,887.0
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600,144,0.5417,0.005,0.0784,-0.0844,0.2369,False,1004.0
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600,144,0.5417,0.01,0.0734,-0.0894,0.2319,False,1145.0
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600,144,0.5417,0.02,0.0634,-0.0994,0.2219,False,1535.0
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600,144,0.5417,0.05,0.0334,-0.1294,0.1919,False,5520.0
+A2 Δtick-split,KBANK.BK,holdout,H1 / Baseline: Persistence-1600 [100-200],61,0.6393,0.0,0.2786,0.0277,0.4964,True,78.0
+A2 Δtick-split,KBANK.BK,holdout,H1 / Baseline: Persistence-1600 [100-200],61,0.6393,0.005,0.2736,0.0227,0.4914,True,81.0
+A2 Δtick-split,KBANK.BK,holdout,H1 / Baseline: Persistence-1600 [100-200],61,0.6393,0.01,0.2686,0.0177,0.4864,True,84.0
+A2 Δtick-split,KBANK.BK,holdout,H1 / Baseline: Persistence-1600 [100-200],61,0.6393,0.02,0.2586,0.0077,0.4764,True,90.0
+A2 Δtick-split,KBANK.BK,holdout,H1 / Baseline: Persistence-1600 [100-200],61,0.6393,0.05,0.2286,-0.0223,0.4464,False,115.0
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600 [200-400],83,0.4699,0.0,-0.0602,-0.2675,0.1524,False,
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600 [200-400],83,0.4699,0.005,-0.0652,-0.2725,0.1474,False,
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600 [200-400],83,0.4699,0.01,-0.0702,-0.2775,0.1424,False,
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600 [200-400],83,0.4699,0.02,-0.0802,-0.2875,0.1324,False,
+A2 Δtick-split,KBANK.BK,holdout,Baseline: Persistence-1600 [200-400],83,0.4699,0.05,-0.1102,-0.3175,0.1024,False,
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM,144,0.5556,0.0,0.1112,-0.0519,0.2685,False,498.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM,144,0.5556,0.005,0.1062,-0.0569,0.2635,False,546.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM,144,0.5556,0.01,0.1012,-0.0619,0.2585,False,602.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM,144,0.5556,0.02,0.0912,-0.0719,0.2485,False,741.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM,144,0.5556,0.05,0.0612,-0.1019,0.2185,False,1642.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [100-200],61,0.5902,0.0,0.1804,-0.0699,0.4094,False,188.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [100-200],61,0.5902,0.005,0.1754,-0.0749,0.4044,False,199.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [100-200],61,0.5902,0.01,0.1704,-0.0799,0.3994,False,211.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [100-200],61,0.5902,0.02,0.1604,-0.0899,0.3894,False,238.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [100-200],61,0.5902,0.05,0.1304,-0.1199,0.3594,False,359.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [200-400],83,0.5301,0.0,0.0602,-0.1524,0.2675,False,1704.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [200-400],83,0.5301,0.005,0.0552,-0.1574,0.2625,False,2027.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [200-400],83,0.5301,0.01,0.0502,-0.1624,0.2575,False,2451.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [200-400],83,0.5301,0.02,0.0402,-0.1724,0.2475,False,3821.0
+A2 Δtick-split,KBANK.BK,holdout,Δtick LightGBM [200-400],83,0.5301,0.05,0.0102,-0.2024,0.2175,False,59254.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600,425,0.5294,0.0,0.0588,-0.0362,0.1528,False,1787.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600,425,0.5294,0.005,0.0538,-0.0412,0.1478,False,2134.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600,425,0.5294,0.01,0.0488,-0.0462,0.1428,False,2593.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600,425,0.5294,0.02,0.0388,-0.0562,0.1328,False,4101.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600,425,0.5294,0.05,0.0088,-0.0862,0.1028,False,79612.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600 [200-400],425,0.5294,0.0,0.0588,-0.0362,0.1528,False,1787.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600 [200-400],425,0.5294,0.005,0.0538,-0.0412,0.1478,False,2134.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600 [200-400],425,0.5294,0.01,0.0488,-0.0462,0.1428,False,2593.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600 [200-400],425,0.5294,0.02,0.0388,-0.0562,0.1328,False,4101.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Baseline: Persistence-1600 [200-400],425,0.5294,0.05,0.0088,-0.0862,0.1028,False,79612.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg,425,0.5318,0.0,0.0636,-0.0314,0.1575,False,1527.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg,425,0.5318,0.005,0.0586,-0.0364,0.1525,False,1798.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg,425,0.5318,0.01,0.0536,-0.0414,0.1475,False,2149.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg,425,0.5318,0.02,0.0436,-0.0514,0.1375,False,3248.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg,425,0.5318,0.05,0.0136,-0.0814,0.1075,False,33326.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg [200-400],425,0.5318,0.0,0.0636,-0.0314,0.1575,False,1527.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg [200-400],425,0.5318,0.005,0.0586,-0.0364,0.1525,False,1798.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg [200-400],425,0.5318,0.01,0.0536,-0.0414,0.1475,False,2149.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg [200-400],425,0.5318,0.02,0.0436,-0.0514,0.1375,False,3248.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LogReg [200-400],425,0.5318,0.05,0.0136,-0.0814,0.1075,False,33326.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM,425,0.5153,0.0,0.0306,-0.0643,0.1249,False,6601.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM,425,0.5153,0.005,0.0256,-0.0693,0.1199,False,9431.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM,425,0.5153,0.01,0.0206,-0.0743,0.1149,False,14564.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM,425,0.5153,0.02,0.0106,-0.0843,0.1049,False,54993.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM,425,0.5153,0.05,-0.0194,-0.1143,0.0749,False,
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM [200-400],425,0.5153,0.0,0.0306,-0.0643,0.1249,False,6601.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM [200-400],425,0.5153,0.005,0.0256,-0.0693,0.1199,False,9431.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM [200-400],425,0.5153,0.01,0.0206,-0.0743,0.1149,False,14564.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM [200-400],425,0.5153,0.02,0.0106,-0.0843,0.1049,False,54993.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick LightGBM [200-400],425,0.5153,0.05,-0.0194,-0.1143,0.0749,False,
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP,425,0.5129,0.0,0.0258,-0.069,0.1202,False,9287.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP,425,0.5129,0.005,0.0208,-0.074,0.1152,False,14287.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP,425,0.5129,0.01,0.0158,-0.079,0.1102,False,24759.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP,425,0.5129,0.02,0.0058,-0.089,0.1002,False,183696.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP,425,0.5129,0.05,-0.0242,-0.119,0.0702,False,
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP [200-400],425,0.5129,0.0,0.0258,-0.069,0.1202,False,9287.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP [200-400],425,0.5129,0.005,0.0208,-0.074,0.1152,False,14287.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP [200-400],425,0.5129,0.01,0.0158,-0.079,0.1102,False,24759.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP [200-400],425,0.5129,0.02,0.0058,-0.089,0.1002,False,183696.0
+A2 Δtick-split,ADVANC.BK,dev OOF,Δtick MLP [200-400],425,0.5129,0.05,-0.0242,-0.119,0.0702,False,
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600,144,0.5139,0.0,0.0278,-0.1341,0.1882,False,7998.0
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600,144,0.5139,0.005,0.0228,-0.1391,0.1832,False,11890.0
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600,144,0.5139,0.01,0.0178,-0.1441,0.1782,False,19507.0
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600,144,0.5139,0.02,0.0078,-0.1541,0.1682,False,101567.0
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600,144,0.5139,0.05,-0.0222,-0.1841,0.1382,False,
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600 [200-400],142,0.507,0.0,0.014,-0.1487,0.1759,False,31542.0
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600 [200-400],142,0.507,0.005,0.009,-0.1537,0.1709,False,76322.0
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600 [200-400],142,0.507,0.01,0.004,-0.1587,0.1659,False,386359.0
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600 [200-400],142,0.507,0.02,-0.006,-0.1687,0.1559,False,
+A2 Δtick-split,ADVANC.BK,holdout,Baseline: Persistence-1600 [200-400],142,0.507,0.05,-0.036,-0.1987,0.1259,False,
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg,144,0.5556,0.0,0.1112,-0.0519,0.2685,False,498.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg,144,0.5556,0.005,0.1062,-0.0569,0.2635,False,546.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg,144,0.5556,0.01,0.1012,-0.0619,0.2585,False,602.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg,144,0.5556,0.02,0.0912,-0.0719,0.2485,False,741.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg,144,0.5556,0.05,0.0612,-0.1019,0.2185,False,1642.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg [200-400],142,0.5493,0.0,0.0986,-0.0655,0.2575,False,634.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg [200-400],142,0.5493,0.005,0.0936,-0.0705,0.2525,False,704.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg [200-400],142,0.5493,0.01,0.0886,-0.0755,0.2475,False,785.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg [200-400],142,0.5493,0.02,0.0786,-0.0855,0.2375,False,998.0
+A2 Δtick-split,ADVANC.BK,holdout,Δtick LogReg [200-400],142,0.5493,0.05,0.0486,-0.1155,0.2075,False,2605.0
