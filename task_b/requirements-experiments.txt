@@ -1,0 +1,20 @@
+# task_b -- extra libraries used ONLY by the Sep-14-feedback experiment scripts
+# (split_profile.py, stats_tests.py, finetune_experiment.py, optuna_features.py)
+#
+# requirements.txt stays untouched: the live/daily pipeline must keep running on
+# the exact pinned set that produced the recorded results (E4).
+# Install with:  pip install -r requirements-experiments.txt
+# (comments kept ASCII: pip on Windows reads this file as cp1252)
+-r requirements.txt
+
+# hyperparameter / feature search (feedback item 3)
+optuna==4.6.0
+
+# KS / Levene tests in split_profile.py (feedback item 5)
+scipy==1.18.1
+
+# figures for the fine-tune and Optuna reports (feedback items 3 and 7)
+matplotlib==3.9.2
+
+# parallel evaluation of the 4 Optuna evals per trial (models stay n_jobs=1)
+joblib==1.6.0

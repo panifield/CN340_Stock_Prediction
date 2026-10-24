@@ -21,7 +21,9 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 # ค่านั้นได้ ~0.98 ทุกโมเดลรวมทั้ง naive -- วัดข้อมูล ไม่ได้วัดโมเดล
 #
 # DirAcc ใช้กับ regression ได้ แต่เป็นแค่ secondary directional diagnostic
-# และต้องกำหนดนโยบายวันราคานิ่งก่อน -> ย้ายไปเฟส 2
+# และต้องกำหนดนโยบายวันราคานิ่งก่อน -> ย้ายไปอยู่ stats_tests.direction_metrics()
+# (นโยบายที่เลือก: นับ hit rate เฉพาะวันที่ y != 0 เพราะวันนิ่งไม่มีทิศที่ถูกให้ทาย)
+# ยังไม่เข้าตารางหลักและไม่ถูกใช้เลือกโมเดล
 
 
 def regression_metrics(y_true, y_pred, prev_close=None):
@@ -123,6 +125,9 @@ def prediction_shape(y_true, y_pred):
            เพื่อกันคำตอบเสื่อม (โมเดลยุบเป็นค่าคงที่)
 
     *** ห้ามเพิ่ม p-value / confidence interval / significance test ใด ๆ ลงในฟังก์ชันนี้ ***
+    การทดสอบนัยสำคัญอยู่ที่ `stats_tests.py` (โมดูลแยก feedback ข้อ 2):
+    `diebold_mariano()` (DM + HLN correction), `direction_metrics()`, `mae_decomposition()`
+    -> คนละตาราง คนละไฟล์ · p-value จึงไม่มีทางไหลเข้ามาเป็นเกณฑ์เลือกโมเดล
     """
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
