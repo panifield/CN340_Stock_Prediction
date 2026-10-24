@@ -123,3 +123,65 @@ def signal_economics(y_true, y_pred, cost_rt, threshold=None):
         "total_cost":   float(total_cost),
         "net_return":   gross_return - float(total_cost),
     }
+
+# ---------------------------------------------------------------
+# Sensitivity ของข้อสรุป "สัญญาณเล็กกว่าต้นทุน" (feedback ข้อ 4)
+# ---------------------------------------------------------------
+# ค่าใน SET_COSTS["commission_per_side"] = 0.0015 เป็นอัตราออนไลน์ของบัญชี
+# cash balance ขั้นแรก (มูลค่าซื้อขาย <= 5 ล้านบาท/วัน) ของโบรกเกอร์หนึ่งราย
+# -- ไม่ใช่ค่าที่ใช้ได้กับทุกคน (ดู REFERENCES.md หมวด 2 สำหรับตารางที่ตรวจมาจริง)
+#
+# ฟังก์ชันด้านล่างตอบคำถามเดียว: *ถ้าค่าคอมมิชชันไม่ใช่ 0.15% ข้อสรุปเปลี่ยนไหม*
+# ประกาศค่าที่จะลองไว้ตรงนี้ (ไม่จูน ไม่เลือกหลังเห็นผล):
+#   0.0010   อัตราต่ำสุดที่ตรวจเจอในตารางโบรกเกอร์ (ขั้นมูลค่าสูง / โปรโมชัน)
+#   0.0015   ค่าที่ใช้อยู่ใน SET_COSTS (DAOL online cash balance <= 5 MB)
+#   0.00157  ค่าที่ task_a / task_a2 ใช้ (= 0.157% ที่โบรกเกอร์มักโฆษณาแบบรวมค่าธรรมเนียม)
+#   0.0020   InnovestX online cash account <= 5 MB
+#   0.0025   อัตรา IC (มีผู้แนะนำการลงทุน) ขั้นแรก
+COMMISSION_GRID = [0.0010, 0.0015, 0.00157, 0.0020, 0.0025]
+
+
+def cost_round_trip_at(commission_per_side, costs=SET_COSTS):
+    """
+    ต้นทุนไป-กลับเมื่อเปลี่ยนเฉพาะค่าคอมมิชชัน (ค่าธรรมเนียมตลาด/ชำระราคา/กำกับ + VAT คงเดิม)
+
+    *** ไม่แก้ SET_COSTS *** -- สร้าง dict ใหม่แล้วส่งให้ cost_round_trip() ตัวเดิม
+    เพื่อให้สูตรมีที่เดียว ถ้าสูตรเปลี่ยน ตาราง sensitivity เปลี่ยนตามอัตโนมัติ
+    """
+    return cost_round_trip({**costs, "commission_per_side": commission_per_side})
+
+
+def cost_sensitivity(y_true, preds, prev_close, commissions=COMMISSION_GRID):
+    """
+    ตาราง sensitivity -- diagnostic เท่านั้น ห้ามใช้เลือกโมเดล (เหมือนตารางที่สาม)
+
+    preds = {ชื่อโมเดล: array ของ predicted return}
+
+    ต่อ (ค่าคอมมิชชัน x โมเดล) คืน:
+      breakeven_bps          ต้นทุนไป-กลับที่อัตรานั้น
+      pct_pred_above_cost    % วันที่โมเดลทำนาย "ขึ้นเกินต้นทุน" (นิยามเดียวกับ breakeven_report)
+      pct_actual_above_cost  % วันที่ราคาขึ้นจริงเกินต้นทุน (ไม่ขึ้นกับโมเดล = เพดานของ long/cash)
+      n_days_long / n_trades / gross_return / total_cost / net_return  จาก signal_economics()
+                             โดย threshold = ต้นทุนของอัตรานั้น (ประกาศล่วงหน้า ไม่จูน)
+
+    ใช้ฟังก์ชันเดิมทุกตัว (cost_round_trip / signal_economics) ไม่คัดลอกสูตรใหม่
+    """
+    y_true = np.asarray(y_true, dtype=float)
+    prev = np.asarray(prev_close, dtype=float)
+    ticks = np.array([tick_size(p) for p in prev])
+
+    rows = []
+    for c in commissions:
+        cost_rt = cost_round_trip_at(c)
+        for name, p in preds.items():
+            p = np.asarray(p, dtype=float)
+            rows.append({
+                "commission_per_side": c,
+                "model": name,
+                "breakeven_bps": cost_rt * 1e4,
+                "pct_pred_above_cost": float(np.mean(p > cost_rt)),
+                "pct_actual_above_cost": float(np.mean(y_true > cost_rt)),
+                "mean_pred_move_ticks": float(np.mean(np.abs(p) * prev / ticks)),
+                **signal_economics(y_true, p, cost_rt),
+            })
+    return rows

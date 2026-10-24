@@ -22,14 +22,37 @@
 ```bash
 pip install -r requirements.txt
 python main.py --dev             # พัฒนา: train/val เท่านั้น ไม่แตะ test (ต้องระบุโหมดเสมอ)
-python tests/test_pipeline.py    # 18 tests (daily pipeline)
+python tests/test_pipeline.py    # 20 tests (daily pipeline)
 python tests/test_phase1d.py     # 21 tests (Phase 1D builder/metric · ข้อมูลสังเคราะห์ · ~3 นาที)
 ```
 
+### งานตอบ feedback 14 ก.ย. 2026 (ผลรายงานเท่านั้น — ไม่เปลี่ยนโมเดลที่ใช้ทำนายจริง)
+
+```bash
+pip install -r requirements-experiments.txt   # = requirements.txt + optuna / scipy / matplotlib / joblib
+
+python split_profile.py                  # ข้อ 5: distribution ของ train/val/test (descriptive)
+python stats_tests.py --walkforward      # ข้อ 2: DM test บน walk-forward 6 evaluation
+python finetune_experiment.py --run      # ข้อ 7: pretrain + fine-tune (มี --smoke จับเวลา)
+python optuna_features.py --run          # ข้อ 3: ค้น feature group + hyperparameter (มี --smoke)
+python main.py --dev --curves            # ข้อ 8: REC curve + ANN loss/alpha curve
+
+python tests/test_stats.py                     # 13 tests ของ stats_tests.py
+python tests/test_features_experimental.py      # 16 tests ของ features_experimental.py
+```
+
+`main.py --dev` เซฟไฟล์ diagnostic เพิ่มด้วย (ข้อ 10 / ข้อ 2 / ข้อ 4):
+`*_val_shape.csv`, `*_val_costs.csv`, `*_val_preds.csv`, `*_val_stats.csv`, `cost_sensitivity.csv`
+— **`*_taskB_val.csv` (ตารางหลัก) ไม่เปลี่ยนชื่อและไม่เปลี่ยนเนื้อหา**
+
+สถานะ feedback ทั้ง 12 ข้อ → [`FEEDBACK_STATUS.md`](FEEDBACK_STATUS.md)
+
 รันจากโฟลเดอร์ไหนก็ได้ (`python task_b/main.py --dev`)
 ผลบันทึกที่ `results/<หุ้น>_taskB_val.csv`
-RF / XGBoost ใช้ `n_jobs=-1` → ผล numerically reproducible within floating-point precision
-(val CSV ที่ตรวจใน regression check ตรงกันทุก byte ในการรันที่ผ่านมา แต่ไม่ได้รับประกันทุกเครื่อง)
+RF / XGBoost ใช้ `n_jobs=1` (เปลี่ยนจาก `-1` เมื่อ 2026-09-29) → รันซ้ำบนเครื่องเดียวกัน
+ได้ผล byte-identical · **ข้ามเครื่อง/ข้าม platform ยังไม่การันตี** — XGBoost ต่างได้ราว
+0.03–0.08% ระหว่าง Windows กับ Linux จึงต้องตรวจด้วย tolerance ไม่ใช่ byte-ต่อ-byte
+(`daily_next_day.check_val_regression`, rtol 0.5% / atol 1e-5 · ดู `KNOWN_ISSUES.md`)
 
 **`python main.py` เปล่า ๆ จะ error** — ต้องเลือก `--dev` หรือ `--open-test` เอง
 `--open-test` เปิด historical test ซึ่งถูกล็อกไว้:
@@ -98,6 +121,19 @@ RF / XGBoost ใช้ `n_jobs=-1` → ผล numerically reproducible within fl
 | `tests/test_pipeline.py` | 18 tests: alignment, dow, NaN, lock gate, seed averaging, shape, weighting, costs, fingerprint, dry-run log, historical test cut |
 | `tests/test_phase1d.py` | 21 tests ของ Phase 1D (ข้อมูลสังเคราะห์) |
 | `results_reference/` | ผลของเวอร์ชันก่อนหน้า — backup เท่านั้น ห้ามเป็น input |
+| **ไฟล์ใหม่ของรอบ feedback 14 ก.ย. 2026** | |
+| `REFERENCES.md` | ข้อ 4: แหล่งอ้างอิงทั้งหมด (ข้อมูล / ค่าธรรมเนียม / วิธีการ) + ตารางโยงโค้ด→reference |
+| `MODEL_RATIONALE.md` | ข้อ 11: ทำไมทำนาย return · แต่ละโมเดลแก้ปัญหาอะไร · พารามิเตอร์มาจากไหน |
+| `FEEDBACK_STATUS.md` | สถานะ feedback ทั้ง 12 ข้อ + ไฟล์หลักฐาน |
+| `split_profile.py` | ข้อ 5: distribution ของ train/val/test + KS / Levene (descriptive · ไม่เทรนบน test) |
+| `stats_tests.py` | ข้อ 2: DM test + HLN correction · direction metrics · การแยก MAE วันนิ่ง/วันขยับ |
+| `features_experimental.py` | ข้อ 3: จัด 29 feature เป็น 7 กลุ่ม + กลุ่มใหม่ `cross_stock` (**ไม่แก้ `features.py`**) |
+| `finetune_experiment.py` | ข้อ 7: pretrain(old) → fine-tune(recent) เทียบ pooled บน walk-forward 6 evaluation |
+| `optuna_features.py` | ข้อ 3: Optuna TPE ค้น feature group + hyperparameter (fold 1–2 ค้น · fold 3 ยืนยัน) |
+| `requirements-experiments.txt` | pin ของสคริปต์ทดลองข้างบน (**ไม่แก้ `requirements.txt`**) |
+| `tests/test_stats.py` | 13 tests ของ `stats_tests.py` (ข้อมูลสังเคราะห์ + ตรวจ HLN กับค่าคำนวณมือ) |
+| `tests/test_features_experimental.py` | 16 tests ของ `features_experimental.py` (รวม negative control ของ leak test + ตาข่ายนิรภัย `dev_only`) |
+| `results/feedback/` | แผนที่ pre-register ไว้ (`FINETUNE_PLAN.md`, `OPTUNA_PLAN.md` + SHA-256) · ผล · `WHY_NAIVE_WINS.md` · `DECISIONS.md` |
 
 ---
 
@@ -178,7 +214,15 @@ python tests/test_backfill_close_r2.py          # 6 tests ของเครื�
 - `MAE_baht` / `RMSE_baht` ใช้อธิบายขนาด error เป็นบาท
 - `R2_return` < 0 = แย่กว่าการทายค่าเฉลี่ยของชุดนั้น
 - ไม่มี `R2_price`: ได้ ~0.98 ทุกโมเดลรวมทั้ง naive — วัดข้อมูล ไม่ได้วัดโมเดล
-- ไม่มี `DirAcc` ในเฟส 1 (ต้องกำหนดนโยบายวันราคานิ่งก่อน — เฟส 2)
+- **`DirAcc` มีแล้ว** แต่อยู่คนละตาราง: `stats_tests.direction_metrics` คืน
+  `dir_hit_rate_moved_days` (นับเฉพาะวันที่ `y != 0` เพราะวันราคานิ่งไม่มีทิศที่ถูกให้ทาย
+  = นโยบายวันราคานิ่งที่เคยค้างไว้) + `frac_zero_move` / `frac_pred_zero` / IC
+  (Pearson, Spearman) · เซฟที่ `results/<หุ้น>_taskB_val_stats.csv` และ
+  `results/feedback/walkforward_stats.csv`
+  **ไม่อยู่ในตารางหลักและไม่ถูกใช้เลือกโมเดล** (การเลือกยังใช้ `MAE_return` เท่านั้น)
+- **DM test มีแล้ว**: `stats_tests.diebold_mariano` (Diebold–Mariano + Harvey–Leybourne–Newbold
+  small-sample correction) → ไฟล์เดียวกับด้านบน · อ่านผลสรุปที่
+  `results/feedback/WHY_NAIVE_WINS.md`
 
 ---
 

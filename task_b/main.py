@@ -41,11 +41,16 @@ from splits import chronological_split, prepare_xy
 from models import get_regressors
 from weighting import recency_weights
 from baselines import get_regression_baselines
-from trading_costs import cost_round_trip, breakeven_report, signal_economics
+from trading_costs import (
+    cost_round_trip, breakeven_report, signal_economics, cost_sensitivity,
+    COMMISSION_GRID,
+)
 from evaluate import (
     regression_metrics, results_table, print_table, compare_to_baseline,
     prediction_shape,
 )
+# feedback ข้อ 2 -- โมดูลแยก ไม่แตะ regression_metrics / prediction_shape (ดู stats_tests.py)
+from stats_tests import full_report
 
 PRIMARY_METRIC = "MAE_return"
 
@@ -172,25 +177,28 @@ def run_task_b(X, targets, use_test, verbose=True):
     print("  - MAE_baht / RMSE_baht ใช้อธิบายขนาด error เป็นบาทเท่านั้น")
     print("  - R2_return < 0 แปลว่าแย่กว่าการทายค่าเฉลี่ยของชุดนั้น")
 
-    # ตารางที่ 2 (§2) -- diagnostic แยกจากตารางหลัก พิมพ์อย่างเดียว ไม่ลง CSV
-    # ไม่ถูกใช้เลือกโมเดล (best เลือกด้วย MAE_return ไปแล้วด้านบน)
+    # ตารางที่ 2 (§2) -- diagnostic แยกจากตารางหลัก ไม่ถูกใช้เลือกโมเดล
+    # (best เลือกด้วย MAE_return ไปแล้วด้านบน)
+    # feedback ข้อ 10: เซฟลง results/<TICKER>_taskB_<stage>_shape.csv ด้วย (ดู save_results)
+    # -- แยกไฟล์จากตารางหลัก เพื่อให้ *_taskB_<stage>.csv คงเดิมทุก byte
     shape_df = results_table(
         {name: prediction_shape(y_eval, p) for name, p in eval_preds.items()}
-    )
-    print_table(shape_df.loc[df.index],       # เรียงลำดับเดียวกับตารางหลัก
+    ).loc[df.index]                           # เรียงลำดับเดียวกับตารางหลัก
+    print_table(shape_df,
                 "งาน B : รูปร่างการทำนาย (diagnostic -- ไม่ใช้เลือกโมเดล)")
     print("\n  อ่านตารางนี้อย่างไร:")
     print("  - StdRatio ใกล้ 0 = โมเดลยุบเป็นค่าคงที่ (ถึงจะได้ MAE ดีก็ไม่นับว่าทำนายได้)")
     print("  - ตารางนี้ไม่ถูกใช้เลือกโมเดล -- การเลือกใช้ MAE_return เท่านั้น")
 
-    # ตารางที่ 3 (§5) -- ต้นทุนการเทรด diagnostic แยก พิมพ์อย่างเดียว ไม่ลง CSV
+    # ตารางที่ 3 (§5) -- ต้นทุนการเทรด diagnostic แยก
     # เฟสนี้รันบน validation เท่านั้น (โหมดปกติยังไม่เปิดเพราะไม่มีไฟล์ lock)
+    # feedback ข้อ 10: เซฟลง results/<TICKER>_taskB_<stage>_costs.csv ด้วย (ดู save_results)
     cost_df = results_table({
         name: {**breakeven_report(y_eval, p, prev_close_eval),
                **signal_economics(y_eval, p, cost_round_trip())}
         for name, p in eval_preds.items()
-    })
-    print_table(cost_df.loc[df.index],
+    }).loc[df.index]
+    print_table(cost_df,
                 "งาน B : ต้นทุนการเทรด -- hypothetical close-to-close signal/cost "
                 "diagnostic, not an executable backtest (ไม่ใช้เลือกโมเดล)")
     print(f"\n  ต้นทุนไป-กลับ = {cost_round_trip()*1e4:.1f} bps "
@@ -203,7 +211,8 @@ def run_task_b(X, targets, use_test, verbose=True):
     print("  - สมมติเข้า/ออกที่ราคา close ได้พอดี (prediction ใช้ข้อมูลถึง close ของ t-1)"
           " ซึ่งทำจริงไม่ได้ครบถ้วน")
 
-    return {"table": df, "preds": eval_preds, "y_eval": y_eval,
+    return {"table": df, "shape_table": shape_df, "cost_table": cost_df,
+            "preds": eval_preds, "y_eval": y_eval,
             "prev_close_eval": prev_close_eval, "diag": diag,
             "eval_index": y_eval.index, "best_model": best, "stage": eval_split,
             "fitted": fitted}
@@ -248,14 +257,96 @@ def run_one_ticker(ticker, use_test):
     return {"ticker": ticker, "b": res}
 
 
+# ตารางที่ต้องเซฟต่อหุ้น: suffix ของชื่อไฟล์ -> key ใน dict ที่ run_task_b คืนมา
+# "" = ตารางหลัก (ชื่อไฟล์เดิม ห้ามเปลี่ยนชื่อหรือเนื้อหา -- เป็น artifact ที่ guard
+#      ของ daily_next_day.py เทียบกับ HEAD ทุกวัน)
+# "_shape" / "_costs" = ตาราง diagnostic ที่ก่อนหน้านี้ print อย่างเดียว (feedback ข้อ 10)
+SAVED_TABLES = {"": "table", "_shape": "shape_table", "_costs": "cost_table"}
+
+
 def save_results(all_results):
-    """บันทึกตารางของ split ที่ประเมิน: --dev -> *_val.csv / โหมดปกติ -> *_test.csv"""
+    """
+    บันทึกตารางของ split ที่ประเมิน: --dev -> *_val*.csv / โหมดปกติ -> *_test*.csv
+
+    เซฟ 3 ไฟล์ต่อหุ้น (feedback ข้อ 10 -- เดิมตาราง 2/3 print อย่างเดียว เลยอ้างอิง
+    ในรายงานไม่ได้):
+        <TICKER>_taskB_<stage>.csv         ตารางหลัก (metric) -- เดิม
+        <TICKER>_taskB_<stage>_shape.csv   StdRatio / Bias / Rho
+        <TICKER>_taskB_<stage>_costs.csv   breakeven + signal economics
+
+    full precision (ไม่ปัด -- ดู evaluate.results_table) และ utf-8-sig เหมือนไฟล์เดิม
+    ทั้งสามไฟล์เรียงแถวเหมือนกัน (ลำดับของตารางหลัก) จึง join ด้วย index ได้ตรง ๆ
+    """
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for r in all_results:
         t = r["ticker"].replace(".", "_").replace("^", "")
-        path = OUTPUT_DIR / f"{t}_taskB_{r['b']['stage']}.csv"
-        r["b"]["table"].to_csv(path, encoding="utf-8-sig")
-        print(f"[main] บันทึก {path.relative_to(OUTPUT_DIR.parent)}")
+        for suffix, key in SAVED_TABLES.items():
+            path = OUTPUT_DIR / f"{t}_taskB_{r['b']['stage']}{suffix}.csv"
+            r["b"][key].to_csv(path, encoding="utf-8-sig")
+            print(f"[main] บันทึก {path.relative_to(OUTPUT_DIR.parent)}")
+    save_cost_sensitivity(all_results)
+    save_stats_and_preds(all_results)
+
+
+def save_stats_and_preds(all_results):
+    """
+    เซฟ 2 ไฟล์ต่อหุ้น (feedback ข้อ 2) -- แยกจากตารางหลักเสมอ
+
+        <TICKER>_taskB_<stage>_preds.csv   คำทำนายรายวันของทุกโมเดล + baseline
+        <TICKER>_taskB_<stage>_stats.csv   DM test vs Naive + direction metrics
+                                           + การแยก MAE เป็นวันนิ่ง/วันขยับ
+
+    ทำไมต้องเซฟคำทำนายรายวัน: ไฟล์ stats คำนวณจากคำทำนายชุดนี้ ถ้าไม่เก็บไว้
+    ตัวเลขในรายงานจะตรวจซ้ำไม่ได้เลย (ต้องเทรนใหม่ทุกครั้ง) · คอลัมน์ prev_close
+    ทำให้แปลงกลับเป็นราคาได้ด้วย
+
+    *** p-value ในไฟล์ stats ห้ามใช้เลือกโมเดล *** การเลือกใช้ MAE_return เท่านั้น
+    และผลบน fixed val เป็น in-sample ของการจูน (val ถูกใช้จูนมาแล้ว)
+    """
+    for r in all_results:
+        t = r["ticker"].replace(".", "_").replace("^", "")
+        stage = r["b"]["stage"]
+        y_eval = r["b"]["y_eval"]
+        preds = r["b"]["preds"]
+
+        wide = pd.DataFrame({"y_true": y_eval,
+                             "prev_close": r["b"]["prev_close_eval"]},
+                            index=y_eval.index)
+        for name, p in preds.items():
+            wide[name] = p
+        wide.index.name = "date"
+        ppath = OUTPUT_DIR / f"{t}_taskB_{stage}_preds.csv"
+        wide.to_csv(ppath, encoding="utf-8-sig")
+        print(f"[main] บันทึก {ppath.relative_to(OUTPUT_DIR.parent)}")
+
+        # Naive ของงาน B = return 0 ทุกวัน -> ใช้ baseline ตัวจริงจากตารางเดียวกัน
+        naive = preds["Baseline: Naive (RW)"]
+        rows = {name: full_report(y_eval, p, naive)
+                for name, p in preds.items()}
+        spath = OUTPUT_DIR / f"{t}_taskB_{stage}_stats.csv"
+        # เรียงแถวเหมือนตารางหลัก -> join ด้วย index ได้ตรง ๆ
+        results_table(rows).loc[r["b"]["table"].index].to_csv(
+            spath, encoding="utf-8-sig")
+        print(f"[main] บันทึก {spath.relative_to(OUTPUT_DIR.parent)}")
+
+
+def save_cost_sensitivity(all_results):
+    """
+    results/cost_sensitivity.csv (feedback ข้อ 4) -- รวมทุกหุ้นในไฟล์เดียว
+
+    ตอบว่า "ข้อสรุปว่าสัญญาณเล็กกว่าต้นทุน เปลี่ยนไหมเมื่อค่าคอมมิชชันเปลี่ยน"
+    ค่าคอมมิชชันที่ลองประกาศไว้ใน trading_costs.COMMISSION_GRID (ไม่ได้เลือกหลังเห็นผล)
+    *** ไม่แก้ SET_COSTS *** และตารางนี้ไม่ถูกใช้เลือกโมเดลเหมือนตารางที่สาม
+    """
+    rows = []
+    for r in all_results:
+        for row in cost_sensitivity(r["b"]["y_eval"], r["b"]["preds"],
+                                    r["b"]["prev_close_eval"]):
+            rows.append({"ticker": r["ticker"], "stage": r["b"]["stage"], **row})
+    path = OUTPUT_DIR / "cost_sensitivity.csv"
+    pd.DataFrame(rows).to_csv(path, index=False, encoding="utf-8-sig")
+    print(f"[main] บันทึก {path.relative_to(OUTPUT_DIR.parent)} "
+          f"(commission {COMMISSION_GRID})")
 
 
 def parse_args():

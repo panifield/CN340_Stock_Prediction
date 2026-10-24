@@ -21,8 +21,14 @@ def baseline_naive_return(y_test):
     ตัวนี้คือคู่แข่งหลักของงานทำนายราคา
 
     ถ้า MAE แพ้ naive ยังไม่มีหลักฐานจาก metric นี้ว่า ML ให้ประโยชน์
-    เหนือ baseline -- ต้องพิจารณาความมีนัยสำคัญ (DM test) และมูลค่า
-    เชิงเศรษฐศาสตร์เพิ่มเติม (เฟส 2)
+    เหนือ baseline -- ต้องพิจารณาความมีนัยสำคัญและมูลค่าเชิงเศรษฐศาสตร์เพิ่มเติม
+
+    ทำแล้ว (feedback ข้อ 2): DM test + HLN correction อยู่ที่
+    `stats_tests.diebold_mariano()` · ผลบน fixed val อยู่ที่
+    `results/<TICKER>_taskB_val_stats.csv` · ผลบน walk-forward 6 evaluation อยู่ที่
+    `results/feedback/walkforward_stats.csv` · คำอธิบายกลไกที่ Naive ได้เปรียบ
+    (วันราคานิ่ง) อยู่ที่ `results/feedback/WHY_NAIVE_WINS.md`
+    ส่วนมูลค่าเชิงเศรษฐศาสตร์อยู่ที่ `trading_costs.py` (ตารางที่สาม)
     """
     return np.zeros(len(y_test))
 

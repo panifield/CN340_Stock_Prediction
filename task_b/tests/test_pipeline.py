@@ -392,6 +392,137 @@ def test_historical_test_end_truncation():
     assert d.index[-1] <= pd.Timestamp(SPLIT_BY_DATE["val_end"])
 
 
+def test_saves_shape_and_costs_tables():
+    """
+    feedback ข้อ 10 / 2 / 4: main.save_results ต้องเซฟไฟล์ diagnostic เพิ่ม
+    (shape / costs / preds / stats + cost_sensitivity) โดยไม่แตะชื่อหรือ
+    เนื้อหาของตารางหลัก
+
+    ใช้ข้อมูลสังเคราะห์ + OUTPUT_DIR ชั่วคราว -- ไม่เทรนโมเดลจริง (เร็ว) และ
+    ไม่มีทางเขียนทับ results/ ของจริง
+    """
+    import main as main_mod
+    from evaluate import results_table, prediction_shape
+    from trading_costs import breakeven_report, signal_economics, cost_round_trip
+
+    rng = np.random.default_rng(0)
+    y_true = pd.Series(rng.normal(0, 0.01, 60),
+                       index=pd.bdate_range("2024-01-01", periods=60))
+    prev_close = pd.Series(np.full(60, 120.0), index=y_true.index)
+    preds = {"Model X": rng.normal(0, 0.002, 60),
+             "Baseline: Naive (RW)": np.zeros(60)}
+
+    table = results_table({n: {"MAE_return": float(np.abs(y_true - p).mean())}
+                           for n, p in preds.items()}, sort_by="MAE_return")
+    shape = results_table({n: prediction_shape(y_true, p)
+                           for n, p in preds.items()}).loc[table.index]
+    cost = results_table({
+        n: {**breakeven_report(y_true, p, prev_close),
+            **signal_economics(y_true, p, cost_round_trip())}
+        for n, p in preds.items()}).loc[table.index]
+
+    all_results = [{"ticker": "SYN.BK",
+                    "b": {"stage": "val", "table": table,
+                          "shape_table": shape, "cost_table": cost,
+                          # save_cost_sensitivity / save_stats_and_preds ใช้สามคีย์นี้
+                          "y_eval": y_true, "preds": preds,
+                          "prev_close_eval": prev_close}}]
+
+    with tempfile.TemporaryDirectory() as d:
+        out = Path(d) / "results"
+        old = main_mod.OUTPUT_DIR
+        main_mod.OUTPUT_DIR = out
+        try:
+            main_mod.save_results(all_results)
+        finally:
+            main_mod.OUTPUT_DIR = old
+
+        written = sorted(f.name for f in out.glob("*.csv"))
+        assert written == ["SYN_BK_taskB_val.csv", "SYN_BK_taskB_val_costs.csv",
+                           "SYN_BK_taskB_val_preds.csv",
+                           "SYN_BK_taskB_val_shape.csv",
+                           "SYN_BK_taskB_val_stats.csv",
+                           "cost_sensitivity.csv"], written
+
+        # ตารางหลักต้องไม่มีคอลัมน์ diagnostic ปนเข้ามา
+        main_csv = pd.read_csv(out / "SYN_BK_taskB_val.csv", index_col=0,
+                               encoding="utf-8-sig")
+        assert main_csv.columns.tolist() == ["MAE_return"]
+
+        got_shape = pd.read_csv(out / "SYN_BK_taskB_val_shape.csv", index_col=0,
+                                encoding="utf-8-sig")
+        assert got_shape.columns.tolist() == ["StdRatio", "Bias", "Rho"]
+
+        got_cost = pd.read_csv(out / "SYN_BK_taskB_val_costs.csv", index_col=0,
+                               encoding="utf-8-sig")
+        assert got_cost.columns.tolist() == [
+            "breakeven_bps", "pct_pred_above_cost", "pct_actual_above_cost",
+            "mean_pred_move_ticks", "n_days_long", "n_trades",
+            "gross_return", "total_cost", "net_return"], got_cost.columns.tolist()
+
+        # ทั้งสามไฟล์เรียงแถวเหมือนกัน -> join ด้วย index ได้
+        assert got_shape.index.tolist() == main_csv.index.tolist()
+        assert got_cost.index.tolist() == main_csv.index.tolist()
+
+        # full precision: ค่าใน CSV ต้องตรงกับ DataFrame ทุกบิต ไม่ถูกปัด
+        assert got_shape.loc["Model X", "StdRatio"] == shape.loc["Model X", "StdRatio"]
+
+        # --- feedback ข้อ 2: คำทำนายรายวัน + สถิติ ---
+        got_preds = pd.read_csv(out / "SYN_BK_taskB_val_preds.csv", index_col=0,
+                                encoding="utf-8-sig")
+        assert got_preds.columns.tolist() == ["y_true", "prev_close",
+                                              "Model X", "Baseline: Naive (RW)"]
+        assert len(got_preds) == len(y_true)
+        assert np.allclose(got_preds["Model X"].to_numpy(), preds["Model X"])
+        assert (got_preds["Baseline: Naive (RW)"] == 0).all()
+
+        got_stats = pd.read_csv(out / "SYN_BK_taskB_val_stats.csv", index_col=0,
+                                encoding="utf-8-sig")
+        assert got_stats.index.tolist() == main_csv.index.tolist()
+        for col in ("relMAE", "frac_zero_move", "dir_hit_rate_moved_days",
+                    "ic_pearson", "ic_spearman", "contrib_zero_days",
+                    "contrib_moved_days", "dm_abs_dm_stat_hln",
+                    "dm_abs_p_one_sided_model_better", "dm_abs_p_two_sided",
+                    "dm_sq_dm_stat_hln"):
+            assert col in got_stats.columns, col
+        # Naive เทียบกับตัวเอง -> relMAE = 1 เป๊ะ และ DM = 0 / p = 1
+        assert got_stats.loc["Baseline: Naive (RW)", "relMAE"] == 1.0
+        assert got_stats.loc["Baseline: Naive (RW)", "dm_abs_dm_stat_hln"] == 0.0
+        assert got_stats.loc["Baseline: Naive (RW)", "dm_abs_p_two_sided"] == 1.0
+
+        # --- feedback ข้อ 4: sensitivity ของค่าคอมมิชชัน ---
+        from trading_costs import COMMISSION_GRID
+        got_cs = pd.read_csv(out / "cost_sensitivity.csv", encoding="utf-8-sig")
+        assert sorted(got_cs["commission_per_side"].unique()) == sorted(COMMISSION_GRID)
+        assert len(got_cs) == len(COMMISSION_GRID) * len(preds)
+        assert got_cs["ticker"].unique().tolist() == ["SYN.BK"]
+        # breakeven ต้องเพิ่มตามค่าคอมมิชชันแบบ monotonic
+        be = got_cs.groupby("commission_per_side")["breakeven_bps"].first()
+        assert be.is_monotonic_increasing
+
+
+def test_real_dev_outputs_have_all_models():
+    """
+    ไฟล์ diagnostic ที่ main.py --dev เซฟไว้จริง ต้องมีทุกโมเดล + ทุก baseline
+    และเรียงแถวตรงกับตารางหลัก (ข้าม test ถ้ายังไม่เคยรัน --dev)
+    """
+    from config import OUTPUT_DIR, TICKERS
+    for ticker in TICKERS:
+        t = ticker.replace(".", "_")
+        main_path = OUTPUT_DIR / f"{t}_taskB_val.csv"
+        if not main_path.exists():
+            print(f"      (ข้าม {ticker}: ยังไม่มี {main_path.name} -- รัน main.py --dev ก่อน)")
+            continue
+        base = pd.read_csv(main_path, index_col=0, encoding="utf-8-sig")
+        for suffix in ("_shape", "_costs"):
+            path = OUTPUT_DIR / f"{t}_taskB_val{suffix}.csv"
+            assert path.exists(), f"ไม่พบ {path.name} -- main.py --dev ต้องเซฟไฟล์นี้"
+            got = pd.read_csv(path, index_col=0, encoding="utf-8-sig")
+            assert got.index.tolist() == base.index.tolist(), (
+                f"{path.name} เรียงแถวไม่ตรงตารางหลัก")
+            assert len(got) == 5, f"{path.name} ต้องมี 3 โมเดล + 2 baseline"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in dict(globals()).items() if k.startswith("test_")]
     failed = 0
