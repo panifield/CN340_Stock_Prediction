@@ -33,3 +33,5 @@ date,ticker,snapshot,source,downloaded_at,minutes_after_1600,hours_present,requi
 2026-10-26,ADVANC.BK,/app/repo/task_b/raw_data_intraday_live/20261026/ADVANC_BK_1h_160345.csv,yahoo,2026-10-26T16:03:45+07:00,3.75,10 11 12 13 14 15,True,False,False,23,
 2026-10-27,KBANK.BK,/app/repo/task_b/raw_data_intraday_live/20261027/KBANK_BK_1h_160405.csv,yahoo,2026-10-27T16:04:05+07:00,4.083333333333333,10 11 12 13 14 15,True,False,False,15,
 2026-10-27,ADVANC.BK,/app/repo/task_b/raw_data_intraday_live/20261027/ADVANC_BK_1h_160405.csv,yahoo,2026-10-27T16:04:05+07:00,4.083333333333333,10 11 12 13 14 15,True,False,False,22,
+2026-10-28,KBANK.BK,/app/repo/task_b/raw_data_intraday_live/20261028/KBANK_BK_1h_160358.csv,yahoo,2026-10-28T16:03:58+07:00,3.966666666666667,10 11 12 13 14 15,True,False,False,12,
+2026-10-28,ADVANC.BK,/app/repo/task_b/raw_data_intraday_live/20261028/ADVANC_BK_1h_160358.csv,yahoo,2026-10-28T16:03:58+07:00,3.966666666666667,10 11 12 13 14 15,True,False,False,20,
